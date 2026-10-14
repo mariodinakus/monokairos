@@ -1,13 +1,14 @@
 /* MONO Weather v3.1 — live multi-model weather, MONO-ML forecast zoo, stations, phenomena, radar, climate.
  * Browser-only, no keys, no build step.
  * Sources: Open-Meteo (forecast · ensemble · previous runs · ERA5 · air quality · marine · geocoding),
- * NOAA Aviation Weather Center METAR (fallback Iowa Environmental Mesonet), Meteostat / NOAA GHCN-Daily,
+ * NOAA Aviation Weather Center METAR (fallback Iowa Environmental Mesonet), WMO SYNOP via OGIMET, Netatmo (optional),
+ * Meteostat / NOAA GHCN-Daily, weather news from publishers' RSS (ERTnews, Newsbeast, Severe Weather Europe, NASA, BBC),
  * RainViewer radar, Meteoalarm official warnings, BigDataCloud reverse geocoding. */
 (() => {
 'use strict';
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
-const VERSION = '3.2';
+const VERSION = '3.6';
 const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
@@ -20,11 +21,25 @@ const MODELS = [
   { id: 'ncep_aigfs025', alt: [], name: 'AIGFS', org: 'NOAA NCEP · ΗΠΑ', kind: 'ai' },
   { id: 'ncep_hgefs025_ensemble_mean', alt: [], name: 'HGEFS (μέσος)', org: 'NOAA NCEP · ΗΠΑ', kind: 'ai' },
   { id: 'dwd_icon_seamless', alt: ['icon_seamless'], name: 'ICON', org: 'DWD · Γερμανία', kind: 'phys' },
+  { id: 'icon_global', alt: [], name: 'ICON Global 13 km', org: 'DWD · Γερμανία', kind: 'phys' },
+  { id: 'icon_eu', alt: [], name: 'ICON-EU 7 km', org: 'DWD · Ευρώπη', kind: 'phys', box: [29.5, 70.5, -23.5, 62.5] },
+  { id: 'icon_d2', alt: [], name: 'ICON-D2 2 km', org: 'DWD · Κεντρική Ευρώπη', kind: 'phys', box: [43.2, 58.1, -3.9, 20.3] },
   { id: 'meteofrance_seamless', alt: [], name: 'ARPEGE / AROME', org: 'Météo-France', kind: 'phys' },
+  { id: 'meteofrance_arpege_world', alt: [], name: 'ARPEGE World 25 km', org: 'Météo-France', kind: 'phys' },
+  { id: 'meteofrance_arpege_europe', alt: [], name: 'ARPEGE Europe 10 km', org: 'Météo-France · Ευρώπη', kind: 'phys', box: [20, 72, -32, 42] },
+  { id: 'meteofrance_arome_france', alt: [], name: 'AROME France 2.5 km', org: 'Météo-France · Γαλλία', kind: 'phys', box: [37.5, 55.4, -12, 16] },
+  { id: 'meteofrance_arome_france_hd', alt: [], name: 'AROME France HD 1.5 km', org: 'Météo-France · Γαλλία', kind: 'phys', box: [37.5, 55.4, -12, 16] },
   { id: 'ukmo_seamless', alt: [], name: 'UKMO Unified', org: 'Met Office · Ην. Βασίλειο', kind: 'phys' },
+  { id: 'ukmo_global_deterministic_10km', alt: [], name: 'UKMO Global 10 km', org: 'Met Office · Ην. Βασίλειο', kind: 'phys' },
+  { id: 'ukmo_uk_deterministic_2km', alt: [], name: 'UKV 2 km', org: 'Met Office · Ην. Βασίλειο', kind: 'phys', box: [47, 63, -13, 6] },
   { id: 'cmc_gem_seamless', alt: ['gem_seamless'], name: 'GEM', org: 'ECCC · Καναδάς', kind: 'phys' },
+  { id: 'gem_global', alt: [], name: 'GEM Global 15 km', org: 'ECCC · Καναδάς', kind: 'phys' },
+  { id: 'gem_regional', alt: [], name: 'GEM Regional 10 km', org: 'ECCC · Β. Αμερική', kind: 'phys', box: [10, 80, -170, -40] },
   { id: 'jma_seamless', alt: [], name: 'JMA GSM/MSM', org: 'JMA · Ιαπωνία', kind: 'phys' },
+  { id: 'jma_gsm', alt: [], name: 'JMA GSM 20 km', org: 'JMA · Ιαπωνία', kind: 'phys' },
+  { id: 'jma_msm', alt: [], name: 'JMA MSM 5 km', org: 'JMA · Ιαπωνία', kind: 'phys', box: [22, 48, 120, 150] },
   { id: 'kma_seamless', alt: [], name: 'KMA', org: 'KMA · Κορέα', kind: 'phys' },
+  { id: 'kma_ldps', alt: [], name: 'KMA LDPS 1.5 km', org: 'KMA · Κορέα', kind: 'phys', box: [32, 44, 120, 136] },
   { id: 'cma_grapes_global', alt: [], name: 'CMA GRAPES', org: 'CMA · Κίνα', kind: 'phys' },
   { id: 'bom_access_global', alt: [], name: 'ACCESS-G', org: 'BOM · Αυστραλία', kind: 'phys' },
   { id: 'italia_meteo_arpae_icon_2i', alt: [], name: 'ICON-2I', org: 'ItaliaMeteo · Ιταλία', kind: 'phys' },
@@ -32,11 +47,16 @@ const MODELS = [
   { id: 'geosphere_seamless', alt: [], name: 'AROME Austria', org: 'GeoSphere · Αυστρία', kind: 'phys' },
   { id: 'chmi_aladin_seamless', alt: [], name: 'ALADIN', org: 'CHMI · Τσεχία', kind: 'phys' },
   { id: 'knmi_seamless', alt: [], name: 'HARMONIE (KNMI)', org: 'KNMI · Ολλανδία', kind: 'phys' },
+  { id: 'knmi_harmonie_arome_europe', alt: [], name: 'HARMONIE Europe 5.5 km', org: 'KNMI · Ευρώπη', kind: 'phys', box: [42, 66, -26, 36] },
+  { id: 'knmi_harmonie_arome_netherlands', alt: [], name: 'HARMONIE NL 2 km', org: 'KNMI · Ολλανδία', kind: 'phys', box: [49, 56, 0, 11] },
   { id: 'dmi_seamless', alt: [], name: 'HARMONIE (DMI)', org: 'DMI · Δανία', kind: 'phys' },
+  { id: 'dmi_harmonie_arome_europe', alt: [], name: 'HARMONIE DINI 2 km', org: 'DMI · Β. Ευρώπη', kind: 'phys', box: [44, 72, -30, 40] },
   { id: 'metno_seamless', alt: [], name: 'MEPS Nordic', org: 'MET Norway', kind: 'phys' },
-  { id: 'ncep_hrrr_conus', alt: [], name: 'HRRR 3 km', org: 'NOAA · ΗΠΑ', kind: 'phys' },
-  { id: 'ncep_nbm_conus', alt: [], name: 'NBM', org: 'NOAA · ΗΠΑ', kind: 'phys' },
-  { id: 'cmc_gem_hrdps', alt: [], name: 'HRDPS 2.5 km', org: 'ECCC · Καναδάς', kind: 'phys' }
+  { id: 'metno_nordic', alt: [], name: 'MEPS 2.5 km', org: 'MET Norway · Σκανδιναβία', kind: 'phys', box: [52, 73, -2, 35] },
+  { id: 'ncep_hrrr_conus', alt: [], name: 'HRRR 3 km', org: 'NOAA · ΗΠΑ', kind: 'phys', box: [21, 53, -135, -60] },
+  { id: 'ncep_nbm_conus', alt: [], name: 'NBM', org: 'NOAA · ΗΠΑ', kind: 'phys', box: [19, 55, -138, -58] },
+  { id: 'ncep_nam_conus', alt: [], name: 'NAM 3 km', org: 'NOAA · ΗΠΑ', kind: 'phys', box: [21, 53, -135, -60] },
+  { id: 'cmc_gem_hrdps', alt: [], name: 'HRDPS 2.5 km', org: 'ECCC · Καναδάς', kind: 'phys', box: [27, 70, -152, -42] }
 ];
 const ENSEMBLES = [
   { id: 'ecmwf_ifs025_ensemble', alt: ['ecmwf_ifs025'], name: 'ECMWF ENS', n: 51 },
@@ -126,8 +146,12 @@ el: {
   seaTemp:'νερό', waves:'Κύμα', illum:'φωτισμένη', aq: ['Καλή','Μέτρια','Μέση','Κακή','Πολύ κακή','Επικίνδυνη'], dust:'Σκόνη',
   pol_birch:'Σημύδα', pol_grass:'Αγρωστώδη', pol_olive:'Ελιά', pol_ragweed:'Αμβροσία', pol_alder:'Σκλήθρα', pol_mugwort:'Αρτεμισία', lvl:['Χαμηλή','Μέτρια','Υψηλή'],
   moonNames:['Νέα σελήνη','Αύξων μηνίσκος','Πρώτο τέταρτο','Αύξουσα αμφίκυρτη','Πανσέληνος','Φθίνουσα αμφίκυρτη','Τελευταίο τέταρτο','Φθίνων μηνίσκος'],
-  stTitle:'Σταθμοί', stSub:'Ζωντανές μετρήσεις METAR από όλους τους σταθμούς της περιοχής.', stUse:'Χρήση για διόρθωση', stInUse:'Σε χρήση',
-  stNone:'Δεν βρέθηκαν σταθμοί METAR κοντά ή οι υπηρεσίες δεν απάντησαν.', stChart:'72 ώρες: σταθμός και MONO', rawMetar:'Πρόσφατα μηνύματα METAR',
+  news:'Ειδήσεις', newsTitle:'Ειδήσεις καιρού', newsSub:'Τίτλοι από ελληνικά και διεθνή μέσα, με σύνδεσμο στο πλήρες άρθρο.', newsCity:'Η πόλη μου', newsGreece:'Ελλάδα', newsWorld:'Κόσμος (EN)',
+  newsLocal:'Για', newsLatest:'Τα πιο πρόσφατα', newsEmpty:'Καμία είδηση', newsEmptyCity:'Δεν υπάρχει πρόσφατο άρθρο που να αναφέρει την πόλη. Δες τις καρτέλες Ελλάδα και Κόσμος.', newsFail:'Οι πηγές ειδήσεων δεν απάντησαν. Δοκίμασε ξανά σε λίγο.', newsSources:'Πηγές',
+  rawSynop:'Πρόσφατα μηνύματα SYNOP', pwsTitle:'Ερασιτεχνικοί σταθμοί (Netatmo)', pwsSub:'Σταθμοί σε σπίτια και μπαλκόνια, σε ακτίνα ~12 km', pwsNone:'Δεν βρέθηκαν ενεργοί σταθμοί κοντά.', pwsMedian:'Διάμεση θερμοκρασία', pwsRain:'Σταθμοί με βροχή την τελευταία ώρα', pwsNearest:'Οι πιο κοντινοί',
+  pwsNote:'Δεν μπαίνουν στη διόρθωση του MONO: είναι πυκνοί αλλά συχνά στον ήλιο ή κοντά σε τοίχους. Η διάμεση τιμή όμως δείχνει καλά τη θερμοκρασία της γειτονιάς.',
+  stTitle:'Σταθμοί', stSub:'Ζωντανές μετρήσεις METAR (αεροδρόμια) και SYNOP (ΕΜΥ και εθνικές υπηρεσίες) από όλους τους σταθμούς της περιοχής.', stUse:'Χρήση για διόρθωση', stInUse:'Σε χρήση',
+  stNone:'Δεν βρέθηκαν σταθμοί METAR ή SYNOP κοντά ή οι υπηρεσίες δεν απάντησαν.', stChart:'72 ώρες: σταθμός και MONO', rawMetar:'Πρόσφατα μηνύματα METAR',
   climTitle:'Κλίμα', climSub:'Ιστορικά δεδομένα πολλών ετών: μέσοι όροι, ρεκόρ, τάσεις και φαινόμενα ανά μήνα.',
   srcStation:'Σταθμός', srcEra:'ERA5 (αναανάλυση)', loadOlder:'Φόρτωση από το 1940', loadingYears:'Φόρτωση ετών', stFail:'Τα δεδομένα σταθμού δεν φορτώθηκαν· εμφανίζεται ERA5.', years:'έτη',
   climograph:'Κλιματικό διάγραμμα', normalTx:'Μέση μέγιστη', normalTn:'Μέση ελάχιστη', normalP:'Βροχή (mm)', recordRange:'Εύρος ρεκόρ',
@@ -182,7 +206,7 @@ el: {
     ['Σταθμός METAR','Μετεωρολογικός σταθμός αεροδρομίου που στέλνει μετρήσεις κάθε μισή ώρα. Είναι πραγματική μέτρηση, όχι πρόγνωση.']
   ],
   stepsList:[
-    ['Ζωντανές προγνώσεις','Έως 24 μοντέλα και 8 ensembles (έως 345 μέλη) φορτώνονται για το σημείο. Μοντέλα εκτός περιοχής ή που αντιγράφουν άλλο εντοπίζονται και αφαιρούνται.'],
+    ['Ζωντανές προγνώσεις','Έως 35 μοντέλα (παγκόσμια και περιοχικά υψηλής ανάλυσης) και 8 ensembles (έως 345 μέλη) φορτώνονται για το σημείο. Μοντέλα εκτός περιοχής ή που αντιγράφουν άλλο εντοπίζονται και αφαιρούνται.'],
     ['Ιστορικό σφαλμάτων','Για τις τελευταίες 8 εβδομάδες κατεβαίνουν οι παλιές προγνώσεις κάθε μοντέλου (ορίζοντας 0–5 ημέρες) και συγκρίνονται με την αναανάλυση ERA5.'],
     ['Έξι αλγόριθμοι','Μέσος όρος, καλύτερο μοντέλο, MOS με διόρθωση ημερήσιας μεροληψίας, ridge stacking, φίλτρο Kalman και ανάλογα (analog ensemble) εκπαιδεύονται χωριστά για κάθε ορίζοντα.'],
     ['Τίμιος έλεγχος','Τα δεδομένα χωρίζονται χρονολογικά 60/20/20. Ο αλγόριθμος ή ο συνδυασμός των τριών καλύτερων επιλέγεται στην επικύρωση. Τα νούμερα που βλέπεις είναι από το τεστ, που δεν χρησιμοποιήθηκε πουθενά.'],
@@ -240,8 +264,12 @@ en: {
   seaTemp:'water', waves:'Waves', illum:'illuminated', aq: ['Good','Fair','Moderate','Poor','Very poor','Extremely poor'], dust:'Dust',
   pol_birch:'Birch', pol_grass:'Grass', pol_olive:'Olive', pol_ragweed:'Ragweed', pol_alder:'Alder', pol_mugwort:'Mugwort', lvl:['Low','Moderate','High'],
   moonNames:['New moon','Waxing crescent','First quarter','Waxing gibbous','Full moon','Waning gibbous','Last quarter','Waning crescent'],
-  stTitle:'Stations', stSub:'Live METAR observations from every station in the area.', stUse:'Use for correction', stInUse:'In use',
-  stNone:'No METAR stations nearby, or the services did not respond.', stChart:'72 hours: station and MONO', rawMetar:'Recent METAR reports',
+  news:'News', newsTitle:'Weather news', newsSub:'Headlines from Greek and international outlets, linking to the full article.', newsCity:'My city', newsGreece:'Greece (EL)', newsWorld:'World',
+  newsLocal:'About', newsLatest:'Latest', newsEmpty:'No news', newsEmptyCity:'No recent article mentions this city. Try the Greece and World tabs.', newsFail:'The news sources did not respond. Try again shortly.', newsSources:'Sources',
+  rawSynop:'Recent SYNOP reports', pwsTitle:'Personal stations (Netatmo)', pwsSub:'Home and balcony stations within ~12 km', pwsNone:'No active stations nearby.', pwsMedian:'Median temperature', pwsRain:'Stations with rain in the last hour', pwsNearest:'Nearest',
+  pwsNote:'Not used for the MONO correction: they are dense but often sit in the sun or near walls. Their median is still a good read of the neighbourhood temperature.',
+  stTitle:'Stations', stSub:'Live METAR (airports) and SYNOP (national weather services) observations from every station in the area.', stUse:'Use for correction', stInUse:'In use',
+  stNone:'No METAR or SYNOP stations nearby, or the services did not respond.', stChart:'72 hours: station and MONO', rawMetar:'Recent METAR reports',
   climTitle:'Climate', climSub:'Many years of history: averages, records, trends and weather events by month.',
   srcStation:'Station', srcEra:'ERA5 (reanalysis)', loadOlder:'Load from 1940', loadingYears:'Loading years', stFail:'Station data did not load; showing ERA5.', years:'years',
   climograph:'Climate chart', normalTx:'Mean high', normalTn:'Mean low', normalP:'Rain (mm)', recordRange:'Record range',
@@ -296,7 +324,7 @@ en: {
     ['METAR station','An airport weather station that reports every half hour. It is a real measurement, not a forecast.']
   ],
   stepsList:[
-    ['Live forecasts','Up to 24 models and 8 ensembles (up to 345 members) are loaded for the point. Models outside their domain or copying another are detected and removed.'],
+    ['Live forecasts','Up to 35 models (global and high-resolution regional) and 8 ensembles (up to 345 members) are loaded for the point. Models outside their domain or copying another are detected and removed.'],
     ['Error history','Each model’s past forecasts for the last 8 weeks (lead 0–5 days) are downloaded and compared with the ERA5 reanalysis.'],
     ['Six algorithms','Plain average, best model, MOS with diurnal bias correction, ridge stacking, a Kalman filter and an analog ensemble are trained separately for every lead.'],
     ['Honest testing','The data are split in time 60/20/20. The algorithm, or the blend of the best three, is chosen on validation. The numbers you see come from the test set, which is used nowhere else.'],
@@ -451,6 +479,9 @@ async function viaProxy(proxyPath, direct, ms = 20000) {
   if (location.protocol.startsWith('http')) { try { const d = await getJSON(proxyPath, ms); if (d != null) return d; } catch {} }
   return getJSON(direct, ms);
 }
+/* Open-Meteo rejects too many simultaneous requests from one browser: run model downloads a few at a time */
+function limiter(n) { let active = 0; const queue = []; const next = () => { if (active >= n || !queue.length) return; active++; const [fn, res, rej] = queue.shift(); fn().then(res, rej).finally(() => { active--; next(); }); }; return fn => new Promise((res, rej) => { queue.push([fn, res, rej]); next(); }); }
+const omSlot = limiter(6);
 async function chain(ids, make) {
   let last;
   for (const id of ids) { try { return { id, data: await getJSON(make(id)) }; } catch (e) { last = e; if (e.status && e.status >= 500) break; } }
@@ -543,6 +574,32 @@ async function fetchObs(c) {
   const st = group(list, c);
   if (!st.length) throw new Error('no obs');
   return { stations: st, source: 'Iowa Environmental Mesonet' };
+}
+
+/* ------------------------------------------------------------------ SYNOP (WMO / national services) + personal stations */
+async function fetchSynop(c) {
+  const d = await getJSON(q('/api/synop', { lat: (+c.lat).toFixed(2), lon: (+c.lon).toFixed(2) }), 25000);
+  const here = { lat: c.lat, lon: c.lon };
+  return (d.stations || []).map(s => ({ ...s, list: s.list.map(o => ({ ...o, id: s.id })), dist: km(here, s), src: 'synop', srcName: 'WMO SYNOP · OGIMET' }))
+    .map(s => ({ ...s, last: s.list.filter(x => fin(x.temp)).at(-1) })).filter(s => s.last);
+}
+async function fetchAllObs(c) {
+  const [m, y] = await Promise.allSettled([fetchObs(c), location.protocol.startsWith('http') ? fetchSynop(c) : Promise.reject(new Error('file'))]);
+  const metar = m.status === 'fulfilled' ? m.value.stations.map(s => ({ ...s, src: 'metar', srcName: m.value.source })) : [];
+  // a SYNOP station at the same airport as a METAR one is the same place: keep the (hourly) METAR
+  const synop = y.status === 'fulfilled' ? y.value.filter(s => !metar.some(x => km(x, s) < 3 || (s.icao && x.id === s.icao))) : [];
+  const stations = [...metar, ...synop].sort((a, b) => a.dist - b.dist);
+  if (!stations.length) throw new Error('no obs');
+  const source = [metar.length ? m.value.source : '', synop.length ? 'WMO SYNOP (OGIMET)' : ''].filter(Boolean).join(' + ');
+  return { stations, source, counts: { metar: metar.length, synop: synop.length } };
+}
+async function fetchNetatmo(c) {
+  const d = await getJSON(q('/api/netatmo', { lat: (+c.lat).toFixed(3), lon: (+c.lon).toFixed(3) }), 20000);
+  const st = (d.stations || []).filter(s => fin(s.temp));
+  const near = st.filter(s => s.dist <= 5), pool = near.length >= 5 ? near : st;
+  const med = a => { const v = a.filter(fin).sort((x, y) => x - y); return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
+  return { stations: st, n: st.length, nNear: near.length, temp: med(pool.map(s => s.temp)), rh: med(pool.map(s => s.rh)), rain1h: med(st.filter(s => fin(s.rain1h)).map(s => s.rain1h)),
+    nRain: st.filter(s => fin(s.rain1h)).length, wet: st.filter(s => s.rain1h > 0.1).length, at: Date.now() };
 }
 
 /* ------------------------------------------------------------------ extras: air, sea, warnings, place names */
@@ -641,15 +698,18 @@ async function loadAll(force = false) {
   const jobs = [], modelJobs = [];
   if (force || Date.now() - state.modelsAt > REFRESH_MODELS || !Object.keys(state.models).length) {
     state.modelsAt = Date.now();
-    modelJobs.push(...MODELS.map(m => chain([m.id, ...m.alt], id => modelURL(c, id))
+    const inBox = m => !m.box || (c.lat >= m.box[0] && c.lat <= m.box[1] && c.lon >= m.box[2] && c.lon <= m.box[3]);
+    MODELS.filter(m => !inBox(m)).forEach(m => { state.models[m.id] = { outside: true }; });
+    modelJobs.push(...MODELS.filter(inBox).map(m => omSlot(() => chain([m.id, ...m.alt], id => modelURL(c, id)))
       .then(r => { if (gen === state.gen) { state.models[m.id] = { data: r.data, used: r.id }; schedule(); } })
-      .catch(() => { if (gen === state.gen) { state.models[m.id] = { error: true }; schedule(); } })));
+      .catch(e => { if (gen === state.gen) { state.models[m.id] = /no data/i.test(e?.message || '') ? { outside: true } : { error: true }; schedule(); } })));
     jobs.push(...ENSEMBLES.map(e => chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL)).catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE)))
       .then(r => { if (gen === state.gen) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
       .catch(() => { if (gen === state.gen) { state.ens[e.id] = { error: true }; schedule(); } })));
   }
   jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) state.rain15 = null; }));
-  jobs.push(fetchObs(c).then(o => { if (gen === state.gen) { state.obs = o; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; schedule(); } }));
+  jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; schedule(); } }));
+  if (location.protocol.startsWith('http')) jobs.push(fetchNetatmo(c).then(d => { if (gen === state.gen) { state.pws = d; schedule(); } }).catch(() => { if (gen === state.gen) state.pws = { off: true }; }));
   jobs.push(getJSON(longURL(c)).then(d => { if (gen === state.gen) { state.long = d; schedule(); } }).catch(() => {}));
   jobs.push(fetchHolidays(c).then(h => { if (gen === state.gen) { state.hol = h; schedule(); } }).catch(() => {}));
   if (!state.clim) { const cc = read(K.clim, {})[ckey(c)]; if (cc?.dayNormals) state.clim = { ...cc, loading: false }; }
@@ -733,7 +793,7 @@ function recompute() {
 
   const md = {};
   for (const m of MODELS) {
-    const r = state.models[m.id]; if (!r?.data?.hourly) continue;
+    const r = state.models[m.id]; if (r?.outside) { md[m.id] = { nocover: true }; continue; } if (!r?.data?.hourly) continue;
     const h = r.data.hourly, a = {};
     for (const v of HV.split(',')) a[v] = align(h.time, h[v], idx);
     if (a.temperature_2m.slice(iNow).filter(fin).length < 24) { md[m.id] = { nocover: true }; continue; }
@@ -793,7 +853,7 @@ function recompute() {
   const ob = state.obs && !state.obs.error ? state.obs : null;
   const stations = ob?.stations || [];
   const pick = stations.find(s => s.id === state.stationPick) || stations.find(s => s.list.length >= 6) || stations[0];
-  const station = pick ? { ...pick, source: ob.source } : null;
+  const station = pick ? { ...pick, source: pick.srcName || ob.source } : null;
   const obsAt = new Array(N).fill(null), obsRow = new Array(N).fill(null);
   if (station) for (const o of station.list) {
     if (!fin(o.temp)) continue;
@@ -981,7 +1041,7 @@ function nowPage() {
     <section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
     <section class="section dual"><div class="card"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</div>
-      <div class="card">${engineSummary()}</div></section>${holidaysCard()}${environment()}${glossary()}`;
+      <div class="card">${engineSummary()}</div></section>${newsCard()}${holidaysCard()}${environment()}${glossary()}`;
 }
 function hoursStrip(rows, cur) {
   return `<div class="scroll-hours">${rows.map((r, j) => `<div class="hourcard ${j === 0 ? 'active' : ''}"><span class="hourtime">${j === 0 ? T('now') : hh(r.t) + ':00'}</span>${icon(j === 0 && cur && fin(cur.code) ? cur.code : r.code, j === 0 && cur ? cur.isDay : r.isDay)}<span class="hourtemp">${deg(j === 0 && cur && fin(cur.temp) ? cur.temp : r.temp)}</span><span class="hoursub">☂ ${pct(r.pop)}</span>${(r.amount ?? 0) >= 0.1 ? `<span class="hoursub rn-hmm">${mm1(r.amount)} mm</span>` : ''}</div>`).join('')}</div>`;
@@ -1997,14 +2057,56 @@ function liveCard() {
     ${V.live.__station ? row(T('stationOos'), V.live.__station, 'me') : ''}${V.live.__mono ? row('MONO', V.live.__mono, 'me') : ''}${V.live.__mean ? row(AN('mean'), V.live.__mean) : ''}${ids.map(id => row(MODELS.find(m => m.id === id)?.name || id, V.live[id])).join('')}</section>`;
 }
 
+/* ------------------------------------------------------------------ weather news (publishers' RSS via /api/news) */
+const NEWS_TTL = 15 * 60e3;
+async function loadNews(force = false) {
+  if (!location.protocol.startsWith('http')) return;
+  if (!force && state.news?.items && Date.now() - state.news.at < NEWS_TTL) return;
+  try { const d = await getJSON('/api/news', 20000); state.news = { items: d.items || [], at: Date.now() }; }
+  catch { if (!state.news?.items) state.news = { error: true, at: Date.now() }; }
+  if (state.page === 'news' || state.page === 'now') render();
+}
+const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ς/g, 'σ');
+function placeStems(c) {
+  const names = [c.name, c.nameEl, ...Object.values(c.i18n || {}).map(x => x?.name)].filter(Boolean).map(fold);
+  // Greek names decline (Θεσσαλονίκη → Θεσσαλονίκης), so match on the stem
+  return [...new Set(names.map(n => (n.length > 6 && /[α-ω]$/.test(n) ? n.slice(0, -2) : n.length > 4 && /[α-ω]$/.test(n) ? n.slice(0, -1) : n)))].filter(n => n.length >= 3);
+}
+function newsFor(tab) {
+  const items = state.news?.items || [];
+  if (tab === 'city') { const st = placeStems(state.city); return items.filter(x => { const t = fold(x.title + ' ' + x.summary); return st.some(s => t.includes(s)); }); }
+  return items.filter(x => x.lang === (tab === 'gr' ? 'el' : 'en'));
+}
+const newsAge = t => { if (!t) return ''; const m = Math.max(1, Math.round((Date.now() - t) / 60e3)); return m < 60 ? `${m} ${T('minutes')} ${T('ago')}` : m < 48 * 60 ? `${Math.round(m / 60)} ${T('hrs')} ${T('ago')}` : dt(t, { day: 'numeric', month: 'short' }); };
+const newsItem = (x, big) => `<a class="newsitem ${big ? 'big' : ''}" href="${esc(x.link)}" target="_blank" rel="noopener">${big && x.image ? `<img src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<div><b>${esc(x.title)}</b>${big && x.summary ? `<p>${esc(x.summary)}</p>` : ''}<small>${esc(x.source)} · ${x.lang.toUpperCase()} · ${esc(newsAge(x.t))}</small></div></a>`;
+function newsCard() {
+  if (!state.news?.items?.length) return '';
+  const local = newsFor('city'), pref = newsFor(state.city.cc === 'GR' || state.lang === 'el' ? 'gr' : 'world');
+  const pick = [...local, ...pref.filter(x => !local.includes(x))].slice(0, 3);
+  if (!pick.length) return '';
+  return `<section class="section card"><div class="panelhead"><div><b>${T('newsTitle')}</b><div class="section-sub">${local.length ? T('newsLocal') + ' ' + esc(cityName(state.city)) : T('newsLatest')}</div></div>${btn('goto', '↗ ' + T('news'), 'data-page="news"')}</div><div class="newslist">${pick.map(x => newsItem(x)).join('')}</div></section>`;
+}
+function newsPage() {
+  const head = header(T('newsTitle'), T('newsSub'), btn('reloadNews', '↻ ' + T('refresh')));
+  if (!state.news) { loadNews(); return head + loadingCard(); }
+  if (state.news.error) return head + `<div class="card placeholder"><b>${T('noData')}</b>${T('newsFail')}</div>`;
+  const tab = state.newsTab || (newsFor('city').length ? 'city' : state.lang === 'el' ? 'gr' : 'world');
+  const tabs = [['city', T('newsCity') + ' · ' + cityName(state.city)], ['gr', T('newsGreece')], ['world', T('newsWorld')]];
+  const list = newsFor(tab);
+  const chips = `<div class="chips">${tabs.map(([k, l]) => `<button class="chip ${tab === k ? 'active' : ''}" data-action="newsTab" data-v="${k}">${esc(l)} <small>${newsFor(k).length}</small></button>`).join('')}</div>`;
+  const body = list.length ? `<div class="newsgrid">${list.slice(0, 60).map(x => newsItem(x, true)).join('')}</div>` : `<div class="card placeholder"><b>${T('newsEmpty')}</b>${tab === 'city' ? T('newsEmptyCity') : ''}</div>`;
+  const srcs = [...new Set((state.news.items || []).map(x => x.source))].join(' · ');
+  return head + chips + body + `<p class="notice">${T('newsSources')}: ${esc(srcs)} · ${T('updated')} ${hhmm(state.news.at)}</p>`;
+}
+
 /* ------------------------------------------------------------------ page: stations */
 function stationsPage() {
   const V = state.view;
   const head = header(T('stTitle'), T('stSub'));
   if (!V || !state.obs) return head + loadingCard();
   if (!V.stations.length) return head + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
-  const cards = V.stations.slice(0, 18).map(s => { const o = s.last, inUse = V.station?.id === s.id;
-    return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)}</div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div></div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
+  const cards = V.stations.slice(0, 30).map(s => { const o = s.last, inUse = V.station?.id === s.id;
+    return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div></div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
       <div class="stvals"><span class="citytemp">${deg(o?.temp)}</span><div class="compact">${T('humidity')} ${num(M.rhFromDew(o?.temp, o?.dewp))}% · ${T('dew')} ${deg(o?.dewp)}<br>${T('wind')} ${num(o?.wspd)} km/h ${dirArrow(o?.wdir)}${fin(o?.wgst) ? ` · ${T('gust')} ${num(o.wgst)}` : ''}<br>${num(o?.pres)} hPa${fin(o?.vis) ? ` · ${num(o.vis, o.vis < 10 ? 1 : 0)} km` : ''}</div></div>
       <div class="compact">${o?.wx?.length ? esc(wxText(o)) + ' · ' : ''}${o ? esc(ageText(o.t)) : ''}</div>
       <div class="citybottom">${inUse ? `<span class="badge">✓ ${T('stInUse')}</span>` : `<button class="cityopen" data-action="station" data-id="${esc(s.id)}">${T('stUse')}</button>`}</div></article>`; }).join('');
@@ -2015,9 +2117,20 @@ function stationsPage() {
     detail = `<section class="section card"><div class="panelhead"><div><b>${esc(s.id)} · ${T('stChart')}</b><div class="section-sub">${esc(s.name || '')} · ${esc(s.source)}</div></div></div>
       ${chart({ rows, series: [{ vals: rows.map(r => (past(r) ? r.tempModel : null)), cls: 'hind' }, { vals: rows.map(r => (!past(r) ? r.temp : null)), cls: 'mono' }], points: rows.map(r => r.obs), nowT: Date.now() })}
       ${legend([['obs', T('legendObs')], ['hind', T('legendHind')], ['mono', T('legendMono')]])}
-      <div class="panelhead" style="margin-top:18px"><b>${T('rawMetar')}</b></div>${s.list.slice(-8).reverse().map(o => `<p class="mono-raw">${esc(o.raw || '')}</p>`).join('')}</section>`;
+      <div class="panelhead" style="margin-top:18px"><b>${T(s.src === 'synop' ? 'rawSynop' : 'rawMetar')}</b></div>${s.list.slice(-8).reverse().map(o => `<p class="mono-raw">${esc(o.raw || '')}</p>`).join('')}</section>`;
   }
-  return head + `<div class="cities-grid">${cards}</div>` + detail;
+  const cnt = state.obs?.counts ? `<div class="chips"><span class="badge">METAR · ${state.obs.counts.metar}</span><span class="badge">SYNOP · ${state.obs.counts.synop}</span>${state.pws?.n ? `<span class="badge">Netatmo · ${state.pws.n}</span>` : ''}</div>` : '';
+  return head + cnt + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
+}
+function pwsCard() {
+  const P = state.pws;
+  if (!P || P.off) return '';
+  if (!P.n) return `<div class="card"><div class="panelhead"><b>${T('pwsTitle')}</b></div><p class="notice">${T('pwsNone')}</p></div>`;
+  const near = P.stations.slice(0, 12).map(s => `<div class="kv"><span>${num(s.dist, 1)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</span><b>${deg(s.temp)}${fin(s.rh) ? ` · ${num(s.rh)}%` : ''}${fin(s.rain1h) && s.rain1h > 0 ? ` · ${num(s.rain1h, 1)} mm/h` : ''}</b></div>`).join('');
+  return `<section class="section dual"><div class="card"><div class="panelhead"><div><b>${T('pwsTitle')}</b><div class="section-sub">${T('pwsSub')}</div></div><span class="badge">${P.n}</span></div>
+    <div class="kv"><span>${T('pwsMedian')}${P.nNear >= 5 ? ' (≤5 km)' : ''}</span><b>${deg(P.temp)}</b></div><div class="kv"><span>${T('humidity')}</span><b>${fin(P.rh) ? num(P.rh) + '%' : '—'}</b></div>
+    <div class="kv"><span>${T('pwsRain')}</span><b>${P.nRain ? `${P.wet} / ${P.nRain}` : '—'}</b></div><p class="notice">${T('pwsNote')}</p></div>
+    <div class="card"><div class="panelhead"><b>${T('pwsNearest')}</b></div>${near}</div></section>`;
 }
 
 /* ------------------------------------------------------------------ page: climate */
@@ -2143,7 +2256,7 @@ async function loadCityLive() {
 }
 
 /* ------------------------------------------------------------------ shell */
-const NAV = [['now', '◐'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['radar', '◎'], ['globe', '◍'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['climate', '▦'], ['cities', '⊞']];
+const NAV = [['now', '◐'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['radar', '◎'], ['globe', '◍'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
 const TABS = ['now', 'rain', 'radar', 'globe', 'phen'];
 function navRender() {
   document.documentElement.lang = state.lang; document.documentElement.dataset.theme = state.theme;
@@ -2159,7 +2272,7 @@ function render() {
   navRender();
   if (state.page === 'radar' && map && $('#map')) return;   // keep the live map running
   if (state.page === 'globe' && globe && $('#globe')) { updateGlobeCtl(); return; }
-  const pages = { now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, radar: radarPage, globe: globePage, models: modelsPage, lab: labPage, stations: stationsPage, climate: climatePage, cities: citiesPage };
+  const pages = { now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, radar: radarPage, globe: globePage, models: modelsPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
   const y = window.scrollY;
   $('#content').innerHTML = (pages[state.page] || nowPage)();
   window.scrollTo(0, y);
@@ -2176,11 +2289,12 @@ function goto(p) {
   try { history.replaceState(null, '', '#' + p); } catch {}
   render(); window.scrollTo(0, 0);
   if (p === 'cities' || p === 'globe') loadCityLive();
+  if (p === 'news') loadNews();
 }
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station' });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true); localizePlaces();
@@ -2233,6 +2347,8 @@ function onClick(e) {
   else if (a === 'lead') { state.lead = +b.dataset.n; render(); }
   else if (a === 'region') { state.region = b.dataset.r; render(); loadCityLive(); }
   else if (a === 'station') { state.stationPick = b.dataset.id; recompute(); render(); }
+  else if (a === 'newsTab') { state.newsTab = b.dataset.v; render(); }
+  else if (a === 'reloadNews') { state.news = null; render(); loadNews(true); }
   else if (a === 'climMonth') { state.climMonth = +b.dataset.n; render(); }
   else if (a === 'climSrc') { state.climSrc = b.dataset.v; render(); }
   else if (a === 'climOlder') loadClimate(1940);
@@ -2270,6 +2386,8 @@ function init() {
   else loadAll(true);
   loadCityLive();
   localizePlaces();
+  loadNews();
+  setInterval(() => { if (document.visibilityState === 'visible') loadNews(); }, NEWS_TTL);
   setInterval(() => { if (document.visibilityState === 'visible') loadAll(false); }, REFRESH_LIVE);
   setInterval(() => { if (state.page === 'globe') globeTick(); if (document.visibilityState === 'visible' && state.view && state.page !== 'radar' && state.page !== 'globe') { recompute(); render(); } }, 60e3);
 }

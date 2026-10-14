@@ -1,4 +1,4 @@
-const CACHE = 'mono-weather-v3.6';
+const CACHE = 'mono-weather-v3.7';
 const ASSETS = ['./', './index.html', './styles.css', './model.js', './climate.js', './trainer.js', './app.js', './icon.svg', './manifest.webmanifest', './app-icon-192.png', './app-icon-512.png',
   ...['sun','moon','partly-day','partly-night','cloud','overcast','fog','drizzle','rain','snow','storm','umbrella','wind','humidity','pressure','thermometer','uv','visibility','sunrise','sunset'].map(n => `./icons/${n}.png`)];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));

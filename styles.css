@@ -362,3 +362,18 @@ html[data-theme=dark]{--r1:#46648c;--r2:#3f7fd8;--r3:#5b9cf0;--r4:#9cc6ff;--r5:#
 @keyframes glive{50%{opacity:.35}}
 #globeLegend .glegend{position:absolute;left:auto;right:14px;bottom:14px}
 @media(max-width:610px){.gprobe-wrap{left:8px;top:8px;max-width:calc(100% - 16px)}.gpt>span{font-size:28px}}
+/* v3.6 · news, SYNOP tag, personal stations */
+.tag.synop{background:var(--soft)}
+.cityname .tag{vertical-align:middle;margin-left:4px}
+.newslist{display:flex;flex-direction:column}
+.newsitem{display:flex;gap:14px;align-items:flex-start;padding:13px 0;border-top:1px solid var(--line);color:var(--ink)}
+.newslist .newsitem:first-child{border-top:0;padding-top:0}
+.newsitem:hover{text-decoration:none}.newsitem:hover b{text-decoration:underline;text-underline-offset:3px}
+.newsitem b{display:block;font-size:13px;line-height:1.4;font-weight:700;letter-spacing:-.01em}
+.newsitem small{display:block;color:var(--muted);font-size:10px;margin-top:6px;font-weight:650;letter-spacing:.02em}
+.newsitem p{margin:7px 0 0;color:var(--sub);font-size:12px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.newsgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.newsitem.big{border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:16px;flex-direction:column}
+.newsitem.big img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;background:var(--soft)}
+.chip small{opacity:.6;margin-left:3px}
+@media (max-width:760px){.newsgrid{grid-template-columns:1fr}}
