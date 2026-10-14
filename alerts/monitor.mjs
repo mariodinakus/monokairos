@@ -158,6 +158,7 @@ function analyse(L, W, models, warnings) {
     const wetFrac = pm.length ? pm.filter(m => m.mm >= 1).length / pm.length : null;
     dayStats[k] = { mm: rs.reduce((a, r) => a + r.amount, 0), prob: mean([Math.max(...rs.map(r => r.pop)), wetFrac]), tmax: Math.max(...rs.map(r => r.temp).filter(fin)), tmin: Math.min(...rs.map(r => r.temp).filter(fin)),
       gust: Math.max(0, ...rs.map(r => r.gust).filter(fin)), storm: rs.some(r => r.code >= 95), wetModels: pm.filter(m => m.mm >= 1).length, nModels: pm.length };
+    if (k === TODAY) { const fr = rs.filter(r => r.t > NOW); dayStats[k].rest = fr.length ? { mm: fr.reduce((a, r) => a + r.amount, 0), prob: Math.max(0, ...fr.map(r => r.pop)), gust: Math.max(0, ...fr.map(r => r.gust).filter(fin)), storm: fr.some(r => r.code >= 95) } : { mm: 0, prob: 0, gust: 0, storm: false }; }
     modelDays[k] = perModel;
   }
   let nowRate = null;
@@ -186,9 +187,10 @@ function statusText(A) {
   return lines.join('\n');
 }
 function dayText(A, k) {
-  const d = A.dayStats[k]; if (!d) return `${dayLabelKey(k)}: —`;
-  const rain = d.mm >= 0.5 || d.prob >= 0.4 ? `🌧 βροχή ${pct(d.prob)} · ~${mm(d.mm)} mm (${d.wetModels}/${d.nModels} μοντέλα)` : '☀ χωρίς ουσιαστική βροχή';
-  return `<b>${dayLabelKey(k)}</b>: 🌡 ${deg(d.tmin)} → ${deg(d.tmax)} · ${rain}${d.gust >= 50 ? ` · 💨 ριπές ${num(d.gust)} km/h` : ''}${d.storm ? ' · ⚡ καταιγίδες' : ''}`;
+  const D = A.dayStats[k]; if (!D) return `${dayLabelKey(k)}: —`;
+  const d = D.rest ? { ...D, ...D.rest } : D, label = D.rest ? `${dayLabelKey(k)} (από τώρα)` : dayLabelKey(k);
+  const rain = d.mm >= 0.5 || d.prob >= 0.4 ? `🌧 βροχή ${pct(d.prob)} · ~${mm(d.mm)} mm${D.rest ? '' : ` (${d.wetModels}/${d.nModels} μοντέλα)`}` : '☀ χωρίς ουσιαστική βροχή';
+  return `<b>${label}</b>: 🌡 ${deg(D.tmin)} → ${deg(D.tmax)} · ${rain}${d.gust >= 50 ? ` · 💨 ριπές ${num(d.gust)} km/h` : ''}${d.storm ? ' · ⚡ καταιγίδες' : ''}`;
 }
 function rainText(A) {
   if (!A.episodes.length) return `☀ <b>${esc(A.L.name)}</b>: καμία βροχή στις επόμενες 72 ώρες.\n${link(A)}`;
