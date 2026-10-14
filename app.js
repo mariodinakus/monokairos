@@ -306,6 +306,71 @@ en: {
     ['Uncertainty','The 80% range combines ensemble spread with MONO’s test error at the same lead.']
   ]
 }};
+/* v3.5 — detailed rain forecast + live interactive globe */
+Object.assign(L.el, {
+  rain:'Βροχή', rainTitle:'Πρόγνωση βροχής', rainSub:'Πότε αρχίζει, πότε σταματά, πόση θα ρίξει και πόσο σίγουρο είναι — ώρα με την ώρα.',
+  rNowLabel:'Αυτή τη στιγμή', rEpisodes:'Επεισόδια βροχής · 7 ημέρες', rEpisodesSub:'Κάθε συνεχόμενο διάστημα με βροχή, με αρχή, τέλος, σύνολο και κορύφωση.',
+  r15:'Επόμενες 6 ώρες ανά 15 λεπτά', r15Sub:'Λεπτομέρεια από μοντέλο υψηλής ανάλυσης (Open-Meteo, 15′). Κάθε στήλη = βροχή στο τέταρτο που τελειώνει εκείνη την ώρα.',
+  r15None:'Η λεπτομέρεια ανά 15 λεπτά δεν είναι διαθέσιμη για αυτό το σημείο.', rHourly:'Ώρα με την ώρα · 48 ώρες', rHourlySub:'Τα ξηρά διαστήματα συμπτύσσονται. mm/ώρα = λίτρα νερό ανά τετραγωνικό μέτρο σε μία ώρα.',
+  rChart:'72 ώρες με μια ματιά', rChartSub:'Στήλες: αναμενόμενα mm ανά ώρα (ανοιχτό: το υγρό σενάριο 90%). Γραμμή: πιθανότητα βροχής.',
+  rDaily:'Ανά ημέρα', rDailySub:'Σύνολο ημέρας, εύρος από τα μέλη των ensembles (10%–90%) και οι πιο βροχερές ώρες.',
+  rDry:'ξηρά', rProb:'πιθανότητα', rTotal:'σύνολο', rPeak:'κορύφωση', rDur:'διάρκεια', rRange:'εύρος', rStorm:'καταιγίδα', rMmH:'mm/ώρα', rOpen:'Αναλυτικά για τη βροχή',
+  rWetHours:'βροχερές ώρες', rMm:'mm',
+  rIntensity:['ξηρά','ψιχάλα','ασθενής βροχή','μέτρια βροχή','ισχυρή βροχή','νεροποντή','καταρρακτώδης βροχή'],
+  rIntensitySnow:['ξηρά','λίγες νιφάδες','ελαφριά χιονόπτωση','χιονόπτωση','πυκνή χιονόπτωση','πολύ πυκνή χιονόπτωση','χιονοθύελλα'],
+  rPlain:['','λίγες σταγόνες, μόλις βρέχει το έδαφος','ελαφριά βροχή — μια ομπρέλα αρκεί','κανονική βροχή — χωρίς ομπρέλα βρέχεσαι γρήγορα','δυνατή βροχή — λιμνούλες και νερά στους δρόμους','πολύ δυνατή βροχή — νερά στους δρόμους, οδήγησε αργά','εξαιρετικά έντονη — μακριά από ρέματα και υπόγεια'],
+  rTotalWords:[[1,'ελάχιστη — ίσα που βρέχει το έδαφος'],[5,'λίγη βροχή'],[15,'αξιόλογη βροχή — μουσκεύει καλά το έδαφος'],[40,'πολλή βροχή — πιθανά νερά στους δρόμους'],[1e9,'πάρα πολλή βροχή — κίνδυνος πλημμύρας']],
+  rNowRaining:(w, end) => `Βρέχει τώρα (${w}).${end ? ` Αναμένεται να σταματήσει γύρω στις ${end}.` : ''}`,
+  rNowSoon:(inTxt, at, until) => `Δεν βρέχει τώρα. Η βροχή αρχίζει σε ${inTxt}, γύρω στις ${at}, και κρατά μέχρι ${until}.`,
+  rNowLater:(at) => `Δεν βρέχει τώρα και δεν αναμένεται βροχή τις επόμενες 24 ώρες. Η επόμενη βροχή φαίνεται ${at}.`,
+  rNowNone:'Δεν βρέχει και δεν φαίνεται βροχή τις επόμενες 7 ημέρες.',
+  rNowObs:(st, wx) => `Ο σταθμός ${st} μετρά: ${wx}.`,
+  rIn:(h, m) => (h ? `${h} ${h === 1 ? 'ώρα' : 'ώρες'}${m ? ` και ${m}′` : ''}` : `${m}′`),
+  rEpisodeText:(o) => `Βροχή ${o.prob} (${o.pct}). ${o.shape} Συνολικά περίπου ${o.mm} mm${o.range ? ` (εύρος ${o.range} mm)` : ''} — ${o.totalWord}.${o.storm ? ` Πιθανότητα καταιγίδας ${o.storm}.` : ''}${o.snow ? ' Μπορεί να πέσει και χιόνι.' : ''}`,
+  rShapeSteady:(w, r) => `Θα είναι κυρίως ${w} (~${r} mm/ώρα).`,
+  rShapePeak:(a, w, r) => `Η πιο έντονη ώρα είναι γύρω στις ${a}: ${w}, ~${r} mm/ώρα.`,
+  rMmExplain:'1 mm βροχής = 1 λίτρο νερό σε κάθε τετραγωνικό μέτρο. 5 mm γεμίζουν ένα ποτήρι σε μπαλκόνι 2 m²· 20 mm σε μια μέρα θεωρούνται πολλά.',
+  rUntil:(t) => t, rToday:'σήμερα', rTomorrow:'αύριο', rRefined:'ακριβής ώρα από 15λεπτα δεδομένα', rHourlyOnly:'ακρίβεια ώρας',
+  rNoEpisodes:'Καμία βροχή στις επόμενες 7 ημέρες.', rWhatMm:'Τι σημαίνουν τα mm;', rUpdated:'Ενημέρωση',
+  globeTitle:'Ζωντανή υδρόγειος', globeSub:'Πραγματικά δεδομένα: δορυφόρος NASA, ραντάρ RainViewer, βροχή IMERG και ζωντανό πλέγμα καιρού Open-Meteo. Γύρισέ τη, κάνε κλικ οπουδήποτε.',
+  gRadar:'Ραντάρ βροχής', gGridL:'Πλέγμα καιρού', gTemps:'Πόλεις', gRain:'Βροχή IMERG', gVar:'Χρώμα πλέγματος', gV_temp:'Θερμοκρασία', gV_wind:'Άνεμος', gV_cloud:'Νέφωση', gV_precip:'Βροχή τώρα',
+  gFresh:'Τελευταία ενημέρωση δεδομένων', gRefresh:'↻ Ανανέωση', gAuto:'αυτόματη ανανέωση κάθε 10′', gNA:'μη διαθέσιμο', gOff:'κλειστό', gDaily:'ημερήσια σύνθεση',
+  gSrcSat:'Δορυφόρος VIIRS (NASA)', gSrcSst:'Θερμοκρασία θάλασσας (GHRSST)', gSrcMarble:'Blue Marble (NASA)', gSrcRadar:'Ραντάρ (RainViewer)', gSrcImerg:'Βροχή δορυφόρου (NASA IMERG)', gSrcGrid:'Πλέγμα καιρού (Open-Meteo)', gSrcCities:'Πόλεις (Open-Meteo)', gStatic:'στατική εικόνα',
+  gClick:'Κάνε κλικ σε οποιοδήποτε σημείο της Γης για ζωντανό καιρό εκεί.', gProbeLoading:'Φόρτωση καιρού για το σημείο…', gOpenHere:'↗ Πρόγνωση εδώ', gNext6:'Βροχή επόμενες 6 ώρες', gWindL:'Άνεμος', gCloudL:'Νέφωση', gHumL:'Υγρασία',
+  gPointAt:'Σημείο', gNoRain6:'χωρίς βροχή', gNoteFoot:'Οι χρόνοι είναι στην ώρα της συσκευής σου. Ραντάρ: μόνο όπου υπάρχει κάλυψη ραντάρ. IMERG: εκτίμηση δορυφόρου με καθυστέρηση ~4–6 ωρών. Πλέγμα: τρέχουσα ανάλυση ανά 15°.'
+});
+Object.assign(L.en, {
+  rain:'Rain', rainTitle:'Rain forecast', rainSub:'When it starts, when it stops, how much will fall and how sure that is — hour by hour.',
+  rNowLabel:'Right now', rEpisodes:'Rain episodes · 7 days', rEpisodesSub:'Each continuous spell of rain, with start, end, total and peak.',
+  r15:'Next 6 hours in 15-minute steps', r15Sub:'Detail from a high-resolution model (Open-Meteo, 15′). Each column = rain in the quarter-hour ending at that time.',
+  r15None:'15-minute detail is not available for this location.', rHourly:'Hour by hour · 48 hours', rHourlySub:'Dry stretches are collapsed. mm/h = litres of water per square metre in one hour.',
+  rChart:'72 hours at a glance', rChartSub:'Bars: expected mm per hour (light: the wet 90% scenario). Line: chance of rain.',
+  rDaily:'By day', rDailySub:'Daily total, range from the ensemble members (10%–90%) and the wettest hours.',
+  rDry:'dry', rProb:'chance', rTotal:'total', rPeak:'peak', rDur:'duration', rRange:'range', rStorm:'thunder', rMmH:'mm/h', rOpen:'Rain in detail',
+  rWetHours:'wet hours', rMm:'mm',
+  rIntensity:['dry','drizzle','light rain','moderate rain','heavy rain','downpour','torrential rain'],
+  rIntensitySnow:['dry','a few flakes','light snow','snow','heavy snow','very heavy snow','blizzard'],
+  rPlain:['','a few drops, barely wets the ground','light rain — an umbrella is enough','proper rain — you get wet quickly without an umbrella','heavy rain — puddles and water on the roads','very heavy rain — water on roads, drive slowly','extreme — keep away from streams and basements'],
+  rTotalWords:[[1,'very little — barely wets the ground'],[5,'a little rain'],[15,'a decent amount — soaks the ground'],[40,'a lot of rain — water on roads likely'],[1e9,'a huge amount — flood risk']],
+  rNowRaining:(w, end) => `It is raining now (${w}).${end ? ` Expected to stop around ${end}.` : ''}`,
+  rNowSoon:(inTxt, at, until) => `Not raining now. Rain starts in ${inTxt}, around ${at}, and lasts until ${until}.`,
+  rNowLater:(at) => `Not raining now and no rain expected in the next 24 hours. The next rain looks like ${at}.`,
+  rNowNone:'Not raining, and no rain in sight for the next 7 days.',
+  rNowObs:(st, wx) => `Station ${st} reports: ${wx}.`,
+  rIn:(h, m) => (h ? `${h} ${h === 1 ? 'hour' : 'hours'}${m ? ` ${m}′` : ''}` : `${m}′`),
+  rEpisodeText:(o) => `Rain is ${o.prob} (${o.pct}). ${o.shape} About ${o.mm} mm in total${o.range ? ` (range ${o.range} mm)` : ''} — ${o.totalWord}.${o.storm ? ` Thunderstorm chance ${o.storm}.` : ''}${o.snow ? ' Some snow is possible.' : ''}`,
+  rShapeSteady:(w, r) => `Mostly ${w} (~${r} mm/h).`,
+  rShapePeak:(a, w, r) => `The most intense hour is around ${a}: ${w}, ~${r} mm/h.`,
+  rMmExplain:'1 mm of rain = 1 litre of water on every square metre. 20 mm in a day counts as a lot.',
+  rUntil:(t) => t, rToday:'today', rTomorrow:'tomorrow', rRefined:'exact time from 15-minute data', rHourlyOnly:'hourly precision',
+  rNoEpisodes:'No rain in the next 7 days.', rWhatMm:'What do the mm mean?', rUpdated:'Updated',
+  globeTitle:'Live globe', globeSub:'Real data: NASA satellite, RainViewer radar, IMERG rainfall and a live Open-Meteo weather grid. Spin it, click anywhere.',
+  gRadar:'Rain radar', gGridL:'Weather grid', gTemps:'Cities', gRain:'IMERG rain', gVar:'Grid colour', gV_temp:'Temperature', gV_wind:'Wind', gV_cloud:'Cloud', gV_precip:'Rain now',
+  gFresh:'Data last updated', gRefresh:'↻ Refresh', gAuto:'auto-refresh every 10′', gNA:'not available', gOff:'off', gDaily:'daily composite',
+  gSrcSat:'VIIRS satellite (NASA)', gSrcSst:'Sea temperature (GHRSST)', gSrcMarble:'Blue Marble (NASA)', gSrcRadar:'Radar (RainViewer)', gSrcImerg:'Satellite rainfall (NASA IMERG)', gSrcGrid:'Weather grid (Open-Meteo)', gSrcCities:'Cities (Open-Meteo)', gStatic:'static image',
+  gClick:'Click anywhere on Earth for the live weather there.', gProbeLoading:'Loading weather for this point…', gOpenHere:'↗ Forecast here', gNext6:'Rain next 6 hours', gWindL:'Wind', gCloudL:'Cloud', gHumL:'Humidity',
+  gPointAt:'Point', gNoRain6:'no rain', gNoteFoot:'Times are in your device’s time zone. Radar: only where radar coverage exists. IMERG: satellite estimate with ~4–6 h latency. Grid: current analysis every 15°.'
+});
 
 /* ------------------------------------------------------------------ state */
 const $ = s => document.querySelector(s);
@@ -322,7 +387,8 @@ const state = {
   page: (location.hash || '').slice(1) || 'now', hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle',
   aq: null, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
-  gBase: UI.gBase || 'sat', gLayers: { clouds: true, rain: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat
+  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat,
+  gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
 const AN = k => ALG_NAMES[state.lang][k] || k;
@@ -394,6 +460,7 @@ const mainURL = c => q(OM, { ...ll(c), timezone: 'auto', timeformat: 'unixtime',
   current: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,visibility,is_day',
   hourly: 'temperature_2m,precipitation_probability,weather_code,is_day,uv_index,visibility', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
 const modelURL = (c, id) => q(OM, { ...ll(c), models: id, hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
+const rain15URL = c => q(OM, { ...ll(c), minutely_15: 'precipitation,rain,snowfall,weather_code', forecast_minutely_15: 96, past_minutely_15: 4, timezone: 'auto', timeformat: 'unixtime' });
 const ensURL = (c, id, vars) => q(ENS, { ...ll(c), models: id, hourly: vars, timeformat: 'unixtime', timezone: 'UTC', past_days: 1, forecast_days: 7 });
 
 /* ------------------------------------------------------------------ METAR */
@@ -534,6 +601,7 @@ async function loadAll(force = false) {
       .then(r => { if (gen === state.gen) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
       .catch(() => { if (gen === state.gen) { state.ens[e.id] = { error: true }; schedule(); } })));
   }
+  jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) state.rain15 = null; }));
   jobs.push(fetchObs(c).then(o => { if (gen === state.gen) { state.obs = o; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; schedule(); } }));
   jobs.push(getJSON(longURL(c)).then(d => { if (gen === state.gen) { state.long = d; schedule(); } }).catch(() => {}));
   jobs.push(fetchHolidays(c).then(h => { if (gen === state.gen) { state.hol = h; schedule(); } }).catch(() => {}));
@@ -698,7 +766,7 @@ function recompute() {
     const Lt = M.leadFit(tr?.temp, r.k), sHist = Lt ? Lt.sigma : 1.3 + 0.35 * r.k, sEns = et ? et.sd : null;
     const sigma = Math.max(0.5, fin(sEns) ? Math.sqrt(0.5 * sEns ** 2 + 0.5 * sHist ** 2) : sHist);
     r.lo = fin(r.temp) ? r.temp - 1.2816 * sigma : null; r.hi = fin(r.temp) ? r.temp + 1.2816 * sigma : null;
-    r.ens = et; r.pEns = ep ? ep.pWet : null;
+    r.ens = et; r.pEns = ep ? ep.pWet : null; r.mmLo = ep ? ep.q10 : null; r.mmHi = ep ? ep.q90 : null;
     r.pop = fin(r.pMono) && fin(r.pEns) ? 0.5 * r.pMono + 0.5 * r.pEns : fin(r.pMono) ? r.pMono : r.pEns;
     if (fin(r.amount) && fin(r.pop) && r.pop < 0.15) r.amount = Math.min(r.amount, 0.1);
     const eStorm = M.ensembleProb(famP.filter(f => f.CAPE), (m, j, f) => { const p = m[i], c = f.CAPE[j]?.[i]; return fin(p) && fin(c) ? c >= 400 && p >= 0.5 : null; });
@@ -775,14 +843,14 @@ function recompute() {
   };
   current.isDay = cur.is_day ?? nowRow?.isDay ?? 1;
 
-  state.view = { times, rows: out, iNow, daily, periods, current, md, order, active, dup, famInfo, famCount: fams.length,
+  state.view = { times, rows: out, iNow, daily, periods, current, md, order, active, dup, famInfo, famCount: fams.length, famP,
     members: famT.reduce((a, f) => a + f.members.length, 0), S, station, stations, useStation, live, zone, at: now };
 }
 
 function saveSnapshot() {
   if (!state.view || !state.main) return;
   const V = state.view;
-  const v = { ...V, md: {}, live: {}, stations: [], station: V.station ? { ...V.station, list: V.station.list.slice(-6) } : null,
+  const v = { ...V, md: {}, live: {}, famP: [], stations: [], station: V.station ? { ...V.station, list: V.station.list.slice(-6) } : null,
     rows: V.rows.map(r => ({ ...r, models: {}, codes: [], ens: null, methods: {} })) };
   const all = read(K.snap, {});
   all[ckey(state.city)] = { at: Date.now(), view: v, main: { timezone: state.main.timezone, hourly: { time: state.main.hourly.time }, current: state.main.current, daily: state.main.daily } };
@@ -861,7 +929,7 @@ function nowPage() {
   const ch = chart({ rows: win, band: { lo: win.map(r => (past(r) ? null : r.lo)), hi: win.map(r => (past(r) ? null : r.hi)) },
     series: [{ vals: win.map(r => (past(r) ? r.tempModel : null)), cls: 'hind' }, { vals: win.map((r, j) => (!past(r) || (win[j + 1] && !past(win[j + 1])) ? r.temp : null)), cls: 'mono' }],
     points: win.map(r => r.obs), bars: win.map(r => (past(r) ? null : r.amount)), nowT: Date.now() });
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${alertsStrip()}${summaryCard()}${todoCard()}${weekendCard()}
+  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${rainNowCard(true)}${alertsStrip()}${summaryCard()}${todoCard()}${weekendCard()}
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${esc(rainSentence())}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(rows.slice(iN, iN + 25), cur)}</section>
     <section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
@@ -869,7 +937,7 @@ function nowPage() {
       <div class="card">${engineSummary()}</div></section>${holidaysCard()}${environment()}${glossary()}`;
 }
 function hoursStrip(rows, cur) {
-  return `<div class="scroll-hours">${rows.map((r, j) => `<div class="hourcard ${j === 0 ? 'active' : ''}"><span class="hourtime">${j === 0 ? T('now') : hh(r.t) + ':00'}</span>${icon(j === 0 && cur && fin(cur.code) ? cur.code : r.code, j === 0 && cur ? cur.isDay : r.isDay)}<span class="hourtemp">${deg(j === 0 && cur && fin(cur.temp) ? cur.temp : r.temp)}</span><span class="hoursub">☂ ${pct(r.pop)}</span></div>`).join('')}</div>`;
+  return `<div class="scroll-hours">${rows.map((r, j) => `<div class="hourcard ${j === 0 ? 'active' : ''}"><span class="hourtime">${j === 0 ? T('now') : hh(r.t) + ':00'}</span>${icon(j === 0 && cur && fin(cur.code) ? cur.code : r.code, j === 0 && cur ? cur.isDay : r.isDay)}<span class="hourtemp">${deg(j === 0 && cur && fin(cur.temp) ? cur.temp : r.temp)}</span><span class="hoursub">☂ ${pct(r.pop)}</span>${(r.amount ?? 0) >= 0.1 ? `<span class="hoursub rn-hmm">${mm1(r.amount)} mm</span>` : ''}</div>`).join('')}</div>`;
 }
 function dailyRows(d) {
   if (!d?.length) return `<p class="muted">—</p>`;
@@ -882,8 +950,8 @@ function periodText(p) {
   return `${lab(p.start)} ${hhmm(p.start)} → ${lab(e) === lab(p.start) ? '' : lab(e) + ' '}${hhmm(e)}`;
 }
 function rainSentence() {
-  const p = state.view.periods[0];
-  return p ? `${T('ph_rain')}: ${periodText(p)} · ${T('upTo')} ${pct(p.max)} · ~${num(p.mm, 1)} mm` : T('noRain');
+  const e = rainEpisodes(72)[0];
+  return e ? `${T('ph_rain')}: ${rWhen(e.start)} → ${rWhen(e.end)} · ${T('upTo')} ${pct(e.pmax)} · ~${mm1(e.mm)} mm · ${rWord(e.peakRate, rIsSnow(e.peak))}` : T('noRain');
 }
 function alertsStrip() {
   const V = state.view, items = [];
@@ -951,6 +1019,211 @@ function hourlyPage() {
   return head + `<div class="chips">${[24, 48, 72, 168].map(n => `<button class="chip ${state.hours === n ? 'active' : ''}" data-action="hours" data-n="${n}">${T(n === 24 ? 'h24' : 'next' + n)}</button>`).join('')}</div>
     <div class="card">${ch}${legend([['mono', T('legendMono')], ['band', T('legendBand')], ['bar', T('legendRain')]])}</div>
     <section class="section"><div class="tableline hl head"><span>${T('time')}</span><span></span><span>${T('temp')}</span><span class="hide-sm">${T('range')}</span><span>${T('rain')}</span><span class="hide-sm">${T('amount')}</span><span>${T('windCol')}</span><span class="hide-sm">${T('rh')}</span></div>${lines}</section>`;
+}
+
+/* ------------------------------------------------------------------ page: rain (v3.5) */
+// Open-Meteo hourly precipitation at time t is the sum of the PRECEDING hour, so an hourly row covers [t − 1 h, t].
+const RAIN_BINS = [0.1, 0.5, 2, 5, 10, 30];
+const rLevel = mm => { if (!fin(mm) || mm < 0.1) return 0; let k = 0; RAIN_BINS.forEach((b, j) => { if (mm >= b) k = j + 1; }); return Math.min(6, k); };
+const rIsSnow = r => (r.pSnow ?? 0) >= 0.5 || (fin(r.temp) && r.temp <= 0.5);
+const rWord = (mm, snow) => T(snow ? 'rIntensitySnow' : 'rIntensity')[rLevel(mm)];
+const mm1 = v => (fin(v) ? (v < 0.05 ? '0' : num(v, v < 10 ? 1 : 0)) : '—');
+// Rain rate if it does rain in that hour: expected amount ÷ chance, capped by the ensemble's wet (90%) scenario.
+function condRate(r) {
+  if (!fin(r.amount) || r.amount <= 0) return 0;
+  const c = r.amount / Math.max(r.pop ?? 0, 0.2);
+  return fin(r.mmHi) && r.mmHi > r.amount ? Math.min(c, r.mmHi) : c;
+}
+const wetHour = r => (r.pop ?? 0) >= 0.4 || ((r.pop ?? 0) >= 0.25 && (r.amount ?? 0) >= 0.3);
+function rWhen(t) {
+  const V = state.view, i = V.daily.findIndex(d => d.key === dayKey(t, V.zone));
+  const d = i === 0 ? T('rToday') : i === 1 ? T('rTomorrow') : dt(t, { weekday: 'long' });
+  return `${d} ${hhmm(t)}`;
+}
+// Ensemble members summed over a set of hours → 10/50/90% totals (equal weight per ensemble system).
+function memberTotals(idxs) {
+  const fams = (state.view?.famP || []).map(f => f.members.map(m => { let s = 0, n = 0; for (const i of idxs) if (fin(m[i])) { s += m[i]; n++; } return n >= Math.max(1, idxs.length * 0.7) ? s : null; }).filter(fin)).filter(v => v.length >= 3);
+  if (!fams.length) return null;
+  const pts = []; fams.forEach(v => v.forEach(x => pts.push({ x, w: 1 / (fams.length * v.length) })));
+  pts.sort((a, b) => a.x - b.x);
+  const qq = p => { let c = 0; for (const o of pts) { c += o.w; if (c >= p) return o.x; } return pts.at(-1).x; };
+  return { q10: qq(0.1), q50: qq(0.5), q90: qq(0.9) };
+}
+function rainEpisodes(hours = 168) {
+  const V = state.view, rows = V.rows, now = Date.now(), raw = [];
+  let cur = null;
+  const stop = Math.min(rows.length, V.iNow + 1 + hours);
+  for (let i = V.iNow + 1; i < stop; i++) {
+    const r = rows[i]; if (!wetHour(r)) continue;
+    if (cur && r.i - cur.i1 <= 3) cur.i1 = r.i; else { cur = { i0: r.i, i1: r.i }; raw.push(cur); }
+  }
+  const R = state.rain15;
+  return raw.map(({ i0, i1 }) => {
+    const span = rows.slice(i0, i1 + 1), wet = span.filter(wetHour);
+    let start = rows[i0].t - 3600e3, end = rows[i1].t, refined = false;
+    if (R && start < R.t.at(-1)) {
+      const slots = R.t.map((t, j) => ({ t, p: R.p[j] })).filter(o => o.t > start - 3600e3 && o.t <= end + 3600e3 && (o.p ?? 0) >= 0.05);
+      if (slots.length) {
+        const s15 = slots[0].t - 15 * 60e3, e15 = slots.at(-1).t;
+        if (Math.abs(s15 - start) <= 90 * 60e3) { start = s15; refined = true; }
+        if (end <= R.t.at(-1) && Math.abs(e15 - end) <= 90 * 60e3) { end = e15; refined = true; }
+      }
+    }
+    if (start < now && span[0].t > now) start = Math.max(start, now - 3600e3);
+    const peak = span.reduce((a, r) => (condRate(r) > condRate(a) ? r : a), span[0]);
+    const mm = span.reduce((a, r) => a + (fin(r.amount) ? r.amount : 0), 0);
+    const mt = memberTotals(span.map(r => r.i));
+    return { start, end, refined, ongoing: start <= now, rows: span, wetHours: wet.length, pmax: Math.max(...span.map(r => r.pop ?? 0)), mm, mt, peak,
+      peakRate: condRate(peak), storm: Math.max(0, ...span.map(r => r.pStorm ?? 0)), snow: span.some(r => rIsSnow(r) && (r.amount ?? 0) >= 0.1) };
+  }).filter(e => e.end > now);
+}
+function totalWord(mm) { return T('rTotalWords').find(([lim]) => mm < lim)[1]; }
+function episodeText(e) {
+  const levels = e.rows.map(r => rLevel(condRate(r))), steady = Math.max(...levels) - Math.min(...levels.filter(Boolean)) <= 1;
+  const snow = rIsSnow(e.peak);
+  const shape = steady ? T('rShapeSteady')(rWord(e.peakRate, snow), mm1(e.peakRate)) : T('rShapePeak')(hhmm(e.peak.t - 1800e3), rWord(e.peakRate, snow), mm1(e.peakRate));
+  const range = e.mt && e.mt.q90 - e.mt.q10 >= 0.5 ? `${mm1(e.mt.q10)}–${mm1(e.mt.q90)}` : null;
+  return T('rEpisodeText')({ prob: probWord(e.pmax), pct: pct(e.pmax), shape, mm: mm1(e.mm), range, totalWord: totalWord(e.mm), storm: e.storm >= 0.2 ? pct(e.storm) : null, snow: e.snow });
+}
+function rainStatus(eps) {
+  const V = state.view, now = Date.now(), cur = V.current, R = state.rain15;
+  let rate15 = null;
+  if (R) { const j = R.t.findIndex(t => t > now); if (j >= 0 && fin(R.p[j])) rate15 = R.p[j] * 4; }
+  const obsWet = cur.source === 'obs' && fin(cur.code) && ((cur.code >= 51 && cur.code <= 67) || (cur.code >= 80 && cur.code <= 99));
+  const e0 = eps[0], next = V.rows[V.iNow + 1];
+  const raining = obsWet || (fin(rate15) && rate15 >= 0.2) || (e0?.ongoing && (next?.pop ?? 0) >= 0.6);
+  const lines = [];
+  let big, kind;
+  if (raining) {
+    const rate = fin(rate15) && rate15 >= 0.1 ? rate15 : next ? condRate(next) : 0;
+    const w = obsWet && cur.wx ? cur.wx : rWord(rate, next && rIsSnow(next));
+    lines.push(T('rNowRaining')(w, e0?.ongoing ? rWhen(e0.end) : null));
+    big = T('rain'); kind = 'wet';
+  } else if (e0 && e0.start - now <= 24 * 3600e3) {
+    const mins = Math.max(0, Math.round((e0.start - now) / 60e3 / 15) * 15);
+    lines.push(T('rNowSoon')(T('rIn')(Math.floor(mins / 60), mins % 60), rWhen(e0.start), rWhen(e0.end)));
+    big = T('rIn')(Math.floor(mins / 60), mins % 60); kind = 'soon';
+  } else if (e0) { lines.push(T('rNowLater')(rWhen(e0.start))); big = T('rDry'); kind = 'dry'; }
+  else { lines.push(T('rNowNone')); big = T('rDry'); kind = 'dry'; }
+  if (cur.source === 'obs' && V.station) lines.push(T('rNowObs')(V.station.id, cur.wx || desc(cur.code).toLowerCase()));
+  return { raining, big, kind, lines, rate15 };
+}
+// 15-minute bars: past hour faded, next 6 hours.
+function rain15Chart() {
+  const R = state.rain15, now = Date.now();
+  if (!R) return `<p class="notice">${T('r15None')}</p>`;
+  const idx = R.t.map((t, j) => j).filter(j => R.t[j] > now - 60 * 60e3 && R.t[j] <= now + 6 * 3600e3 + 60e3);
+  if (!idx.length) return `<p class="notice">${T('r15None')}</p>`;
+  const W = 720, H = 150, l = 34, r = 8, top = 12, bot = 26, n = idx.length;
+  const rates = idx.map(j => (fin(R.p[j]) ? R.p[j] * 4 : null)), mx = Math.max(1, ...rates.filter(fin));
+  const sc = niceStep(mx / 3), hi = Math.ceil(mx / sc) * sc, bw = (W - l - r) / n;
+  const y = v => top + (H - top - bot) * (1 - v / hi);
+  let g = '';
+  for (let v = 0; v <= hi + 1e-9; v += sc) g += `<line class="chart-grid" x1="${l}" x2="${W - r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="chart-axis" x="${l - 5}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end">${num(v, sc < 1 ? 1 : 0)}</text>`;
+  idx.forEach((j, k) => {
+    const v = rates[k], x0 = l + k * bw, past = R.t[j] <= now, snow = (R.s?.[j] ?? 0) > 0.05;
+    if (fin(v) && v >= 0.04) g += `<rect class="rn-bar lv${rLevel(v)}${past ? ' past' : ''}${snow ? ' snow' : ''}" x="${(x0 + 1).toFixed(1)}" y="${y(v).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${(H - bot - y(v)).toFixed(1)}" rx="2"><title>${hhmm(R.t[j] - 15 * 60e3)}–${hhmm(R.t[j])} · ${num(R.p[j], 1)} mm · ${rWord(v, snow)}</title></rect>`;
+    if (new Date(R.t[j]).getUTCMinutes() === 0 && k % (n > 20 ? 4 : 2) === 0) g += `<text class="chart-axis" x="${(x0 + bw).toFixed(1)}" y="${H - 8}" text-anchor="middle">${hhmm(R.t[j])}</text>`;
+  });
+  const k0 = idx.findIndex(j => R.t[j] > now);
+  if (k0 > 0) { const xn = l + k0 * bw; g += `<line class="chart-now" x1="${xn}" x2="${xn}" y1="${top}" y2="${H - bot}"/><text class="chart-axis strong" x="${xn + 4}" y="${top + 9}">${state.lang === 'el' ? 'ΤΩΡΑ' : 'NOW'}</text>`; }
+  g += `<text class="chart-axis" x="${l}" y="${top - 2}">${T('rMmH')}</text>`;
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" style="aspect-ratio:${W}/${H}" role="img">${g}</svg>`;
+}
+// 72 h: expected mm (bars), wet-scenario mm (light bars), chance (line, right axis).
+function rain72Chart(rows) {
+  const narrow = window.innerWidth < 640, W = narrow ? 420 : 760, H = narrow ? 190 : 230, l = 34, r = 34, top = 14, bot = 30, n = rows.length;
+  if (!n) return '';
+  const mx = Math.max(1, ...rows.map(x => Math.max(x.amount ?? 0, Math.min(x.mmHi ?? 0, (x.amount ?? 0) * 4 + 1)))), sc = niceStep(mx / 3), hi = Math.ceil(mx / sc) * sc;
+  const bw = (W - l - r) / n, y = v => top + (H - top - bot) * (1 - Math.min(v, hi) / hi), yp = p => top + (H - top - bot) * (1 - p);
+  let g = '';
+  for (let v = 0; v <= hi + 1e-9; v += sc) g += `<line class="chart-grid" x1="${l}" x2="${W - r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="chart-axis" x="${l - 5}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end">${num(v, sc < 1 ? 1 : 0)}</text>`;
+  [0, 0.5, 1].forEach(p => (g += `<text class="chart-axis" x="${W - r + 5}" y="${(yp(p) + 3.5).toFixed(1)}">${Math.round(p * 100)}%</text>`));
+  let lastDay = '';
+  rows.forEach((x, k) => {
+    const x0 = l + k * bw, d = dayKey(x.t - 3600e3, state.view.zone);
+    if (d !== lastDay) { if (k) g += `<line class="rn-daysep" x1="${x0.toFixed(1)}" x2="${x0.toFixed(1)}" y1="${top}" y2="${H - bot + 4}"/>`; g += `<text class="chart-axis strong" x="${(x0 + 3).toFixed(1)}" y="${H - 8}">${esc(dt(x.t - 3600e3, { weekday: 'short', day: 'numeric' }))}</text>`; lastDay = d; }
+    if (fin(x.mmHi) && x.mmHi >= 0.1) g += `<rect class="rn-hi" x="${(x0 + 0.5).toFixed(1)}" y="${y(x.mmHi).toFixed(1)}" width="${Math.max(1, bw - 1).toFixed(1)}" height="${(H - bot - y(x.mmHi)).toFixed(1)}"/>`;
+    if (fin(x.amount) && x.amount >= 0.05) g += `<rect class="rn-bar lv${Math.max(1, rLevel(condRate(x)))}" x="${(x0 + 0.5).toFixed(1)}" y="${y(x.amount).toFixed(1)}" width="${Math.max(1, bw - 1).toFixed(1)}" height="${(H - bot - y(x.amount)).toFixed(1)}"><title>${hhmm(x.t - 3600e3)}–${hhmm(x.t)} · ${mm1(x.amount)} mm · ${pct(x.pop)}</title></rect>`;
+  });
+  let d = '', pen = false;
+  rows.forEach((x, k) => { if (fin(x.pop)) { d += `${pen ? 'L' : 'M'}${(l + (k + 0.5) * bw).toFixed(1)},${yp(x.pop).toFixed(1)}`; pen = true; } else pen = false; });
+  g += `<path class="rn-pop" d="${d}"/>`;
+  g += `<text class="chart-axis" x="${l}" y="${top - 3}">mm</text>`;
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" style="aspect-ratio:${W}/${H}" role="img">${g}</svg>`;
+}
+function episodeCard(e) {
+  const hrs = Math.max(0.25, (e.end - e.start) / 3600e3), dur = hrs >= 1 ? `${num(hrs, hrs % 1 && hrs < 10 ? 1 : 0)} ${state.lang === 'el' ? 'ώρ.' : 'h'}` : `${Math.round(hrs * 60)}′`;
+  const mxr = Math.max(0.5, ...e.rows.map(condRate));
+  const bars = e.rows.map(r => { const v = condRate(r); return `<i class="lv${rLevel(v)}" style="height:${Math.max(4, Math.round(100 * Math.min(1, v / mxr)))}%;opacity:${(0.35 + 0.65 * (r.pop ?? 0)).toFixed(2)}" title="${hhmm(r.t - 3600e3)}–${hhmm(r.t)} · ${mm1(r.amount)} mm · ${pct(r.pop)}"></i>`; }).join('');
+  return `<article class="card rn-ep ${e.ongoing ? 'on' : ''}"><div class="rn-ephead"><div><span class="label">${e.ongoing ? T('rNowLabel') : esc(rWhen(e.start).split(' ')[0])}</span>
+      <h3>${esc(rWhen(e.start))} → ${esc(rWhen(e.end))}</h3><small class="muted">${dur} · ${e.refined ? T('rRefined') : T('rHourlyOnly')}</small></div>
+      <span class="rn-pill ${probCls(e.pmax)}">${pct(e.pmax)}</span></div>
+    <div class="rn-epbars">${bars}</div>
+    <div class="rn-stats"><div><span class="label">${T('rTotal')}</span><b>${mm1(e.mm)} <small>mm</small></b>${e.mt && e.mt.q90 - e.mt.q10 >= 0.5 ? `<small>${T('rRange')} ${mm1(e.mt.q10)}–${mm1(e.mt.q90)}</small>` : ''}</div>
+      <div><span class="label">${T('rPeak')}</span><b>${mm1(e.peakRate)} <small>${T('rMmH')}</small></b><small>${hhmm(e.peak.t - 3600e3)}–${hhmm(e.peak.t)}</small></div>
+      <div><span class="label">${T('rProb')}</span><b>${pct(e.pmax)}</b><small>${esc(probWord(e.pmax))}</small></div>
+      ${e.storm >= 0.15 ? `<div><span class="label">${T('rStorm')}</span><b>${pct(e.storm)}</b><small>⚡</small></div>` : ''}</div>
+    <p class="rn-text">${esc(episodeText(e))}</p></article>`;
+}
+function rainHourly(rows) {
+  const V = state.view, out = []; let dry = [], last = '';
+  const mxA = Math.max(1, ...rows.map(r => r.amount ?? 0));
+  const flush = () => { if (!dry.length) return; const a = dry[0].t - 3600e3, b = dry.at(-1).t, pm = Math.max(0, ...dry.map(r => r.pop ?? 0));
+    out.push(`<div class="rn-row dry"><strong>${hhmm(a)}–${hhmm(b)}</strong><span class="muted">${T('rDry')}${pm >= 0.05 ? ` · ≤ ${pct(pm)}` : ''}</span></div>`); dry = []; };
+  for (const r of rows) {
+    const d = dayKey(r.t - 3600e3, V.zone);
+    if (d !== last) { flush(); out.push(`<div class="daydivider">${esc(dt(r.t - 3600e3, { weekday: 'long', day: 'numeric', month: 'long' }))}</div>`); last = d; }
+    if ((r.pop ?? 0) < 0.2 && (r.amount ?? 0) < 0.05) { dry.push(r); continue; }
+    flush();
+    const cr = condRate(r), lv = rLevel(cr), snow = rIsSnow(r);
+    out.push(`<div class="rn-row"><strong>${hhmm(r.t - 3600e3)}–${hhmm(r.t)}</strong>
+      <div class="rn-mmcell"><div class="rn-mmbar"><span class="lv${Math.max(1, lv)}" style="width:${Math.round(100 * Math.min(1, (r.amount ?? 0) / mxA))}%"></span>${fin(r.mmHi) && r.mmHi > (r.amount ?? 0) ? `<em style="width:${Math.round(100 * Math.min(1, r.mmHi / mxA))}%"></em>` : ''}</div><b>${mm1(r.amount)} <small>mm</small></b></div>
+      <span class="rn-pill ${probCls(r.pop ?? 0)}">${pct(r.pop)}</span>
+      <span class="rn-word">${icon(r.code, r.isDay)}<span><b>${esc(rWord(cr, snow))}${(r.pStorm ?? 0) >= 0.3 ? ' ⚡' : ''}</b><small>${esc(lv ? T('rPlain')[lv] : '')}</small></span></span></div>`);
+  }
+  flush();
+  return out.join('');
+}
+function rainDaily() {
+  const V = state.view, now = Date.now();
+  return V.daily.map((d, i) => {
+    const rows = V.rows.filter(r => r.t > now && dayKey(r.t - 3600e3, V.zone) === d.key), mt = memberTotals(rows.map(r => r.i));
+    let best = null; for (let k = 0; k + 2 < rows.length; k++) { const s = rows.slice(k, k + 3).reduce((a, r) => a + (r.amount ?? 0), 0); if (!best || s > best.s) best = { s, a: rows[k].t - 3600e3, b: rows[k + 2].t }; }
+    const mm = rows.reduce((a, r) => a + (r.amount ?? 0), 0);
+    return `<div class="rn-day"><strong>${esc(dayLabel(d.t, i))}</strong><span class="rn-pill ${probCls(d.pop ?? 0)}">${pct(d.pop)}</span>
+      <b>${mm1(mm)} <small>mm</small></b><span class="muted hide-sm">${mt && mt.q90 >= 0.2 ? `${mm1(mt.q10)}–${mm1(mt.q90)} mm` : '—'}</span>
+      <span class="rn-daynote">${mm >= 0.2 && best && best.s >= 0.1 ? `${hhmm(best.a)}–${hhmm(best.b)} · ${esc(totalWord(mm))}` : esc(T('rDry'))}</span></div>`;
+  }).join('');
+}
+function rainNowCard(compact) {
+  const V = state.view; if (!V) return '';
+  const eps = rainEpisodes(), S = rainStatus(eps), e0 = eps[0];
+  const next24 = V.rows.slice(V.iNow + 1, V.iNow + 25), mx = Math.max(0.5, ...next24.map(r => r.amount ?? 0));
+  const strip = `<div class="rn-strip">${next24.map(r => `<i class="lv${Math.max(1, rLevel(condRate(r)))}" style="height:${(r.amount ?? 0) >= 0.05 ? Math.max(8, Math.round(100 * (r.amount ?? 0) / mx)) : 3}%;opacity:${(0.3 + 0.7 * (r.pop ?? 0)).toFixed(2)}" title="${hhmm(r.t - 3600e3)} · ${mm1(r.amount)} mm · ${pct(r.pop)}"></i>`).join('')}</div>
+    <div class="rn-striplab"><span>${hhmm(next24[0]?.t - 3600e3)}</span><span>+12h</span><span>+24h</span></div>`;
+  return `<section class="section card rn-now ${S.kind}"><div class="rn-nowgrid"><div><span class="label">☂ ${T('rNowLabel')}</span><div class="rn-big">${esc(S.big)}</div></div>
+    <div class="rn-nowtext">${S.lines.map(x => `<p>${esc(x)}</p>`).join('')}
+      ${e0 ? `<div class="rn-chips"><span>${T('rProb')} <b>${pct(e0.pmax)}</b></span><span>${T('rTotal')} <b>${mm1(e0.mm)} mm</b></span><span>${T('rPeak')} <b>${mm1(e0.peakRate)} ${T('rMmH')}</b></span></div>` : ''}</div></div>
+    ${strip}${compact ? `<div class="rn-more">${btn('goto', '↗ ' + T('rOpen'), 'data-page="rain"')}</div>` : ''}</section>`;
+}
+function rainPage() {
+  const V = state.view;
+  const head = header(T('rainTitle'), T('rainSub'), btn('reload', '↻ ' + T('refresh')));
+  if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
+  const eps = rainEpisodes();
+  const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
+  return head + rainNowCard(false)
+    + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
+       <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
+    <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
+      ${eps.length ? `<div class="rn-eps">${eps.map(episodeCard).join('')}</div>` : `<div class="card placeholder"><b>☀ ${T('rNoEpisodes')}</b></div>`}</section>
+    <section class="section card"><div class="panelhead"><div><b>${T('rChart')}</b><div class="section-sub">${T('rChartSub')}</div></div></div>${rain72Chart(rows72)}</section>
+    <section class="section dual"><div class="card"><div class="panelhead"><div><b>${T('rDaily')}</b><div class="section-sub">${T('rDailySub')}</div></div></div>${rainDaily()}</div>
+      <div class="card"><div class="panelhead"><b>${T('rWhatMm')}</b></div><p class="rn-text">${T('rMmExplain')}</p>
+        ${T('rIntensity').slice(1).map((w, k) => `<div class="kv"><span><i class="rn-dot lv${k + 1}"></i> ${esc(w)} — ${esc(T('rPlain')[k + 1])}</span><b>${k === 5 ? '≥ 30' : `${num(RAIN_BINS[k], RAIN_BINS[k] < 1 ? 1 : 0)}–${num(RAIN_BINS[k + 1], RAIN_BINS[k + 1] < 1 ? 1 : 0)}`} ${T('rMmH')}</b></div>`).join('')}</div></section>
+    <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rHourly')}</h2><div class="section-sub">${T('rHourlySub')}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${rainHourly(rows48)}</section>
+    <p class="notice">${T('rUpdated')} ${hhmm(state.fetchedAt || V.at)}${state.rain15 ? ` · 15′ ${hhmm(state.rain15.at)}` : ''} · MONO (${V.active.length} ${T('models')}, ${num(V.members)} ${T('members')})</p>`;
 }
 
 /* ------------------------------------------------------------------ page: weather events */
@@ -1336,48 +1609,115 @@ function glossary() {
   return `<section class="section card"><details class="gloss"><summary><b>${T('glossTitle')}</b><span class="compact">${T('glossSub')}</span></summary><dl>${T('glossList').map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></details></section>`;
 }
 
-/* ------------------------------------------------------------------ page: globe */
-// Textures are real Earth-observation imagery, composited in a canvas (equirectangular 2048×1024):
-//   NASA GIBS (Blue Marble, VIIRS NOAA-20 true colour of yesterday, GHRSST sea temperature, IMERG 30-min precipitation)
-//   RainViewer infrared satellite (clouds now) — through the same-origin proxy only (its tiles have no CORS).
-let globe = null, globeBusy = 0;
-const GIBS = (layer, fmt = 'image/jpeg', extra = '') => `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=${layer}&CRS=EPSG:4326&BBOX=-90,-180,90,180&WIDTH=2048&HEIGHT=1024&FORMAT=${encodeURIComponent(fmt)}${extra}`;
+/* ------------------------------------------------------------------ page: globe (v3.5 — live & interactive) */
+// Texture = real Earth-observation imagery composited in an equirectangular 2048×1024 canvas:
+//   NASA GIBS: Blue Marble, VIIRS NOAA-20 true colour (yesterday, full day), GHRSST sea temperature, IMERG 30-min rain (latest available slot)
+//   RainViewer radar composite (latest 10-min frame) — through the same-origin /proxy/rv rewrite (its tiles have no CORS).
+// On top: a live Open-Meteo grid (every 15°) as clickable points + rings where it rains now, city chips, and a click-anywhere probe.
+let globe = null, globeBusy = 0, globeRO = null;
+const GW = 2048, GH = 1024;
+const GIBS = (layer, fmt = 'image/jpeg', extra = '', w = GW, h = GH) => `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=${layer}&CRS=EPSG:4326&BBOX=-90,-180,90,180&WIDTH=${w}&HEIGHT=${h}&FORMAT=${encodeURIComponent(fmt)}${extra}`;
 const G_BASES = { sat: 'gSat', marble: 'gMarble', sst: 'gSst' };
-function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, radarSat: state.radarSat }); }
+const LZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } })();
+const lhm = t => dt(t, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, LZ);
+const ldate = t => dt(t, { day: 'numeric', month: 'short' }, LZ);
+const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
+const isoMin = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
+function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat }); }
 function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
-async function rvClouds() {
-  // RainViewer IR tiles (Web Mercator, zoom 2) → reprojected to equirectangular rows.
+
+// Latest IMERG half-hour that already has data (latency is a few hours): probe tiny images backwards in time.
+let imergCache = null;
+async function imergLatest() {
+  if (imergCache && Date.now() - imergCache.at < 20 * 60e3) return imergCache.t;
+  const step = 1800e3, base = Math.floor(Date.now() / step) * step;
+  const has = async t => { try { const im = await loadImg(GIBS('IMERG_Precipitation_Rate_30min', 'image/png', `&TRANSPARENT=TRUE&TIME=${isoMin(t)}`, 128, 64)); const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d'); x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, 128, 64).data; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true; return false; } catch { return false; } };
+  for (let k = 4; k <= 30; k += 4) {
+    const ts = [0, 1, 2, 3].map(j => base - (k + j) * step), ok = await Promise.all(ts.map(has)), j = ok.indexOf(true);
+    if (j >= 0) { imergCache = { t: ts[j], at: Date.now() }; return ts[j]; }
+  }
+  return null;
+}
+// RainViewer radar mosaic (Web Mercator, zoom 2) → reprojected to equirectangular rows.
+async function rvRadar() {
   if (!location.protocol.startsWith('http')) throw new Error('no proxy');
   const d = await getJSON('https://api.rainviewer.com/public/weather-maps.json', 10000);
-  const ir = d.satellite?.infrared?.at(-1); if (!ir) throw new Error('no ir');
+  const fr = d.radar?.past?.at(-1); if (!fr) throw new Error('no radar');
   const z = 2, n = 4, S = 256, merc = document.createElement('canvas'); merc.width = merc.height = n * S;
   const mc = merc.getContext('2d');
-  await Promise.all([...Array(n * n).keys()].map(async k => { const x = k % n, y = Math.floor(k / n); const im = await loadImg(`/proxy/rv${ir.path}/256/${z}/${x}/${y}/0/0_0.png`); mc.drawImage(im, x * S, y * S); }));
-  const out = document.createElement('canvas'); out.width = 2048; out.height = 1024; const oc = out.getContext('2d');
-  for (let row = 0; row < 1024; row++) {
-    const lat = 90 - (row + 0.5) * 180 / 1024; if (Math.abs(lat) > 85) continue;
+  let ok = 0;
+  await Promise.all([...Array(n * n).keys()].map(async k => { const x = k % n, y = Math.floor(k / n); try { const im = await loadImg(`/proxy/rv${fr.path}/256/${z}/${x}/${y}/2/1_1.png`); mc.drawImage(im, x * S, y * S); ok++; } catch {} }));
+  if (!ok) throw new Error('radar tiles');
+  const out = document.createElement('canvas'); out.width = GW; out.height = GH; const oc = out.getContext('2d');
+  for (let row = 0; row < GH; row++) {
+    const lat = 90 - (row + 0.5) * 180 / GH; if (Math.abs(lat) > 85) continue;
     const phi = lat * Math.PI / 180, my = (1 - Math.log(Math.tan(Math.PI / 4 + phi / 2)) / Math.PI) / 2 * n * S;
-    oc.drawImage(merc, 0, Math.floor(my), n * S, 1, 0, row, 2048, 1);
+    oc.drawImage(merc, 0, Math.floor(my), n * S, 1, 0, row, GW, 1);
   }
-  return { canvas: out, time: ir.time * 1000 };
+  return { canvas: out, time: fr.time * 1000 };
 }
 async function paintGlobe() {
   if (!globe) return;
-  const job = ++globeBusy, base = state.gBase, L = state.gLayers;
+  const job = ++globeBusy, base = state.gBase, Lr = state.gLayers, src = {};
   state.gStatus = 'loading'; updateGlobeCtl();
-  const cv = document.createElement('canvas'); cv.width = 2048; cv.height = 1024; const ctx = cv.getContext('2d');
-  const notes = [];
+  const cv = document.createElement('canvas'); cv.width = GW; cv.height = GH; const ctx = cv.getContext('2d');
   try {
-    ctx.drawImage(await loadImg(GIBS('BlueMarble_ShadedRelief_Bathymetry')), 0, 0, 2048, 1024);
-    if (base === 'sat') { try { ctx.drawImage(await loadImg(GIBS('VIIRS_NOAA20_CorrectedReflectance_TrueColor', 'image/png', '&TRANSPARENT=TRUE')), 0, 0, 2048, 1024); notes.push(T('gSatNote')); } catch { notes.push(T('gFail')); } }
-    if (base === 'sst') { try { ctx.drawImage(await loadImg(GIBS('GHRSST_L4_MUR_Sea_Surface_Temperature', 'image/png', '&TRANSPARENT=TRUE')), 0, 0, 2048, 1024); notes.push(T('gSstNote')); } catch { notes.push(T('gFail')); } }
-    if (L.clouds) { try { const c = await rvClouds(); ctx.globalAlpha = 0.75; ctx.globalCompositeOperation = 'screen'; ctx.drawImage(c.canvas, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; notes.push(`${T('gClouds')} · ${hhmm(c.time)}`); } catch { notes.push(T('gCloudsNA')); } }
-    if (L.rain) { try { ctx.globalAlpha = 0.9; ctx.drawImage(await loadImg(GIBS('IMERG_Precipitation_Rate_30min', 'image/png', '&TRANSPARENT=TRUE')), 0, 0, 2048, 1024); ctx.globalAlpha = 1; notes.push(T('gRainNote')); } catch { notes.push(T('gFail')); } }
+    const yday = isoDay(Date.now() - 86400e3), sstDay = isoDay(Date.now() - 2 * 86400e3);
+    const [bm, top, imT, rad] = await Promise.all([
+      loadImg(GIBS('BlueMarble_ShadedRelief_Bathymetry')),
+      base === 'sat' ? loadImg(GIBS('VIIRS_NOAA20_CorrectedReflectance_TrueColor', 'image/png', `&TRANSPARENT=TRUE&TIME=${yday}`)).catch(() => null)
+        : base === 'sst' ? loadImg(GIBS('GHRSST_L4_MUR_Sea_Surface_Temperature', 'image/png', `&TRANSPARENT=TRUE&TIME=${sstDay}`)).catch(() => null) : null,
+      Lr.rain ? imergLatest().catch(() => null) : null,
+      Lr.radar ? rvRadar().catch(() => null) : null
+    ]);
+    ctx.drawImage(bm, 0, 0, GW, GH);
+    if (top) { ctx.drawImage(top, 0, 0, GW, GH); src.base = base === 'sat' ? Date.parse(yday + 'T12:00:00Z') : Date.parse(sstDay + 'T12:00:00Z'); }
+    else src.base = base === 'marble' ? 'static' : null;
+    if (Lr.rain && imT) { try { const im = await loadImg(GIBS('IMERG_Precipitation_Rate_30min', 'image/png', `&TRANSPARENT=TRUE&TIME=${isoMin(imT)}`)); ctx.globalAlpha = 0.9; ctx.drawImage(im, 0, 0, GW, GH); ctx.globalAlpha = 1; src.imerg = imT; } catch { src.imerg = null; } }
+    if (Lr.radar && rad) { ctx.globalAlpha = 0.95; ctx.drawImage(rad.canvas, 0, 0); ctx.globalAlpha = 1; src.radar = rad.time; }
     if (job !== globeBusy || !globe) return;
-    globe.globeImageUrl(cv.toDataURL('image/jpeg', 0.88));
-    state.gStatus = 'ok'; state.gNotes = notes;
-  } catch { state.gStatus = 'error'; state.gNotes = [T('gFail')]; }
+    globe.globeImageUrl(cv.toDataURL('image/jpeg', 0.9));
+    state.gSrc = { ...src, painted: Date.now() }; state.gStatus = 'ok';
+  } catch { if (job === globeBusy) { state.gStatus = 'error'; state.gNotes = [T('gFail')]; } }
   updateGlobeCtl();
+}
+
+/* live weather grid */
+const GRID = (() => { const p = []; for (let la = -60; la <= 75; la += 15) for (let lo = -180; lo < 180; lo += 15) p.push({ lat: la, lon: lo + ((la / 15) % 2 ? 7.5 : 0) }); return p; })();
+async function fetchGrid(force = false) {
+  const fresh = g => g && Date.now() - g.at < 10 * 60e3;
+  if (!force && fresh(state.grid)) return state.grid;
+  if (!force && !state.grid) { const c = read('mono35_grid', null); if (fresh(c)) { state.grid = c; return c; } }
+  if (state.gridBusy) return state.grid;
+  state.gridBusy = true; updateGlobeCtl();
+  try {
+    const B = 80, batches = [];
+    for (let i = 0; i < GRID.length; i += B) batches.push(GRID.slice(i, i + B));
+    const res = await Promise.all(batches.map(b => getJSON(q(OM, { latitude: b.map(p => p.lat).join(','), longitude: b.map(p => p.lon).join(','), current: 'temperature_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,is_day', timeformat: 'unixtime', timezone: 'UTC' }), 25000)));
+    const pts = []; let time = 0;
+    res.forEach((d, bi) => (Array.isArray(d) ? d : [d]).forEach((o, j) => { const c = o?.current; if (!c || !fin(c.temperature_2m)) return; const p = batches[bi][j]; time = Math.max(time, c.time * 1000);
+      pts.push({ lat: p.lat, lon: p.lon, t: c.temperature_2m, precip: c.precipitation, code: c.weather_code, cloud: c.cloud_cover, wind: c.wind_speed_10m, dir: c.wind_direction_10m, day: c.is_day }); }));
+    if (pts.length) { state.grid = { at: Date.now(), time, pts }; write('mono35_grid', state.grid); }
+  } catch {}
+  state.gridBusy = false;
+  return state.grid;
+}
+function windColor(w) {
+  const stops = [[0, [111, 183, 255]], [15, [88, 214, 160]], [30, [231, 210, 90]], [50, [240, 140, 60]], [75, [214, 69, 90]], [110, [155, 45, 134]]];
+  if (!fin(w)) return 'rgba(200,200,200,.6)';
+  for (let i = 1; i < stops.length; i++) if (w <= stops[i][0]) { const [a, ca] = stops[i - 1], [b, cb] = stops[i], f = Math.max(0, (w - a) / (b - a)); return `rgb(${ca.map((v, j) => Math.round(v + (cb[j] - v) * f)).join(',')})`; }
+  return 'rgb(155,45,134)';
+}
+const RAIN_RGB = ['rgba(150,160,175,.35)', '#9cc3f0', '#5d9be6', '#2f74d0', '#1d4fa8', '#6b2fb3', '#b0207a'];
+function gridColor(p) {
+  const v = state.gGrid;
+  if (v === 'wind') return windColor(p.wind);
+  if (v === 'cloud') return fin(p.cloud) ? `rgba(240,244,250,${(0.12 + 0.85 * p.cloud / 100).toFixed(2)})` : 'rgba(200,200,200,.3)';
+  if (v === 'precip') return RAIN_RGB[rLevel(p.precip)];
+  return tempColor(p.t);
+}
+function gridTip(p) {
+  return `<div class="gtip"><b>${deg(p.t)}</b> · ${esc(desc(p.code))}<br>${T('gWindL')} ${num(p.wind)} km/h ${fin(p.dir) ? `<span style="display:inline-block;transform:rotate(${Math.round(p.dir)}deg)">↓</span>` : ''} · ${T('gCloudL')} ${num(p.cloud)}% · ${T('rain')} ${mm1(p.precip)} mm<br><small>${num(Math.abs(p.lat))}°${p.lat >= 0 ? 'N' : 'S'} ${num(Math.abs(p.lon), 1)}°${p.lon >= 0 ? 'E' : 'W'} · ${T('rUpdated')} ${lhm(state.grid?.time)}</small></div>`;
 }
 function tempColor(t) {
   if (!fin(t)) return 'var(--muted)';
@@ -1388,22 +1728,89 @@ function tempColor(t) {
 function globePoints() {
   const list = [...new Map([state.city, ...state.favorites, ...CITIES].map(c => [ckey(c), c])).values()];
   const pts = list.map(c => { const v = ckey(c) === ckey(state.city) && state.view?.current ? { temperature_2m: state.view.current.temp, weather_code: state.view.current.code } : state.cityLive[ckey(c)]?.current; return { c, t: v?.temperature_2m, code: v?.weather_code, me: ckey(c) === ckey(state.city) }; }).filter(p => fin(p.t));
-  // keep labels readable: drop points closer than ~3.5° to one already shown (current city and favourites first)
   const kept = [];
   for (const p of pts) if (p.me || !kept.some(k => km(k.c, p.c) < 390)) kept.push(p);
   return kept;
 }
+
+/* click anywhere → live weather at that point */
+async function probeAt(lat, lng) {
+  lat = Math.max(-89.9, Math.min(89.9, +(+lat).toFixed(3))); lng = +(((+lng + 540) % 360) - 180).toFixed(3);
+  const id = Date.now(); state.probe = { id, lat, lon: lng, loading: true }; updateGlobeCtl();
+  try {
+    const [d, nm] = await Promise.all([
+      getJSON(q(OM, { latitude: lat, longitude: lng, current: 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day', hourly: 'precipitation,precipitation_probability', forecast_hours: 7, timeformat: 'unixtime', timezone: 'auto' }), 15000),
+      reverseName(lat, lng)
+    ]);
+    if (state.probe?.id !== id) return;
+    const H = d.hourly || {}, now = Date.now();
+    const idx = (H.time || []).map((t, i) => [t * 1000, i]).filter(([t]) => t > now && t <= now + 6 * 3600e3 + 60e3).map(([, i]) => i);
+    state.probe = { ...state.probe, loading: false, cur: d.current, name: nm, mm: idx.reduce((a, i) => a + (H.precipitation?.[i] || 0), 0), pp: Math.max(0, ...idx.map(i => H.precipitation_probability?.[i] ?? 0)) / 100 };
+  } catch { if (state.probe?.id === id) state.probe = { ...state.probe, loading: false, error: true }; }
+  updateGlobeCtl();
+}
+function probeCard() {
+  const P = state.probe; if (!P) return `<div class="gprobe hint">${T('gClick')}</div>`;
+  const where = P.name?.name ? `${esc(P.name.name)}${P.name.country ? `<small>${esc(P.name.country)}</small>` : ''}` : `${T('gPointAt')}<small>${num(P.lat, 2)}, ${num(P.lon, 2)}</small>`;
+  if (P.loading) return `<div class="gprobe"><button class="gx" data-action="gProbeClose" aria-label="×">×</button><b class="gpn">${where}</b><p><span class="spin">◌</span> ${T('gProbeLoading')}</p></div>`;
+  if (P.error || !P.cur) return `<div class="gprobe"><button class="gx" data-action="gProbeClose" aria-label="×">×</button><b class="gpn">${where}</b><p>${T('noData')}</p></div>`;
+  const c = P.cur, t = c.time * 1000;
+  return `<div class="gprobe"><button class="gx" data-action="gProbeClose" aria-label="×">×</button><b class="gpn">${where}</b>
+    <div class="gpt">${icon(c.weather_code, c.is_day)}<span>${deg(c.temperature_2m)}</span><em>${esc(desc(c.weather_code))}<br><small>${T('feels')} ${deg(c.apparent_temperature)}</small></em></div>
+    <div class="gpk"><span>${T('gWindL')} <b>${num(c.wind_speed_10m)} km/h ${dirArrow(c.wind_direction_10m)}</b></span><span>${T('gust')} <b>${num(c.wind_gusts_10m)}</b></span><span>${T('gHumL')} <b>${num(c.relative_humidity_2m)}%</b></span><span>${T('gCloudL')} <b>${num(c.cloud_cover)}%</b></span>
+    <span class="w">${T('gNext6')} <b>${P.pp >= 0.05 || P.mm >= 0.1 ? `${pct(P.pp)} · ${mm1(P.mm)} mm` : T('gNoRain6')}</b></span></div>
+    <small class="muted">${T('rUpdated')} ${lhm(t)} · ${esc(ageText(t))}</small>
+    <button class="outline-btn" data-action="gProbeOpen">${T('gOpenHere')}</button></div>`;
+}
+function globeFresh() {
+  const S = state.gSrc || {}, Lr = state.gLayers;
+  const ag = t => `${lhm(t)} · ${esc(ageText(t))}`;
+  const baseName = { sat: 'gSrcSat', marble: 'gSrcMarble', sst: 'gSrcSst' }[state.gBase];
+  const baseVal = S.base === 'static' ? T('gStatic') : fin(S.base) ? `${ldate(S.base)} · ${T('gDaily')}` : state.gStatus === 'loading' ? '…' : T('gNA');
+  const cityAt = Math.max(0, ...Object.values(state.cityLive).map(v => (v?.current ? v.at : 0)));
+  const row = (k, v, live) => `<div class="kv"><span>${live ? '<i class="gl-live"></i>' : ''}${T(k)}</span><b>${v}</b></div>`;
+  return `<div class="panelhead"><div><b>${T('gFresh')}</b><div class="section-sub">${T('gAuto')}</div></div><button class="outline-btn" data-action="gRefresh">${T('gRefresh')}</button></div>
+    ${row(baseName, baseVal)}
+    ${row('gSrcRadar', !Lr.radar ? T('gOff') : fin(S.radar) ? ag(S.radar) : state.gStatus === 'loading' ? '…' : T('gNA'), fin(S.radar) && Lr.radar)}
+    ${row('gSrcImerg', !Lr.rain ? T('gOff') : fin(S.imerg) ? `${lhm(S.imerg)}–${lhm(S.imerg + 1800e3)} · ${esc(ageText(S.imerg + 1800e3))}` : state.gStatus === 'loading' ? '…' : T('gNA'))}
+    ${row('gSrcGrid', !Lr.grid ? T('gOff') : state.grid ? `${ag(state.grid.time)} · ${num(state.grid.pts.length)} pts` : state.gridBusy ? '…' : T('gNA'), !!state.grid && Lr.grid)}
+    ${row('gSrcCities', !Lr.temps ? T('gOff') : cityAt ? ag(cityAt) : '…', !!cityAt && Lr.temps)}
+    <p class="notice">${T('gNoteFoot')}</p>`;
+}
+function globeLegend() {
+  if (!state.gLayers.grid && !state.gLayers.temps) return '';
+  const v = state.gLayers.grid ? state.gGrid : 'temp';
+  if (v === 'wind') return `<div class="glegend"><span>0</span><i style="background:linear-gradient(90deg,${[0, 15, 30, 50, 75, 110].map(windColor).join(',')})"></i><span>110 km/h</span></div>`;
+  if (v === 'cloud') return `<div class="glegend"><span>0%</span><i style="background:linear-gradient(90deg,rgba(240,244,250,.12),rgba(240,244,250,.97))"></i><span>100%</span></div>`;
+  if (v === 'precip') return `<div class="glegend"><span>0,1</span><i style="background:linear-gradient(90deg,${RAIN_RGB.slice(1).join(',')})"></i><span>30+ mm/h</span></div>`;
+  return `<div class="glegend"><span>−15°</span><i style="background:linear-gradient(90deg,${[-15, 0, 10, 18, 26, 34, 42].map(tempColor).join(',')})"></i><span>42°</span></div>`;
+}
 function globeCtl() {
   const chip = (act, v, on, label) => `<button class="chip ${on ? 'active' : ''}" data-action="${act}" data-v="${v}">${label}</button>`;
+  const Lr = state.gLayers;
   return `<div class="gctl"><div class="chips">${Object.entries(G_BASES).map(([k, l]) => chip('gBase', k, state.gBase === k, T(l))).join('')}</div>
-    <div class="chips">${chip('gLayer', 'clouds', state.gLayers.clouds, T('gClouds'))}${chip('gLayer', 'rain', state.gLayers.rain, T('gRain'))}${chip('gLayer', 'temps', state.gLayers.temps, T('gTemps'))}${chip('gSpin', '1', state.gSpin, T('gSpin'))}</div></div>
-    <p class="notice">${state.gStatus === 'loading' ? `<span class="spin">◌</span> ${T('loading')} · ` : ''}${esc((state.gNotes || []).join(' · '))}</p>`;
+    <div class="chips">${chip('gLayer', 'radar', Lr.radar, T('gRadar'))}${chip('gLayer', 'rain', Lr.rain, T('gRain'))}${chip('gLayer', 'grid', Lr.grid, T('gGridL'))}${chip('gLayer', 'temps', Lr.temps, T('gTemps'))}${chip('gSpin', '1', state.gSpin, T('gSpin'))}</div>
+    ${Lr.grid ? `<div class="chips"><span class="label gvl">${T('gVar')}</span>${['temp', 'wind', 'cloud', 'precip'].map(k => chip('gGrid', k, state.gGrid === k, T('gV_' + k))).join('')}</div>` : ''}</div>
+    <p class="notice">${state.gStatus === 'loading' || state.gridBusy ? `<span class="spin">◌</span> ${T('loading')}` : state.gStatus === 'error' ? esc(T('gFail')) : ''}</p>`;
 }
-function updateGlobeCtl() { const el = $('#globeCtl'); if (el) el.innerHTML = globeCtl(); if (globe) globe.htmlElementsData(state.gLayers.temps ? globePoints() : []); }
+function applyGlobeData() {
+  if (!globe) return;
+  const G = state.gLayers.grid && state.grid ? state.grid.pts : [];
+  globe.pointColor(gridColor).pointAltitude(p => (state.gGrid === 'precip' ? 0.004 + Math.min(0.08, (p.precip ?? 0) * 0.012) : 0.004)).pointsData(G);
+  globe.ringsData(G.filter(p => (p.precip ?? 0) >= 0.1));
+  const html = state.gLayers.temps ? globePoints() : [];
+  if (state.probe) html.push({ probe: true, c: { lat: state.probe.lat, lon: state.probe.lon } });
+  globe.htmlElementsData(html);
+}
+function updateGlobeCtl() {
+  const set = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
+  set('#globeCtl', globeCtl()); set('#globeFresh', globeFresh()); set('#globeLegend', globeLegend()); set('#globeProbe', probeCard());
+  applyGlobeData();
+}
 function globePage() {
-  return header(T('globeTitle'), T('globeSub')) + `<div id="globeCtl">${globeCtl()}</div><div class="card globecard"><div id="globe" class="globe"></div>
-    <div class="glegend"><span>−15°</span><i style="background:linear-gradient(90deg,${[-15, 0, 10, 18, 26, 34, 42].map(tempColor).join(',')})"></i><span>42°</span></div></div>
-    <p class="notice">${T('globeNote')}</p>`;
+  return header(T('globeTitle'), T('globeSub')) + `<div id="globeCtl">${globeCtl()}</div>
+    <div class="card globecard"><div id="globe" class="globe"></div><div id="globeProbe" class="gprobe-wrap">${probeCard()}</div><div id="globeLegend">${globeLegend()}</div></div>
+    <section class="section card" id="globeFresh">${globeFresh()}</section>`;
 }
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
 async function mountGlobe() {
@@ -1415,16 +1822,35 @@ async function mountGlobe() {
     globe = new window.Globe(box, { animateIn: true })
       .width(box.clientWidth).height(box.clientHeight).backgroundColor('rgba(0,0,0,0)')
       .showAtmosphere(true).atmosphereColor(state.theme === 'dark' ? '#9fb7d9' : '#7fa2d6').atmosphereAltitude(0.16)
-      .htmlElementsData(state.gLayers.temps ? globePoints() : []).htmlLat(p => p.c.lat).htmlLng(p => p.c.lon).htmlAltitude(0.01)
-      .htmlElement(p => { const d = document.createElement('button'); d.className = 'gchip' + (p.me ? ' me' : ''); d.style.setProperty('--c', tempColor(p.t)); d.innerHTML = `<b>${deg(p.t)}</b><span>${esc(cityName(p.c))}</span>`; d.onclick = () => { setCity(p.c); goto('now'); }; d.style.pointerEvents = 'auto'; return d; });
+      .pointLat('lat').pointLng('lon').pointRadius(2.3).pointResolution(8).pointsMerge(false).pointsTransitionDuration(400).pointLabel(gridTip)
+      .onPointClick(p => probeAt(p.lat, p.lon))
+      .ringLat('lat').ringLng('lon').ringColor(() => t => `rgba(110,170,255,${(0.9 * (1 - t)).toFixed(2)})`).ringMaxRadius(3.2).ringPropagationSpeed(1.4).ringRepeatPeriod(1700)
+      .onGlobeClick(({ lat, lng }) => probeAt(lat, lng))
+      .htmlLat(p => p.c.lat).htmlLng(p => p.c.lon).htmlAltitude(p => (p.probe ? 0.02 : 0.01))
+      .htmlElement(p => {
+        const d = document.createElement(p.probe ? 'div' : 'button');
+        if (p.probe) { d.className = 'gpin'; d.innerHTML = '<i></i>'; return d; }
+        d.className = 'gchip' + (p.me ? ' me' : ''); d.style.setProperty('--c', tempColor(p.t)); d.innerHTML = `<b>${deg(p.t)}</b><span>${esc(cityName(p.c))}</span>`;
+        d.onclick = e => { e.stopPropagation(); setCity(p.c); goto('now'); }; d.style.pointerEvents = 'auto'; return d;
+      });
     globe.controls().autoRotate = state.gSpin; globe.controls().autoRotateSpeed = 0.35; globe.controls().enableDamping = true;
     globe.controls().addEventListener('start', () => { if (state.gSpin) { state.gSpin = false; globe.controls().autoRotate = false; updateGlobeCtl(); } });
     globe.pointOfView({ lat: state.city.lat, lng: state.city.lon, altitude: window.innerWidth < 640 ? 2.9 : 2.1 }, 0);
-    new ResizeObserver(() => { const b = $('#globe'); if (globe && b) globe.width(b.clientWidth).height(b.clientHeight); }).observe(box);
+    globeRO?.disconnect(); globeRO = new ResizeObserver(() => { const b = $('#globe'); if (globe && b) globe.width(b.clientWidth).height(b.clientHeight); }); globeRO.observe(box);
+    applyGlobeData();
     paintGlobe();
+    fetchGrid().then(() => updateGlobeCtl());
   } catch { const g = $('#globe'); if (g) g.innerHTML = `<div class="placeholder">${T('gFail')}</div>`; }
 }
-function killGlobe() { if (globe) { try { globe.pauseAnimation(); globe._destructor(); } catch {} globe = null; } }
+function refreshGlobe(force) { if (!globe) return; imergCache = force ? null : imergCache; paintGlobe(); fetchGrid(force).then(() => updateGlobeCtl()); loadCityLive(); }
+// called every minute while the globe page is open: refresh radar + grid when they are 10 minutes old
+function globeTick() {
+  if (!globe || document.visibilityState !== 'visible') return;
+  if (!state.gSrc?.painted || Date.now() - state.gSrc.painted > 10 * 60e3) paintGlobe();
+  if (!state.grid || Date.now() - state.grid.at > 10 * 60e3) fetchGrid(true).then(() => updateGlobeCtl());
+  else updateGlobeCtl();
+}
+function killGlobe() { globeRO?.disconnect(); globeRO = null; if (globe) { try { globe.pauseAnimation(); globe._destructor(); } catch {} globe = null; } }
 
 /* ------------------------------------------------------------------ page: models */
 function modelsPage() {
@@ -1665,8 +2091,8 @@ async function loadCityLive() {
 }
 
 /* ------------------------------------------------------------------ shell */
-const NAV = [['now', '◐'], ['hourly', '◷'], ['phen', '⚡'], ['radar', '◎'], ['globe', '◍'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['climate', '▦'], ['cities', '⊞']];
-const TABS = ['now', 'phen', 'radar', 'globe', 'climate'];
+const NAV = [['now', '◐'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['radar', '◎'], ['globe', '◍'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['climate', '▦'], ['cities', '⊞']];
+const TABS = ['now', 'rain', 'radar', 'globe', 'phen'];
 function navRender() {
   document.documentElement.lang = state.lang; document.documentElement.dataset.theme = state.theme;
   $('#search').placeholder = T('search'); $('#theme').textContent = state.theme === 'dark' ? '☀' : '☾'; $('#language').textContent = state.lang === 'el' ? 'ΕΛ / EN' : 'EN / ΕΛ';
@@ -1681,7 +2107,7 @@ function render() {
   navRender();
   if (state.page === 'radar' && map && $('#map')) return;   // keep the live map running
   if (state.page === 'globe' && globe && $('#globe')) { updateGlobeCtl(); return; }
-  const pages = { now: nowPage, hourly: hourlyPage, phen: phenPage, radar: radarPage, globe: globePage, models: modelsPage, lab: labPage, stations: stationsPage, climate: climatePage, cities: citiesPage };
+  const pages = { now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, radar: radarPage, globe: globePage, models: modelsPage, lab: labPage, stations: stationsPage, climate: climatePage, cities: citiesPage };
   const y = window.scrollY;
   $('#content').innerHTML = (pages[state.page] || nowPage)();
   window.scrollTo(0, y);
@@ -1702,7 +2128,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe();
-  Object.assign(state, { city: c, main: null, view: null, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station' });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station' });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true);
@@ -1762,8 +2188,12 @@ function onClick(e) {
   else if (a === 'radarPlay') toggleRadar();
   else if (a === 'radarSat') toggleSat();
   else if (a === 'gBase') { state.gBase = b.dataset.v; persistUI(); paintGlobe(); render(); }
-  else if (a === 'gLayer') { state.gLayers[b.dataset.v] = !state.gLayers[b.dataset.v]; persistUI(); paintGlobe(); render(); }
+  else if (a === 'gLayer') { const k = b.dataset.v; state.gLayers[k] = !state.gLayers[k]; persistUI(); if (k === 'radar' || k === 'rain') paintGlobe(); if (k === 'grid' && state.gLayers.grid) fetchGrid().then(() => updateGlobeCtl()); render(); }
   else if (a === 'gSpin') { state.gSpin = !state.gSpin; if (globe) globe.controls().autoRotate = state.gSpin; render(); }
+  else if (a === 'gGrid') { state.gGrid = b.dataset.v; persistUI(); if (!state.gLayers.grid) state.gLayers.grid = true; render(); }
+  else if (a === 'gRefresh') refreshGlobe(true);
+  else if (a === 'gProbeClose') { state.probe = null; updateGlobeCtl(); }
+  else if (a === 'gProbeOpen') { const P = state.probe; if (P) { const n = P.name || {}; const nm = n.name || `${num(P.lat, 2)}, ${num(P.lon, 2)}`; state.probe = null; setCity({ name: nm, nameEl: nm, admin1: n.admin1, country: n.country, cc: n.cc || '', lat: P.lat, lon: P.lon }); goto('now'); } }
   else if (a === 'csv') csv();
 }
 function init() {
@@ -1788,7 +2218,7 @@ function init() {
   else loadAll(true);
   loadCityLive();
   setInterval(() => { if (document.visibilityState === 'visible') loadAll(false); }, REFRESH_LIVE);
-  setInterval(() => { if (document.visibilityState === 'visible' && state.view && state.page !== 'radar' && state.page !== 'globe') { recompute(); render(); } }, 60e3);
+  setInterval(() => { if (state.page === 'globe') globeTick(); if (document.visibilityState === 'visible' && state.view && state.page !== 'radar' && state.page !== 'globe') { recompute(); render(); } }, 60e3);
 }
 init();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});

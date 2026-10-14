@@ -1,1 +1,22 @@
-{"cleanUrls":true,"trailingSlash":false}
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/proxy/awc/:path*",
+      "destination": "https://aviationweather.gov/:path*"
+    },
+    {
+      "source": "/proxy/meteoalarm/:path*",
+      "destination": "https://feeds.meteoalarm.org/:path*"
+    },
+    {
+      "source": "/proxy/meteostat/:path*",
+      "destination": "https://bulk.meteostat.net/:path*"
+    },
+    {
+      "source": "/proxy/rv/:path*",
+      "destination": "https://tilecache.rainviewer.com/:path*"
+    }
+  ]
+}
