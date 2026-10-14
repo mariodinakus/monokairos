@@ -394,8 +394,10 @@ const T = k => L[state.lang][k] ?? L.el[k] ?? k;
 const AN = k => ALG_NAMES[state.lang][k] || k;
 const persist = () => write(K.prefs, { lang: state.lang, theme: state.theme, city: state.city, favorites: state.favorites });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const cityName = c => (state.lang === 'el' && c.nameEl ? c.nameEl : c.name);
-const countryName = c => c.country || (COUNTRY[c.cc] ? COUNTRY[c.cc][state.lang === 'el' ? 0 : 1] : c.cc || '');
+const locOf = c => (c && c.i18n && c.i18n[state.lang]) || null;
+const cityName = c => (locOf(c) && locOf(c).name) || (state.lang === 'el' && c.nameEl ? c.nameEl : c.name);
+const adminName = c => (locOf(c) && locOf(c).admin1) || c.admin1;
+const countryName = c => (locOf(c) && locOf(c).country) || (COUNTRY[c.cc] ? COUNTRY[c.cc][state.lang === 'el' ? 0 : 1] : c.country || c.cc || '');
 
 /* ------------------------------------------------------------------ formatting */
 const loc = () => (state.lang === 'el' ? 'el-GR' : 'en-GB');
@@ -570,9 +572,54 @@ async function fetchWarnings(c) {
   out.forEach(w => { w.local = !!region && w.areas.some(a => a.toLowerCase().includes(region) || region.includes(a.toLowerCase())); });
   return out.sort((a, b) => (b.local - a.local) || (rank[b.color] - rank[a.color]) || (a.onset - b.onset));
 }
-async function reverseName(lat, lon) {
-  try { const d = await getJSON(q('https://api.bigdatacloud.net/data/reverse-geocode-client', { latitude: lat, longitude: lon, localityLanguage: state.lang }), 8000);
+async function reverseName(lat, lon, lang = state.lang) {
+  try { const d = await getJSON(q('https://api.bigdatacloud.net/data/reverse-geocode-client', { latitude: lat, longitude: lon, localityLanguage: lang }), 8000);
     return { name: d.city || d.locality || d.principalSubdivision, admin1: d.principalSubdivision, country: d.countryName, cc: d.countryCode }; } catch { return null; }
+}
+
+/* ------------------------------------------------------------------ localized place names
+   Every place keeps a small cache c.i18n = { el: {name, admin1, country}, en: {...} }.
+   When the language changes, missing entries are fetched once and stored with the place. */
+const BUILTIN_KEYS = new Set(CITIES.map(c => ckey(c)));
+async function placeIn(c, lang) {
+  try {
+    if (c.geoId) {
+      const d = await getJSON(q('https://geocoding-api.open-meteo.com/v1/get', { id: c.geoId, language: lang, format: 'json' }), 8000);
+      if (d && d.name) return { name: d.name, admin1: d.admin1, country: d.country };
+    }
+    if (!c.gps) {
+      const names = [...new Set([c.name, c.nameEl].filter(Boolean))];
+      for (const nm of names) {
+        const d = await getJSON(q('https://geocoding-api.open-meteo.com/v1/search', { name: nm, count: 10, language: lang, format: 'json' }), 8000);
+        const k = Math.cos(c.lat * Math.PI / 180);
+        const best = (d.results || []).map(r => [r, Math.hypot(r.latitude - c.lat, (r.longitude - c.lon) * k)]).sort((a, b) => a[1] - b[1])[0];
+        if (best && best[1] < 0.3) { const r = best[0]; return { name: r.name, admin1: r.admin1, country: r.country, geoId: r.id }; }
+      }
+    }
+    const n = await reverseName(c.lat, c.lon, lang);
+    if (n && n.name) return { name: n.name, admin1: n.admin1, country: n.country };
+  } catch {}
+  return null;
+}
+let localizing = null;
+async function localizePlaces() {
+  const lang = state.lang;
+  const groups = new Map();
+  [state.city, ...(state.favorites || [])].filter(Boolean).forEach(c => {
+    if (c.i18n && c.i18n[lang]) return;
+    const k = ckey(c); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c);
+  });
+  if (!groups.size) return;
+  const job = localizing = Promise.all([...groups.values()].map(async list => {
+    const p = await placeIn(list[0], lang);
+    if (!p) return false;
+    const geoId = p.geoId; delete p.geoId;
+    if (BUILTIN_KEYS.has(ckey(list[0]))) delete p.name;          // keep the curated city names
+    list.forEach(c => { if (geoId && !c.geoId) c.geoId = geoId; c.i18n = Object.assign({}, c.i18n, { [lang]: p }); });
+    return true;
+  }));
+  const done = await job;
+  if (done.some(Boolean)) { persist(); if (lang === state.lang) render(); }
 }
 
 /* ------------------------------------------------------------------ loading */
@@ -911,7 +958,7 @@ const probCls = p => (p >= 0.6 ? 'p-hi' : p >= 0.3 ? 'p-mid' : p >= 0.1 ? 'p-lo'
 /* ------------------------------------------------------------------ page: now */
 function nowPage() {
   const c = state.city, V = state.view;
-  const head = header(esc(cityName(c)), esc([c.admin1, countryName(c)].filter(Boolean).join(' · ')), `${favBtn(c)}${btn('reload', '↻ ' + T('refresh'))}`);
+  const head = header(esc(cityName(c)), esc([adminName(c), countryName(c)].filter(Boolean).join(' · ')), `${favBtn(c)}${btn('reload', '↻ ' + T('refresh'))}`);
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard(state.locating ? T('locating') : ''));
   const cur = V.current, rows = V.rows, iN = V.iNow, today = V.daily[0];
   const pop6 = Math.max(0, ...rows.slice(iN + 1, iN + 7).map(r => r.pop ?? 0));
@@ -2136,7 +2183,7 @@ function setCity(c) {
   Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station' });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
-  window.scrollTo(0, 0); loadAll(true);
+  window.scrollTo(0, 0); loadAll(true); localizePlaces();
 }
 const findCity = id => [...state.favorites, ...CITIES, state.city, ...(window.__results || [])].find(c => ckey(c) === id);
 function locate(silent = false) {
@@ -2166,7 +2213,7 @@ async function geocode(text) {
   try {
     const d = await getJSON(q('https://geocoding-api.open-meteo.com/v1/search', { name: text, count: 10, language: state.lang, format: 'json' }), 12000);
     if (g !== searchGen) return;
-    const res = (d.results || []).map(r => ({ name: r.name, nameEl: state.lang === 'el' ? r.name : undefined, admin1: r.admin1, country: r.country, cc: r.country_code, lat: r.latitude, lon: r.longitude, region: '' }));
+    const res = (d.results || []).map(r => ({ name: r.name, nameEl: state.lang === 'el' ? r.name : undefined, admin1: r.admin1, country: r.country, cc: r.country_code, lat: r.latitude, lon: r.longitude, region: '', geoId: r.id, i18n: { [state.lang]: { name: r.name, admin1: r.admin1, country: r.country } } }));
     window.__results = res;
     box.innerHTML = res.length ? res.map(r => `<button class="searchoption" data-action="city" data-id="${ckey(r)}"><span><b>${esc(r.name)}</b><small>${esc([r.admin1, r.country].filter(Boolean).join(' · '))}</small></span><span>↗</span></button>`).join('') : `<div class="searchoption muted">${T('noData')}</div>`;
   } catch { if (g === searchGen) box.innerHTML = `<div class="searchoption muted">${T('noData')}</div>`; }
@@ -2203,7 +2250,7 @@ function onClick(e) {
 }
 function init() {
   document.addEventListener('click', onClick);
-  $('#language').addEventListener('click', () => { state.lang = state.lang === 'el' ? 'en' : 'el'; persist(); killMap(); killGlobe(); render(); });
+  $('#language').addEventListener('click', () => { state.lang = state.lang === 'el' ? 'en' : 'el'; persist(); killMap(); killGlobe(); render(); localizePlaces(); });
   $('#theme').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; persist(); killMap(); killGlobe(); render(); });
   $('#refreshBtn').addEventListener('click', () => loadAll(true));
   $('#mobileMenu').addEventListener('click', e => { e.stopPropagation(); $('.sidebar').classList.toggle('open'); });
@@ -2222,6 +2269,7 @@ function init() {
   if (state.firstRun) { state.locating = true; render(); locate(true).then(ok => { state.locating = false; if (!ok) loadAll(true); }); }
   else loadAll(true);
   loadCityLive();
+  localizePlaces();
   setInterval(() => { if (document.visibilityState === 'visible') loadAll(false); }, REFRESH_LIVE);
   setInterval(() => { if (state.page === 'globe') globeTick(); if (document.visibilityState === 'visible' && state.view && state.page !== 'radar' && state.page !== 'globe') { recompute(); render(); } }, 60e3);
 }
