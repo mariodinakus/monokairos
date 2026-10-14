@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f7f5">
+<meta name="description" content="MONO Weather — ζωντανός καιρός από 24 μοντέλα, 8 ensembles και μετρήσεις σταθμών, έξι αλγόριθμοι πρόβλεψης, φαινόμενα, ραντάρ και κλίμα πολλών ετών.">
+<title>MONO Weather</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="app-icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="mark">M<span class="mark-point">.</span></span><span class="brandcopy">MONO<span class="brand-detail">WEATHER · v3.4</span></span></div>
+    <div class="sidecap" data-i18n="workspace">ΕΦΑΡΜΟΓΗ</div>
+    <nav id="nav" class="nav" aria-label="Κύρια πλοήγηση"></nav>
+    <div class="sidecap" data-i18n="saved">ΑΓΑΠΗΜΕΝΑ</div>
+    <div id="sideCities" class="sidecities"></div>
+    <div class="sidebar-foot"><span class="livepin"></span><span id="status">…</span><span class="sidefootnote">Open-Meteo · NOAA · NASA · IEM</span></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button id="mobileMenu" class="mobile-menu subtle-btn" aria-label="Μενού">☰</button>
+      <div class="search-area"><span class="search-icon">⌕</span><input id="search" autocomplete="off" aria-label="Αναζήτηση πόλης"><kbd>/</kbd><div id="results" class="search-results hidden" role="listbox"></div></div>
+      <div class="topActions">
+        <button class="subtle-btn" id="geoBtn" aria-label="Η τοποθεσία μου" title="Η τοποθεσία μου">◎</button>
+        <button class="subtle-btn" id="refreshBtn" aria-label="Ανανέωση" title="Ανανέωση">↻</button>
+        <button class="switch-btn" id="language" aria-label="Γλώσσα">ΕΛ / EN</button>
+        <button class="subtle-btn" id="theme" aria-label="Θέμα">☾</button>
+      </div>
+    </header>
+    <main id="content" class="content" aria-live="polite"></main>
+    <footer class="footer"><div>MONO / WEATHER · v3.4 · MONO-ML</div><div><span data-i18n="attribution"></span> · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · <a href="https://aviationweather.gov/data/api/" target="_blank" rel="noopener">AWC</a> · <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a> · <a href="https://meteostat.net/" target="_blank" rel="noopener">Meteostat</a> · <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> · <a href="https://meteoalarm.org/" target="_blank" rel="noopener">Meteoalarm</a></div></footer>
+  </div>
+</div>
+<nav id="tabbar" class="tabbar" aria-label="Πλοήγηση"></nav>
+<div id="toast" class="toast" role="status"></div>
+<script src="model.js"></script>
+<script src="climate.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# Netlify: same-origin proxies for services that don't allow browser (CORS) requests.
+/proxy/awc/*         https://aviationweather.gov/:splat        200
+/proxy/meteoalarm/*  https://feeds.meteoalarm.org/:splat       200
+/proxy/meteostat/*   https://bulk.meteostat.net/:splat         200
+/proxy/rv/*          https://tilecache.rainviewer.com/:splat   200
