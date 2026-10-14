@@ -1,0 +1,31 @@
+{
+  "site": "https://monokairos.vercel.app",
+  "timezone": "Europe/Athens",
+  "locations": [
+    {
+      "name": "Θεσσαλονίκη",
+      "lat": 40.6403,
+      "lon": 22.9439,
+      "meteoalarm": "greece",
+      "warnAreas": ["Κεντρική Μακεδονία", "Central Macedonia", "Θεσσαλονίκη", "Thessaloniki", "Θεσσαλονίκης"]
+    }
+  ],
+  "models": [
+    ["ecmwf_ifs025", "ECMWF"],
+    ["ecmwf_aifs025_single", "ECMWF AI"],
+    ["icon_seamless", "ICON"],
+    ["gfs_seamless", "GFS"],
+    ["meteofrance_seamless", "Météo-France"],
+    ["ukmo_seamless", "UKMO"],
+    ["gem_seamless", "GEM"],
+    ["jma_seamless", "JMA"],
+    ["italia_meteo_arpae_icon_2i", "ICON-2I"]
+  ],
+  "quietHours": [23, 7],
+  "dailySummaryHour": 7,
+  "eveningOutlookHour": 21,
+  "rain": { "soonHours": 3, "minProb": 0.5, "minMm": 0.5 },
+  "changes": { "dayMmDelta": 5, "dayProbDelta": 0.3, "tempDelta": 3, "modelMmDelta": 8, "modelTempDelta": 4, "cooldownHours": 3 },
+  "severe": { "dayMm": 20, "gust": 62 },
+  "allowNewSubscribers": false
+}
