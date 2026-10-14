@@ -479,6 +479,9 @@ async function viaProxy(proxyPath, direct, ms = 20000) {
   if (location.protocol.startsWith('http')) { try { const d = await getJSON(proxyPath, ms); if (d != null) return d; } catch {} }
   return getJSON(direct, ms);
 }
+/* Open-Meteo rejects too many simultaneous requests from one browser: run model downloads a few at a time */
+function limiter(n) { let active = 0; const queue = []; const next = () => { if (active >= n || !queue.length) return; active++; const [fn, res, rej] = queue.shift(); fn().then(res, rej).finally(() => { active--; next(); }); }; return fn => new Promise((res, rej) => { queue.push([fn, res, rej]); next(); }); }
+const omSlot = limiter(6);
 async function chain(ids, make) {
   let last;
   for (const id of ids) { try { return { id, data: await getJSON(make(id)) }; } catch (e) { last = e; if (e.status && e.status >= 500) break; } }
@@ -584,7 +587,7 @@ async function fetchAllObs(c) {
   const [m, y] = await Promise.allSettled([fetchObs(c), location.protocol.startsWith('http') ? fetchSynop(c) : Promise.reject(new Error('file'))]);
   const metar = m.status === 'fulfilled' ? m.value.stations.map(s => ({ ...s, src: 'metar', srcName: m.value.source })) : [];
   // a SYNOP station at the same airport as a METAR one is the same place: keep the (hourly) METAR
-  const synop = y.status === 'fulfilled' ? y.value.filter(s => !metar.some(x => km(x, s) < 3)) : [];
+  const synop = y.status === 'fulfilled' ? y.value.filter(s => !metar.some(x => km(x, s) < 3 || (s.icao && x.id === s.icao))) : [];
   const stations = [...metar, ...synop].sort((a, b) => a.dist - b.dist);
   if (!stations.length) throw new Error('no obs');
   const source = [metar.length ? m.value.source : '', synop.length ? 'WMO SYNOP (OGIMET)' : ''].filter(Boolean).join(' + ');
@@ -697,7 +700,7 @@ async function loadAll(force = false) {
     state.modelsAt = Date.now();
     const inBox = m => !m.box || (c.lat >= m.box[0] && c.lat <= m.box[1] && c.lon >= m.box[2] && c.lon <= m.box[3]);
     MODELS.filter(m => !inBox(m)).forEach(m => { state.models[m.id] = { outside: true }; });
-    modelJobs.push(...MODELS.filter(inBox).map(m => chain([m.id, ...m.alt], id => modelURL(c, id))
+    modelJobs.push(...MODELS.filter(inBox).map(m => omSlot(() => chain([m.id, ...m.alt], id => modelURL(c, id)))
       .then(r => { if (gen === state.gen) { state.models[m.id] = { data: r.data, used: r.id }; schedule(); } })
       .catch(e => { if (gen === state.gen) { state.models[m.id] = /no data/i.test(e?.message || '') ? { outside: true } : { error: true }; schedule(); } })));
     jobs.push(...ENSEMBLES.map(e => chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL)).catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE)))
