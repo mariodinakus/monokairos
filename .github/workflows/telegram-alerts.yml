@@ -1,0 +1,59 @@
+name: Telegram alerts
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 minutes (GitHub may delay scheduled runs by a few minutes)
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Στείλε δοκιμαστικό μήνυμα με την τρέχουσα κατάσταση'
+        type: boolean
+        default: true
+
+concurrency:
+  group: telegram-alerts
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write   # to prune old state caches
+
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: alerts
+
+      - name: Restore alert state
+        uses: actions/cache/restore@v4
+        with:
+          path: alerts/.state
+          key: alerts-state-${{ github.run_id }}
+          restore-keys: alerts-state-
+
+      - name: Check forecast and send Telegram messages
+        run: node alerts/monitor.mjs
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FORCE_TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
+
+      - name: Save alert state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: alerts/.state
+          key: alerts-state-${{ github.run_id }}
+
+      - name: Prune old state caches
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --key alerts-state- --sort created_at --order desc --limit 100 --json id --jq '.[5:][].id' \
+            | xargs -r -n1 gh cache delete
