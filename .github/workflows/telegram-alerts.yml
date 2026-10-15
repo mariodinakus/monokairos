@@ -2,7 +2,7 @@ name: Telegram alerts
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # every 15 minutes (GitHub may delay scheduled runs by a few minutes)
+    - cron: '7,22,37,52 * * * *'  # 15-minute checks, shifted away from the top of the hour; best-effort, not guaranteed
   workflow_dispatch:
     inputs:
       test:
