@@ -1,3 +1,4 @@
+const {guard,coordinates,bounded} = require('../lib/server.cjs');
 /* MONO · /api/synop?lat=40.64&lon=22.94[&km=120][&hours=72]
  * Official WMO SYNOP observations (national met services, e.g. HNMS/ΕΜΥ) near a point.
  *   Station coordinates: Meteostat station list (WMO ids). Reports: OGIMET (getsynop), decoded here.
@@ -11,7 +12,7 @@ let stationCache = null, stationAt = 0;
 
 async function wmoStations() {
   if (stationCache && Date.now() - stationAt < 24 * 3600e3) return stationCache;
-  const r = await fetch(STATIONS_URL, { headers: { 'User-Agent': 'MONO-Weather (monokairos.vercel.app)' } });
+  const r = await fetch(STATIONS_URL, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'MONO-Weather (monokairos.vercel.app)' } });
   if (!r.ok) throw new Error('stations HTTP ' + r.status);
   let buf = Buffer.from(await r.arrayBuffer());
   if (buf[0] === 0x1f && buf[1] === 0x8b) buf = zlib.gunzipSync(buf);
@@ -103,11 +104,13 @@ function decodeSynop(raw, t) {
 }
 
 module.exports = async (req, res) => {
+  if (!guard(req, res)) return;
   try {
-    const u = new URL(req.url, 'http://x');
-    const lat = +u.searchParams.get('lat'), lon = +u.searchParams.get('lon');
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) { res.status(400).json({ error: 'lat/lon' }); return; }
-    const radius = Math.min(200, +u.searchParams.get('km') || 120), hours = Math.min(96, +u.searchParams.get('hours') || 72);
+    const c = coordinates(req);
+    if (!c) {res.status(400).json({error:'Invalid coordinates'});return;}
+    const {lat,lon,params} = c;
+    const radius = bounded(params,'km',120,1,200), hours = bounded(params,'hours',72,1,96);
+    if (radius === null || hours === null) {res.status(400).json({error:'Invalid range'});return;}
     const here = { lat, lon };
     const near = (await wmoStations()).map(s => ({ ...s, dist: km(here, s) })).filter(s => s.dist <= radius).sort((a, b) => a.dist - b.dist).slice(0, 25);
     if (!near.length) { res.setHeader('Cache-Control', 's-maxage=3600'); res.status(200).json({ source: 'OGIMET · WMO SYNOP', stations: [] }); return; }
@@ -117,7 +120,7 @@ module.exports = async (req, res) => {
     const lists = {};
     for (const b of blocks) {
       const url = `https://www.ogimet.com/cgi-bin/getsynop?begin=${stamp(begin)}&end=${stamp(end)}&block=${b}`;
-      const r = await fetch(url, { headers: { 'User-Agent': 'MONO-Weather (monokairos.vercel.app)' } });
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'MONO-Weather (monokairos.vercel.app)' } });
       if (!r.ok) continue;
       const text = await r.text();
       for (const line of text.split('\n')) {
@@ -132,7 +135,7 @@ module.exports = async (req, res) => {
     res.setHeader('Cache-Control', 's-maxage=1200, stale-while-revalidate=1800');
     res.status(200).json({ source: 'OGIMET · WMO SYNOP', stations });
   } catch (e) {
-    res.status(502).json({ error: String(e && e.message || e) });
+    res.status(502).json({ error: 'Upstream data unavailable' });
   }
 };
 module.exports.decodeSynop = decodeSynop;

@@ -1,6 +1,8 @@
+const {guard,coordinates,bounded} = require('../lib/server.cjs');
 /* Cache the single GFS profile request independently of the multi-model downloads. */
 const { HOURLY } = require('../atmosphere.js');
 module.exports = async (req, res) => {
+  if (!guard(req, res)) return;
   const input = new URL(req.url, 'https://monokairos.vercel.app');
   const rawLat = input.searchParams.get('lat'), rawLon = input.searchParams.get('lon');
   const lat = Number(rawLat), lon = Number(rawLon);

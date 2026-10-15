@@ -1,3 +1,4 @@
+const {guard,coordinates,bounded} = require('../lib/server.cjs');
 /* MONO · /api/news — weather headlines in Greek and English, straight from the publishers' own RSS feeds.
  * Only headline, short summary, source, time and the link back to the article are shown.
  * Response: { at, items: [{ id, title, summary, link, source, lang, t, image }] }  (newest first, cached 15 min at the edge) */
@@ -40,13 +41,14 @@ async function readFeed(f) {
 }
 
 module.exports = async (req, res) => {
+  if (!guard(req, res)) return;
   const lists = await Promise.all(FEEDS.map(readFeed));
   const seen = new Set(), items = [];
   for (const x of lists.flat().sort((a, b) => (b.t || 0) - (a.t || 0))) {
     const key = x.link.replace(/[?#].*$/, '');
     if (seen.has(key)) continue; seen.add(key);
     if (x.t && Date.now() - x.t > 14 * 86400e3) continue;
-    delete x.all; x.id = key;
+    delete x.all; delete x.summary; delete x.image; x.id = key;
     items.push(x);
   }
   res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
