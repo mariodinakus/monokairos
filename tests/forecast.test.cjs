@@ -13,6 +13,23 @@ test('local grids stay within latitude limits and wrap longitude across the date
  assert.ok(g.bounds[3]>180);assert.equal(g.points.length,g.nx*g.ny);
  assert.throws(()=>Core.grid('local',91,0));assert.throws(()=>Core.grid('invalid'));
 });
+test('world grid covers every longitude and closes the date-line seam',()=>{
+ const g=Core.grid('world');assert.deepEqual(g.bounds,[-85,-180,85,180]);assert.equal(g.points.length,325);
+ for(let y=0;y<g.ny;y++){const first=g.points[y*g.nx],last=g.points[(y+1)*g.nx-1];assert.equal(first.lat,last.lat);assert.equal(first.queryLon,last.queryLon);}
+ assert.ok(g.points.some(p=>p.lat< -60));assert.ok(g.points.some(p=>p.lon>150));
+});
+test('cached forecast windows retain only the next seven days and align every field with its timestamp',()=>{
+ const g=Core.grid('greece'),d=Core.mapData(sample(g),g,now,8),later=now+7*HOUR,v=Core.futureMap(d,later);
+ assert.ok(v.times.every(t=>t>=later&&t<=later+7*24*HOUR));
+ assert.equal(v.points[0].frames[0][2],d.points[0].frames[d.times.indexOf(v.times[0])][2]);
+ assert.equal(d.times[0],now);assert.throws(()=>Core.futureMap(d,now+10*24*HOUR),/No future/);
+});
+test('wind flow interpolates vectors across north and wraps around the date line without inventing missing values',()=>{
+ const d={region:'world',bounds:[-85,-180,85,180],nx:3,ny:2,points:Array.from({length:6},(_,i)=>({frames:[[0,0,0,0,0,0,i%3===1?1:359,20]]}))};
+ const north=Core.windAt(d,0,-90);assert.ok(Math.abs(north.u)<.01);assert.ok(north.v< -19.9);
+ assert.deepEqual(Core.windAt(d,0,181),Core.windAt(d,0,-179));assert.equal(Core.windAt(d,86,0),null);
+ d.points[0].frames[0][6]=null;assert.equal(Core.windAt(d,-50,-150),null);
+});
 test('forecast raster rows follow Mercator latitude rather than a linear screen latitude',()=>{
  assert.ok(Math.abs(Core.rasterLatitude(0,30,65)-65)<1e-9);
  assert.ok(Math.abs(Core.rasterLatitude(1,30,65)-30)<1e-9);
