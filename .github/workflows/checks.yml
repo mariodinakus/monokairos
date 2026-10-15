@@ -12,4 +12,4 @@ jobs:
           persist-credentials: false
       - run: node --test tests/*.test.cjs
       - run: |
-          for file in app.js sky.js cosmic.js space-weather.js privacy.js forecast-core.js forecast-motion.js forecast.js api/*.js; do node --check "$file"; done
+          for file in app.js geo.js alerts/monitor.mjs sky.js cosmic.js space-weather.js privacy.js forecast-core.js forecast-motion.js forecast.js api/*.js; do node --check "$file"; done

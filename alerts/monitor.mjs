@@ -27,8 +27,11 @@ const fin = Number.isFinite;
 const log = (...a) => console.log(...a);
 
 /* ------------------------------------------------------------------ state */
-let S = { v: 1, offset: 0, chats: [], sent: {}, base: {}, mbase: {}, day: {} };
+let S = { v: 2, offset: 0, chats: [], sent: {}, base: {}, mbase: {}, day: {}, stopped: {} };
 try { S = { ...S, ...JSON.parse(await readFile(STATE_FILE, 'utf8')) }; } catch { log('ℹ no previous state (first run)'); }
+// v1 cached dry-run messages as delivered. Reset stale alert baselines when upgrading.
+if (S.v !== 2) { S.v = 2; S.sent = {}; S.base = {}; S.mbase = {}; S.day = {}; }
+S.stopped ||= {};
 for (const [k, t] of Object.entries(S.sent)) if (NOW - t > 4 * 86400e3) delete S.sent[k];
 const wasSent = (k, within = 1e15) => fin(S.sent[k]) && NOW - S.sent[k] < within;
 const mark = k => (S.sent[k] = NOW);
@@ -271,11 +274,9 @@ function rules(A) {
   // 5. morning summary + evening outlook
   const hr = lhour(NOW), dayTag = TODAY;
   if (hr >= CFG.dailySummaryHour && hr < CFG.dailySummaryHour + 2 && S.day[`am:${key}`] !== dayTag) {
-    S.day[`am:${key}`] = dayTag;
     out.push({ tag: `am:${key}:${dayTag}`, text: [`☀️ <b>Καλημέρα! ${esc(A.L.name)}</b>`, statusText(A).split('\n').slice(1).join('\n'), '', ...Object.keys(A.dayStats).slice(0, 2).map(k => dayText(A, k)), '', link(A, 'now')].join('\n') });
   }
   if (hr >= CFG.eveningOutlookHour && hr < CFG.eveningOutlookHour + 2 && S.day[`pm:${key}`] !== dayTag) {
-    S.day[`pm:${key}`] = dayTag;
     const k = Object.keys(A.dayStats)[1];
     if (k) out.push({ tag: `pm:${key}:${dayTag}`, text: [`🌙 <b>${esc(A.L.name)} — αύριο</b>`, dayText(A, k), ...A.episodes.filter(e => dkey(e.start) === k || dkey(e.end) === k).slice(0, 2).map(e => `🌧 ${at(e.start)} → ${at(e.end)} · ~${mm(e.mm)} mm · ${pct(e.pmax)}`), link(A, 'now')].join('\n') });
   }
@@ -293,11 +294,12 @@ async function tg(method, body) {
 const quiet = () => { const [a, b] = CFG.quietHours || []; const h = lhour(NOW); return fin(a) && fin(b) && (a > b ? h >= a || h < b : h >= a && h < b); };
 const outbox = [];
 async function send(chat, text, opts = {}) {
-  outbox.push(text);
-  if (DRY) return;
-  await tg('sendMessage', { chat_id: chat, text, parse_mode: 'HTML', disable_web_page_preview: true, disable_notification: !!opts.silent });
+  if (DRY) { outbox.push(text); return false; }
+  const response = await tg('sendMessage', { chat_id: chat, text, parse_mode: 'HTML', disable_web_page_preview: true, disable_notification: !!opts.silent });
+  if (response?.ok) { outbox.push(text); return true; }
+  return false;
 }
-const chats = () => (FIXED.length ? FIXED : S.chats);
+const chats = () => (FIXED.length ? FIXED : S.chats).filter(id => !S.stopped[String(id)]);
 const allowed = id => (FIXED.length ? FIXED.includes(String(id)) : S.chats.includes(String(id)) || CFG.allowNewSubscribers || !S.chats.length);
 const HELP = ['<b>MONO Weather</b> — ειδοποιήσεις για βροχή, αλλαγές πρόγνωσης και μοντέλων, προειδοποιήσεις.', '', '/now — καιρός τώρα και επόμενη βροχή', '/rain — βροχή επόμενες 72 ώρες', '/tomorrow — αύριο', '/models — τι λέει κάθε μοντέλο', '/stop — σταμάτα τις ειδοποιήσεις', '', 'Οι απαντήσεις έρχονται στον επόμενο έλεγχο (κάθε ~15 λεπτά).'].join('\n');
 
@@ -317,13 +319,14 @@ if (!DRY) {
     if (cmd === '/start') {
       if (!allowed(id)) { await send(id, 'Αυτό το bot είναι ιδιωτικό.'); continue; }
       if (!S.chats.includes(id)) S.chats.push(id);
-      log(`ℹ subscribed chat ${id}`);
+      delete S.stopped[id];
+      log('ℹ subscriber registered');
       await send(id, `✅ Εγγράφηκες στις ειδοποιήσεις.\n\n${HELP}`);
       for (const A of results) await send(id, statusText(A));
       continue;
     }
     if (!allowed(id) || !(FIXED.includes(id) || S.chats.includes(id))) continue;
-    if (cmd === '/stop') { S.chats = S.chats.filter(c => c !== id); await send(id, 'Οι ειδοποιήσεις σταμάτησαν. Στείλε /start για να ξαναρχίσουν.'); continue; }
+    if (cmd === '/stop') { S.stopped[id] = true; S.chats = S.chats.filter(c => c !== id); await send(id, 'Οι ειδοποιήσεις σταμάτησαν. Στείλε /start για να ξαναρχίσουν.'); continue; }
     for (const A of results) {
       if (cmd === '/now' || cmd === '/tora') await send(id, `${statusText(A)}\n\n${Object.keys(A.dayStats).slice(0, 2).map(k => dayText(A, k)).join('\n')}\n${link(A, 'now')}`);
       else if (cmd === '/rain' || cmd === '/vroxi') await send(id, rainText(A));
@@ -338,16 +341,29 @@ const silent = quiet();
 for (const A of results) {
   const msgs = rules(A);
   if (TEST) msgs.unshift({ tag: `test:${NOW}`, text: `✅ <b>Δοκιμή MONO → Telegram</b>\n${statusText(A)}\n\n${Object.keys(A.dayStats).slice(0, 3).map(k => dayText(A, k)).join('\n')}` });
-  if (!chats().length && !DRY) { log('ℹ no chat yet — send /start to the bot from Telegram'); continue; }
+  if (!chats().length && !DRY) { log('✗ no subscribed chat — send /start to the bot from Telegram, or set TELEGRAM_CHAT_ID'); process.exitCode = 1; continue; }
   for (const m of msgs) {
-    for (const c of DRY ? ['dry-run'] : chats()) await send(c, m.text, { silent: silent && !m.loud });
-    mark(m.tag);
+    let delivered = !DRY;
+    for (const c of DRY ? ['dry-run'] : chats()) {
+      const ok = await send(c, m.text, { silent: silent && !m.loud });
+      delivered = delivered && ok;
+    }
+    if (delivered) {
+      mark(m.tag);
+      if (m.tag.startsWith('am:')) S.day[`am:${A.key}`] = TODAY;
+      if (m.tag.startsWith('pm:')) S.day[`pm:${A.key}`] = TODAY;
+    } else if (!DRY) { log(`✗ alert ${m.tag} was not delivered; will retry next run`); process.exitCode = 1; }
   }
   if (!msgs.length) log(`· ${A.key}: nothing new to send`);
 }
 // report + save
 const report = outbox.length ? outbox.map(t => t.replace(/<[^>]+>/g, '')).join('\n\n———\n\n') : '(κανένα μήνυμα)';
-log(`\n${DRY ? 'DRY RUN (no TELEGRAM_BOT_TOKEN) — would send:' : `sent ${outbox.length} message(s) to ${chats().length} chat(s)`}\n\n${report}`);
-if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `### MONO → Telegram ${DRY ? '(dry run)' : ''}\n\n\`\`\`\n${report}\n\`\`\`\n`).catch(() => {});
-await mkdir(STATE_DIR, { recursive: true });
-await writeFile(STATE_FILE, JSON.stringify(S));
+log(`\n${DRY ? 'DRY RUN (no TELEGRAM_BOT_TOKEN) — would send:' : `delivered ${outbox.length} message(s) to ${chats().length} chat(s)`}\n\n${report}`);
+if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `### MONO → Telegram ${DRY ? '(not configured)' : ''}\n\n\`\`\`\n${report}\n\`\`\`\n`).catch(() => {});
+if (DRY) {
+  log('✗ TELEGRAM_BOT_TOKEN is missing. Add it under GitHub repository Settings → Secrets and variables → Actions.');
+  process.exitCode = 1;
+} else {
+  await mkdir(STATE_DIR, { recursive: true });
+  await writeFile(STATE_FILE, JSON.stringify(S));
+}
