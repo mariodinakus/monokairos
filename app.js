@@ -402,6 +402,9 @@ Object.assign(L.en, {
   gPointAt:'Point', gNoRain6:'no rain', gNoteFoot:'Times are in your device’s time zone. Radar: only where radar coverage exists. IMERG: satellite estimate with ~4–6 h latency. Grid: current analysis every 15°.'
 });
 
+Object.assign(L.el,{maps:'Χάρτες & τάσεις',mapsTitle:'Χάρτες & ό,τι έρχεται',mapsSub:'Δες την εξέλιξη των συστημάτων, τα σήματα κακοκαιρίας και τις τάσεις του μήνα.'});
+Object.assign(L.en,{maps:'Maps & outlook',mapsTitle:'Maps & what comes next',mapsSub:'Follow weather systems, severe-weather signals and monthly trends.'});
+
 /* ------------------------------------------------------------------ state */
 const $ = s => document.querySelector(s);
 const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate'].includes(k);
@@ -1058,7 +1061,7 @@ function nowPage() {
   const ch = chart({ rows: win, band: { lo: win.map(r => (past(r) ? null : r.lo)), hi: win.map(r => (past(r) ? null : r.hi)) },
     series: [{ vals: win.map(r => (past(r) ? r.tempModel : null)), cls: 'hind' }, { vals: win.map((r, j) => (!past(r) || (win[j + 1] && !past(win[j + 1])) ? r.temp : null)), cls: 'mono' }],
     points: win.map(r => r.obs), bars: win.map(r => (past(r) ? null : r.amount)), nowT: Date.now() });
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
+  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoForecast.compact(forecastOptions())}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${esc(rainSentence())}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(rows.slice(iN, iN + 25), cur)}</section>
     <section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
@@ -1133,6 +1136,8 @@ function environmentPage() {
   const jumps = [['environment', state.lang === 'el' ? 'Αέρας & γύρη' : 'Air & pollen'], ['cloud-pressure', state.lang === 'el' ? 'Σύννεφα & πίεση' : 'Clouds & pressure'], ['cloud-timeline', state.lang === 'el' ? 'Νέφωση κάθε ώρα' : 'Clouds hourly'], ['synoptic', state.lang === 'el' ? 'Χάρτης Υ/Χ' : 'H/L map'], ['vertical-profile', state.lang === 'el' ? 'Ανώτερα στρώματα' : 'Upper levels'], ['sun-sea', T('sun') + ' · ' + T('sea')]];
   return header(T('envTitle'), T('envSub'), btn('reload', '↻ ' + T('refresh'))) + (state.view ? `<div class="chips">${jumps.map(([target, label]) => `<button class="chip" data-action="envJump" data-target="${target}">${label}</button>`).join('')}${btn('goto', '☄ ' + T('space'), 'data-page="space"')}</div>` + environment(true) : state.mainErr ? errorCard() : loadingCard());
 }
+function forecastOptions() { return {...skyOptions(),theme:state.theme,warnings:state.warn,country:countryName(state.city),news:state.news?.items||[]}; }
+function forecastPage() { return header(T('mapsTitle'),T('mapsSub'),btn('reload','↻ '+T('refresh'))) + MonoForecast.render(forecastOptions()); }
 function spacePage() {
   const jumps = [['space-weather',state.lang === 'el' ? 'Ήλιος & πρόγνωση' : 'Sun & forecast'],['invisible-sky',state.lang === 'el' ? 'Ακτίνες γάμμα & σωματίδια' : 'Gamma rays & particles'],['local-sky',state.lang === 'el' ? 'Ο ουρανός εδώ & επόμενα φαινόμενα' : 'Local sky & upcoming events']];
   return header(T('spaceTitle'), T('spaceSub'), btn('reload', '↻ ' + T('refresh'))) + `<div class="chips">${jumps.map(([target,label])=>`<button class="chip" data-action="envJump" data-target="${target}">${label}</button>`).join('')}</div>` + MonoSpaceWeather.render(state.space, { lang: state.lang, zone: state.view?.zone || 'UTC', lat: +state.city.lat, lon: +state.city.lon }) + MonoCosmic.render(state.space, state.cosmic, skyOptions()) + MonoSky.render(skyOptions());
@@ -1389,7 +1394,7 @@ function phenPage() {
 /* ------------------------------------------------------------------ page: radar */
 let map = null, radar = { frames: [], layers: [], i: 0, timer: 0, host: '' };
 function radarPage() {
-  return header(T('radarTitle'), T('radarSub')) + `<div class="card mapcard"><div id="map" class="map"></div><div class="radarbar"><button class="outline-btn" id="radarPlay" data-action="radarPlay">▶ ${T('play')}</button><button class="chip ${state.radarSat ? 'active' : ''}" id="radarSat" data-action="radarSat">${T('satIR')}</button><input type="range" id="radarSlider" min="0" max="0" value="0" aria-label="${T('time')}"><span id="radarTime" class="compact">—</span></div></div><p class="notice">${T('radarNote')} · RainViewer · Esri · © OpenStreetMap</p>`;
+  return header(T('radarTitle'), T('radarSub'),btn('goto',state.lang==='el'?'Χάρτες πρόγνωσης ↗':'Forecast maps ↗','data-page="maps"')) + `<div class="card mapcard"><div id="map" class="map"></div><div class="radarbar"><button class="outline-btn" id="radarPlay" data-action="radarPlay">▶ ${T('play')}</button><button class="chip ${state.radarSat ? 'active' : ''}" id="radarSat" data-action="radarSat">${T('satIR')}</button><input type="range" id="radarSlider" min="0" max="0" value="0" aria-label="${T('time')}"><span id="radarTime" class="compact">—</span></div></div><p class="notice">${T('radarNote')} · RainViewer · Esri · © OpenStreetMap</p>`;
 }
 function loadLeaflet() {
   if (window.L) return Promise.resolve();
@@ -2091,7 +2096,7 @@ async function loadNews(force = false) {
   if (!force && state.news?.items && Date.now() - state.news.at < NEWS_TTL) return;
   try { const d = await getJSON('/api/news', 20000); state.news = { items: d.items || [], at: Date.now() }; }
   catch { if (!state.news?.items) state.news = { error: true, at: Date.now() }; }
-  if (state.page === 'news' || state.page === 'now') render();
+  if (state.page === 'news' || state.page === 'now' || state.page === 'maps') render();
 }
 const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ς/g, 'σ');
 function placeStems(c) {
@@ -2283,7 +2288,7 @@ async function loadCityLive() {
 }
 
 /* ------------------------------------------------------------------ shell */
-const NAV = [['now', '◐'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
+const NAV = [['now', '◐'], ['maps','▱'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
 const TABS = ['now', 'rain', 'radar', 'globe', 'phen'];
 function navRender() {
   document.documentElement.lang = state.lang; document.documentElement.dataset.theme = state.theme;
@@ -2297,9 +2302,10 @@ function navRender() {
 }
 function render() {
   navRender();
+  if (state.page === 'maps' && MonoForecast.isMounted(forecastOptions())) { MonoForecast.update(forecastOptions()); return; }
   if (state.page === 'radar' && map && $('#map')) return;   // keep the live map running
   if (state.page === 'globe' && globe && $('#globe')) { updateGlobeCtl(); return; }
-  const pages = { now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, environment: environmentPage, space: spacePage, radar: radarPage, globe: globePage, models: modelsPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
+  const pages = { maps: forecastPage, now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, environment: environmentPage, space: spacePage, radar: radarPage, globe: globePage, models: modelsPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
   const y = window.scrollY;
   const openEnvDetails = [...document.querySelectorAll('.environment-section details[open]')].map(el => el.id);
   const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap')].map(el => [el.id, el.scrollLeft]);
@@ -2308,12 +2314,14 @@ function render() {
   envScroll.forEach(([id, left]) => { const el = document.getElementById(id); if (el) el.scrollLeft = left; });
   window.scrollTo(0, y);
   const r = $('#selHour'); if (r) r.addEventListener('input', e => { state.sel = +e.target.value; const yy = window.scrollY; render(); window.scrollTo(0, yy); $('#selHour')?.focus(); });
+  if (state.page === 'maps') MonoForecast.mount(forecastOptions(),loadLeaflet);
   if (state.page === 'radar') mountRadar();
   if (state.page === 'globe') mountGlobe();
 }
 let toastT;
 function toast(m) { const n = $('#toast'); n.textContent = m; n.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => n.classList.remove('show'), 3200); }
 function goto(p) {
+  if (p !== 'maps') MonoForecast.destroy();
   if (p !== 'radar') killMap();
   if (p !== 'globe') killGlobe();
   state.page = p; $('.sidebar').classList.remove('open');
@@ -2324,7 +2332,7 @@ function goto(p) {
 }
 function setCity(c) {
   if (!c) return;
-  killMap(); killGlobe();
+  killMap(); killGlobe(); MonoForecast.destroy();
   Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
@@ -2370,7 +2378,7 @@ function onClick(e) {
   if (a === 'goto') goto(b.dataset.page);
   else if (a === 'envJump') document.getElementById(b.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   else if (a === 'menu') $('.sidebar').classList.toggle('open');
-  else if (a === 'reload') loadAll(true);
+  else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); }
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
   else if (a === 'retrain') ensureTraining(state.city, state.gen, true);
   else if (a === 'city') setCity(findCity(b.dataset.id));
@@ -2401,7 +2409,7 @@ function init() {
   document.addEventListener('click', onClick);
   $('#language').addEventListener('click', () => { state.lang = state.lang === 'el' ? 'en' : 'el'; persist(); killMap(); killGlobe(); render(); localizePlaces(); });
   $('#theme').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; persist(); killMap(); killGlobe(); render(); });
-  $('#refreshBtn').addEventListener('click', () => loadAll(true));
+  $('#refreshBtn').addEventListener('click', () => { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); });
   $('#mobileMenu').addEventListener('click', e => { e.stopPropagation(); $('.sidebar').classList.toggle('open'); });
   $('#geoBtn').addEventListener('click', () => locate(false));
   $('#search').addEventListener('input', e => { clearTimeout(searchT); searchT = setTimeout(() => geocode(e.target.value), 300); });
