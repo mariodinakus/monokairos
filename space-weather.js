@@ -7,7 +7,8 @@ const number = (v, min = 0, max = Infinity) => v !== null && v !== undefined && 
 const utc = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(value) ? Date.parse(value.replace(' ', 'T') + (/Z$|[+-]\d\d:\d\d$/.test(value) ? '' : 'Z')) : NaN;
 const NOAA = 'https://services.swpc.noaa.gov/';
 const FEEDS = { scales: 'products/noaa-scales.json', kp: 'products/noaa-planetary-k-index.json', forecast: 'products/noaa-planetary-k-index-forecast.json',
-  wind: 'products/summary/solar-wind-speed.json', magnetic: 'products/summary/solar-wind-mag-field.json', flux: 'products/summary/10cm-flux.json' };
+  wind: 'products/summary/solar-wind-speed.json', magnetic: 'products/summary/solar-wind-mag-field.json', flux: 'products/summary/10cm-flux.json',
+  flare: 'json/goes/primary/xray-flares-latest.json', xrays: 'json/goes/primary/xrays-6-hour.json', protons: 'json/goes/primary/integral-protons-6-hour.json', electrons: 'json/goes/primary/integral-electrons-6-hour.json' };
 function objects(feed) {
   if (!Array.isArray(feed)) return [];
   if (!Array.isArray(feed[0])) return feed;
@@ -31,7 +32,7 @@ function snapshot(data, now = Date.now()) {
 /* Browser-side fallback with the same shape as /api/space-weather (NOAA feeds allow CORS). */
 async function fetchDirect() {
   const entries = await Promise.all(Object.entries(FEEDS).map(async ([key, path]) => {
-    try { const r = await fetch(NOAA + path); if (!r.ok) throw new Error('upstream'); return [key, await r.json()]; } catch { return [key, null]; }
+    try { const r = await fetch(NOAA + path, {signal: AbortSignal.timeout(8000)}); if (!r.ok) throw new Error('upstream'); return [key, await r.json()]; } catch { return [key, null]; }
   }));
   const feeds = Object.fromEntries(entries);
   if (!entries.some(([, v]) => v !== null)) return { error: true };
@@ -40,15 +41,10 @@ async function fetchDirect() {
 
 /* ------------------------------------------------------------ extras: flares + X-ray curve (self-fetched, 10 min cache) */
 const extra = { at: 0, busy: false, flare: null, xray: null };
-function ensureExtras() {
-  if (typeof fetch !== 'function' || extra.busy || Date.now() - extra.at < 10 * 60e3) return;
-  extra.busy = true;
-  Promise.all([fetch(NOAA + 'json/goes/primary/xray-flares-latest.json').then(r => r.json()).catch(() => null), fetch(NOAA + 'json/goes/primary/xrays-6-hour.json').then(r => r.json()).catch(() => null)])
-    .then(([f, x]) => {
-      extra.flare = Array.isArray(f) ? f[0] : null;
-      extra.xray = Array.isArray(x) ? x.filter(r => r.energy === '0.1-0.8nm' && number(r.flux, 1e-10, 1) !== null).map(r => ({ t: utc(r.time_tag), f: +r.flux })).filter(r => Number.isFinite(r.t)) : null;
-      extra.at = Date.now(); extra.busy = false; paint();
-    }).catch(() => { extra.busy = false; extra.at = Date.now() - 8 * 60e3; });
+function ensureExtras(data, now = Date.now()) {
+  const f = Array.isArray(data?.flare) ? data.flare[0] : null;
+  extra.flare = f && now - utc(f.time_tag) <= 30 * 60e3 && utc(f.time_tag) <= now + 60000 ? f : null;
+  extra.xray = Array.isArray(data?.xrays) ? data.xrays.filter(r => r.energy === '0.1-0.8nm' && number(r.flux, 1e-10, 1) !== null).map(r => ({ t: utc(r.time_tag), f: +r.flux })).filter(r => Number.isFinite(r.t) && r.t <= now + 60000 && r.t >= now - 6 * 3600e3).sort((a,b) => a.t-b.t) : null;
 }
 const CLASS_EXP = { A: -8, B: -7, C: -6, M: -5, X: -4 };
 const classFlux = s => { const m = /^([ABCMX])(\d+(?:\.\d+)?)/.exec(s || ''); return m ? +m[2] * 10 ** CLASS_EXP[m[1]] : null; };
@@ -63,7 +59,7 @@ const kpForHorizon = mlat => (66 - Math.abs(mlat)) / 3; // rough view-line appro
 
 const copy = {
   el: {
-    intro: 'Ο καιρός πέρα από τα σύννεφα: Ήλιος, ηλιακός άνεμος, μαγνητικό πεδίο, σέλας και ραδιοεπικοινωνίες. Παγκόσμιοι δείκτες NOAA, όχι τοπική πρόγνωση βλάβης.',
+    intro: 'Ο καιρός πέρα από τα σύννεφα: Ήλιος, σωματίδια, ακτίνες γάμμα, νετρίνα και ο ουρανός της πόλης σου. Παγκόσμιοι δείκτες NOAA, όχι τοπική πρόγνωση βλάβης.',
     hero: 'Ηλιακή καταιγίδα τώρα;', heroWords: ['Ήσυχος Ήλιος, ήσυχη Γη', 'Αναταραχή στο μαγνητικό πεδίο', 'Γεωμαγνητική καταιγίδα σε εξέλιξη', 'Ισχυρή γεωμαγνητική καταιγίδα'],
     heroSub: 'Βασισμένο σε Kp, κλίμακα G της NOAA και ηλιακές εκλάμψεις τελευταίων ωρών.',
     names: { G: 'Γεωμαγνητική καταιγίδα', R: 'Διαταραχές ραδιοεπικοινωνιών', S: 'Καταιγίδα ηλιακής ακτινοβολίας' },
@@ -72,7 +68,7 @@ const copy = {
     unavailable: 'Μη διαθέσιμο', stale: 'Παλαιότερα δεδομένα', at: 'Χρόνος δεδομένων',
     kp: 'Δείκτης Kp', kpNote: 'Τρίωρος πλανητικός δείκτης 0–9. Από Kp 5 ξεκινά η γεωμαγνητική καταιγίδα (G1).',
     kpChart: 'Kp · 3 μέρες πίσω, 3 μπροστά', observed: 'Μέτρηση', estimated: 'Εκτίμηση', predicted: 'Πρόγνωση',
-    flare: 'Ηλιακές εκλάμψεις (ακτίνες Χ)', flareNow: 'Τώρα', flareMax: 'Μέγιστη σήμερα', flareNote: 'Κλάσεις A·B·C·M·X, κάθε μία 10 φορές ισχυρότερη. Από M και πάνω μπορεί να διαταραχθούν τα HF.',
+    flare: 'Ηλιακές εκλάμψεις (ακτίνες Χ)', flareNow: 'Τώρα', flareMax: 'Μέγιστο τελευταίας έκλαμψης', flareNote: 'Κλάσεις A·B·C·M·X, κάθε μία 10 φορές ισχυρότερη. Από M και πάνω μπορεί να διαταραχθούν τα HF.',
     xray: 'Ροή ακτίνων Χ · τελευταίες 6 ώρες (GOES)',
     wind: 'Ηλιακός άνεμος', windNote: 'Ταχύτητα πλάσματος στο σημείο L1, πριν φτάσει στη Γη. >600 km/s = γρήγορο ρεύμα.', windWords: ['Αργός', 'Κανονικός', 'Γρήγορος', 'Πολύ γρήγορος'],
     bz: 'Μαγνητικό πεδίο Bz', bzNote: 'Νότιο (αρνητικό) Bz «ανοίγει την πόρτα» στο γήινο πεδίο και ευνοεί καταιγίδες και σέλας.', bzWords: ['Νότιο · ευνοεί καταιγίδα', 'Ουδέτερο', 'Βόρειο · προστατευτικό'],
@@ -97,7 +93,7 @@ const copy = {
     unavailable: 'Unavailable', stale: 'Older data', at: 'Data time',
     kp: 'Kp index', kpNote: 'Three-hour planetary index 0–9. Geomagnetic storms start at Kp 5 (G1).',
     kpChart: 'Kp · 3 days back, 3 ahead', observed: 'Observed', estimated: 'Estimated', predicted: 'Forecast',
-    flare: 'Solar flares (X-rays)', flareNow: 'Now', flareMax: 'Today’s max', flareNote: 'Classes A·B·C·M·X, each 10× stronger. M and above can disrupt HF radio.',
+    flare: 'Solar flares (X-rays)', flareNow: 'Now', flareMax: 'Last flare peak', flareNote: 'Classes A·B·C·M·X, each 10× stronger. M and above can disrupt HF radio.',
     xray: 'X-ray flux · last 6 hours (GOES)',
     wind: 'Solar wind', windNote: 'Plasma speed at L1, before it reaches Earth. >600 km/s = fast stream.', windWords: ['Slow', 'Normal', 'Fast', 'Very fast'],
     bz: 'Magnetic field Bz', bzNote: 'Southward (negative) Bz “opens the door” to Earth’s field and favours storms and auroras.', bzWords: ['Southward · storm-friendly', 'Neutral', 'Northward · protective'],
@@ -123,6 +119,7 @@ const kpColor = k => k === null ? 'var(--muted)' : k < 4 ? '#3ecf8e' : k < 5 ? '
 
 function flareInner(C, fmt) {
   const f = extra.flare, now = classFlux(f?.current_class), max = classFlux(f?.max_class);
+  const safeClass = value => /^([ABCMX])(\d+(?:\.\d+)?)$/.test(value || '') ? value : '—';
   const pos = v => v === null ? 0 : Math.max(0, Math.min(100, (Math.log10(v) + 8) / 5 * 100));
   let curve = '';
   if (extra.xray?.length > 3) {
@@ -133,7 +130,7 @@ function flareInner(C, fmt) {
   }
   return `<div class="mx-flarebar"><div class="mx-fscale">${['A', 'B', 'C', 'M', 'X'].map(L => `<span>${L}</span>`).join('')}</div>
     ${max !== null ? `<i class="mx-fmax" style="left:${pos(max).toFixed(1)}%" title="${C.flareMax}"></i>` : ''}${now !== null ? `<i class="mx-fnow" style="left:${pos(now).toFixed(1)}%"></i>` : ''}</div>
-    <div class="env-pressure-stats"><div><span>${C.flareNow}</span><b class="mx-fclass">${f?.current_class || '—'}</b></div><div><span>${C.flareMax}</span><b>${f?.max_class || '—'}</b></div></div>${curve}`;
+    <div class="env-pressure-stats"><div><span>${C.flareNow}</span><b class="mx-fclass">${safeClass(f?.current_class)}</b></div><div><span>${C.flareMax}</span><b>${safeClass(f?.max_class)}</b></div></div>${curve}`;
 }
 
 function render(data, options = {}) {
@@ -143,8 +140,8 @@ function render(data, options = {}) {
   const time = m => `<small class="env-meta">${m.time === null ? C.unavailable : `${C.at}: ${new Date(m.time).toLocaleString(L, { timeZone: zone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}`}${m.value !== null && !m.fresh ? ` · <b>${C.stale}</b>` : ''}</small>`;
   const empty = !data ? C.loading : data.error ? C.failed : '';
   last = [C, fmt];
-  ensureExtras();
-  const kp = S.kp.value, g = S.scales.G.value;
+  ensureExtras(data, options.now);
+  const kp = S.kp.fresh ? S.kp.value : null, g = S.scales.G.fresh ? S.scales.G.value : null;
   const lvl = kp === null && g === null ? null : (g ?? 0) >= 3 || (kp ?? 0) >= 7 ? 3 : (g ?? 0) >= 1 || (kp ?? 0) >= 5 ? 2 : (kp ?? 0) >= 4 ? 1 : 0;
   // Kp gauge
   const kpDeg = kp === null ? 0 : kp / 9 * 180;
@@ -170,7 +167,8 @@ function render(data, options = {}) {
     const ml = geomagLat(options.lat, options.lon), need = Math.min(9, Math.max(0, kpForHorizon(ml)));
     const kmax = Math.max(kp ?? 0, ...S.forecast.slice(0, 4).map(r => r.value));
     const chance = kmax >= need ? 2 : kmax >= need - 1 ? 1 : 0;
-    aurora = `<article class="card env mx-aurora mx-ac${chance}"><h3 class="label">${C.aurora}</h3><div class="minivalue">Kp ${fmt(need, 1)}${need >= 9 ? '+' : ''}</div><b class="env-status">${C.auroraMaybe[chance]}</b>
+    const known = kp !== null || S.forecast.length > 0;
+    aurora = `<article class="card env mx-aurora mx-ac${chance}"><h3 class="label">${C.aurora}</h3><div class="minivalue">Kp ${fmt(need, 1)}${need >= 9 ? '+' : ''}</div><b class="env-status">${known ? C.auroraMaybe[chance] : C.unavailable}</b>
       <div class="env-pressure-stats"><div><span>${C.auroraNeed}</span><b>${fmt(need, 1)}</b></div><div><span>${C.auroraNow}</span><b>${fmt(kp, 2)}</b></div><div><span>${C.mlat}</span><b>${fmt(ml, 1)}°</b></div></div>
       <p class="env-meta">${C.auroraNote}</p><a class="env-source" href="https://www.swpc.noaa.gov/products/aurora-30-minute-forecast" target="_blank" rel="noopener">${C.auroraLink} ↗</a></article>`;
   }
@@ -203,10 +201,10 @@ function render(data, options = {}) {
 function miniCard(data, options = {}) {
   const lang = options.lang === 'en' ? 'en' : 'el', C = copy[lang], S = snapshot(data, options.now);
   const L = lang === 'el' ? 'el-GR' : 'en-GB', fmt = (v, d = 0) => v === null || !Number.isFinite(v) ? '—' : v.toLocaleString(L, { maximumFractionDigits: d });
-  ensureExtras();
-  const kp = S.kp.value, g = S.scales.G.value;
+  ensureExtras(data, options.now);
+  const kp = S.kp.fresh ? S.kp.value : null, g = S.scales.G.fresh ? S.scales.G.value : null;
   const lvl = kp === null && g === null ? null : (g ?? 0) >= 3 || (kp ?? 0) >= 7 ? 3 : (g ?? 0) >= 1 || (kp ?? 0) >= 5 ? 2 : (kp ?? 0) >= 4 ? 1 : 0;
-  return `<div class="card env mx-spacemini mx-sh${lvl ?? 'x'}"><div class="minihead"><span class="label">${C.mini}</span><span class="mx-sunball sm" aria-hidden="true"></span></div><div class="minivalue" style="color:${kpColor(kp)}">Kp ${fmt(kp, 1)}</div><div class="mininote">${lvl === null ? C.unavailable : C.heroWords[lvl]}</div><div class="kvs"><span>G <b>${fmt(g)}</b></span><span>${lang === 'el' ? 'Έκλαμψη' : 'Flare'} <b>${extra.flare?.current_class || '—'}</b></span><span>${lang === 'el' ? 'Άνεμος' : 'Wind'} <b>${fmt(S.wind.value)} km/s</b></span></div><small class="env-meta">NOAA SWPC</small></div>`;
+  return `<div class="card env mx-spacemini mx-sh${lvl ?? 'x'}"><div class="minihead"><span class="label">${C.mini}</span><span class="mx-sunball sm" aria-hidden="true"></span></div><div class="minivalue" style="color:${kpColor(kp)}">Kp ${fmt(kp, 1)}</div><div class="mininote">${lvl === null ? C.unavailable : C.heroWords[lvl]}</div><div class="kvs"><span>G <b>${fmt(g)}</b></span><span>${lang === 'el' ? 'Έκλαμψη' : 'Flare'} <b>${fluxClass(classFlux(extra.flare?.current_class)) || '—'}</b></span><span>${lang === 'el' ? 'Άνεμος' : 'Wind'} <b>${fmt(S.wind.value)} km/s</b></span></div><small class="env-meta">NOAA SWPC</small></div>`;
 }
 const api = { snapshot, render, miniCard, utc, fetchDirect, geomagLat, fluxClass };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

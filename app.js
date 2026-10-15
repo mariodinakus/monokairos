@@ -404,8 +404,10 @@ Object.assign(L.en, {
 
 /* ------------------------------------------------------------------ state */
 const $ = s => document.querySelector(s);
-const read = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch { return d; } };
-const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
+const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate'].includes(k);
+const cacheAllowed = () => { try {return localStorage.getItem('mono_privacy_cache') === 'yes';} catch {return false;} };
+const read = (k, d) => { if (optionalCache(k) && !cacheAllowed()) return d; try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch { return d; } };
+const write = (k, v) => { if (optionalCache(k) && !cacheAllowed()) return false; try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const ckey = c => `${(+c.lat).toFixed(3)},${(+c.lon).toFixed(3)}`;
 const P = read(K.prefs, {}), UI = read('mono32_ui', {});
 const sysDark = () => { try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch { return false; } };
@@ -416,7 +418,7 @@ const state = {
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
   page: (location.hash || '').slice(1) || 'now', hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle',
-  aq: null, atmosphere: null, space: null, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
+  aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat,
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
 };
@@ -615,6 +617,13 @@ async function loadSpace(force = false) {
   catch { state.space = { error: true }; }
   finally { state.spaceAt = Date.now(); state.spaceBusy = false; schedule(); }
 }
+async function loadCosmic(force = false) {
+  if (state.cosmicBusy || (!force && Date.now()-state.cosmicAt < 600000)) return;
+  state.cosmicBusy = true;
+  try { state.cosmic = await getJSON('/api/cosmic-events', 12000); } catch { state.cosmic = {error:true}; }
+  finally { state.cosmicAt = Date.now(); state.cosmicBusy = false; schedule(); }
+}
+function skyOptions() { return {lang:state.lang, zone:state.view?.zone || state.main?.timezone || 'UTC', lat:+state.city.lat, lon:+state.city.lon, city:cityName(state.city), rows:state.view?.rows || []}; }
 async function fetchMarine(c) {
   const d = await getJSON(q('https://marine-api.open-meteo.com/v1/marine', { ...ll(c), timezone: 'auto', timeformat: 'unixtime', current: 'wave_height,wave_direction,wave_period,sea_surface_temperature' }));
   if (!fin(d?.current?.sea_surface_temperature) && !fin(d?.current?.wave_height)) throw new Error('inland');
@@ -694,6 +703,7 @@ function align(srcTimes, arr, idx) { const out = new Array(idx.size).fill(null);
 
 async function loadAll(force = false) {
   loadSpace(force);
+  loadCosmic(force);
   const c = state.city, gen = ++state.gen;
   state.mainErr = false; render();
   try {
@@ -1048,7 +1058,7 @@ function nowPage() {
   const ch = chart({ rows: win, band: { lo: win.map(r => (past(r) ? null : r.lo)), hi: win.map(r => (past(r) ? null : r.hi)) },
     series: [{ vals: win.map(r => (past(r) ? r.tempModel : null)), cls: 'hind' }, { vals: win.map((r, j) => (!past(r) || (win[j + 1] && !past(win[j + 1])) ? r.temp : null)), cls: 'mono' }],
     points: win.map(r => r.obs), bars: win.map(r => (past(r) ? null : r.amount)), nowT: Date.now() });
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${rainNowCard(true)}${alertsStrip()}${summaryCard()}${todoCard()}${weekendCard()}
+  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${esc(rainSentence())}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(rows.slice(iN, iN + 25), cur)}</section>
     <section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
@@ -1124,7 +1134,8 @@ function environmentPage() {
   return header(T('envTitle'), T('envSub'), btn('reload', '↻ ' + T('refresh'))) + (state.view ? `<div class="chips">${jumps.map(([target, label]) => `<button class="chip" data-action="envJump" data-target="${target}">${label}</button>`).join('')}${btn('goto', '☄ ' + T('space'), 'data-page="space"')}</div>` + environment(true) : state.mainErr ? errorCard() : loadingCard());
 }
 function spacePage() {
-  return header(T('spaceTitle'), T('spaceSub'), btn('reload', '↻ ' + T('refresh'))) + MonoSpaceWeather.render(state.space, { lang: state.lang, zone: state.view?.zone || 'UTC', lat: +state.city.lat, lon: +state.city.lon });
+  const jumps = [['space-weather',state.lang === 'el' ? 'Ήλιος & πρόγνωση' : 'Sun & forecast'],['invisible-sky',state.lang === 'el' ? 'Ακτίνες γάμμα & σωματίδια' : 'Gamma rays & particles'],['local-sky',state.lang === 'el' ? 'Ο ουρανός εδώ & επόμενα φαινόμενα' : 'Local sky & upcoming events']];
+  return header(T('spaceTitle'), T('spaceSub'), btn('reload', '↻ ' + T('refresh'))) + `<div class="chips">${jumps.map(([target,label])=>`<button class="chip" data-action="envJump" data-target="${target}">${label}</button>`).join('')}</div>` + MonoSpaceWeather.render(state.space, { lang: state.lang, zone: state.view?.zone || 'UTC', lat: +state.city.lat, lon: +state.city.lon }) + MonoCosmic.render(state.space, state.cosmic, skyOptions()) + MonoSky.render(skyOptions());
 }
 
 /* ------------------------------------------------------------------ page: hourly */
@@ -1383,8 +1394,8 @@ function radarPage() {
 function loadLeaflet() {
   if (window.L) return Promise.resolve();
   return new Promise((res, rej) => {
-    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(css);
-    const s = document.createElement('script'); s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'vendor/leaflet.css'; document.head.appendChild(css);
+    const s = document.createElement('script'); s.src = 'vendor/leaflet.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s);
   });
 }
 function killMap() { if (radar.timer) { clearInterval(radar.timer); radar.timer = 0; } if (map) { map.remove(); map = null; } radar.layers = []; }
@@ -1940,7 +1951,7 @@ function globePage() {
     <div class="card globecard"><div id="globe" class="globe"></div><div id="globeProbe" class="gprobe-wrap">${probeCard()}</div><div id="globeLegend">${globeLegend()}</div></div>
     <section class="section card" id="globeFresh">${globeFresh()}</section>`;
 }
-function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.integrity = 'sha384-UIZDw6UdEIau7arIrg1Ug9IeMaLlfIHHF6awQRUsvId92iYakt5KLbHNEDQJF5QP'; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
 async function mountGlobe() {
   const el = $('#globe'); if (!el || globe) return;
   try {
@@ -2094,7 +2105,7 @@ function newsFor(tab) {
   return items.filter(x => x.lang === (tab === 'gr' ? 'el' : 'en'));
 }
 const newsAge = t => { if (!t) return ''; const m = Math.max(1, Math.round((Date.now() - t) / 60e3)); return m < 60 ? `${m} ${T('minutes')} ${T('ago')}` : m < 48 * 60 ? `${Math.round(m / 60)} ${T('hrs')} ${T('ago')}` : dt(t, { day: 'numeric', month: 'short' }); };
-const newsItem = (x, big) => `<a class="newsitem ${big ? 'big' : ''}" href="${esc(x.link)}" target="_blank" rel="noopener">${big && x.image ? `<img src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<div><b>${esc(x.title)}</b>${big && x.summary ? `<p>${esc(x.summary)}</p>` : ''}<small>${esc(x.source)} · ${x.lang.toUpperCase()} · ${esc(newsAge(x.t))}</small></div></a>`;
+const newsItem = (x, big) => /^https?:\/\//i.test(x.link || '') ? `<a class="newsitem ${big ? 'big' : ''}" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer"><div><b>${esc(x.title)}</b><small>${esc(x.source)} · ${esc(String(x.lang || '').toUpperCase())} · ${esc(newsAge(x.t))}</small></div></a>` : '';
 function newsCard() {
   if (!state.news?.items?.length) return '';
   const local = newsFor('city'), pref = newsFor(state.city.cc === 'GR' || state.lang === 'el' ? 'gr' : 'world');
@@ -2321,9 +2332,10 @@ function setCity(c) {
 }
 const findCity = id => [...state.favorites, ...CITIES, state.city, ...(window.__results || [])].find(c => ckey(c) === id);
 function locate(silent = false) {
+  if (!silent && !window.confirm(state.lang === 'el' ? 'Το MONO θα χρησιμοποιήσει κατά προσέγγιση τοποθεσία (~1 km) για τον καιρό. Θα σταλεί σε Open-Meteo και στις πηγές καιρού/γεωκωδικοποίησης (BigDataCloud, IEM, NCEI) και στα API του MONO στη Vercel, όπως περιγράφεται στο Απόρρητο. Θέλεις να συνεχίσεις;' : 'MONO will use an approximate location (~1 km) for weather. It will be sent to Open-Meteo, weather/geocoding sources (BigDataCloud, IEM, NCEI), and MONO APIs on Vercel as explained in Privacy. Continue?')) return Promise.resolve(false);
   if (!navigator.geolocation) { if (!silent) toast(T('geoError')); return Promise.resolve(false); }
   return new Promise(res => navigator.geolocation.getCurrentPosition(async p => {
-    const lat = +p.coords.latitude.toFixed(4), lon = +p.coords.longitude.toFixed(4);
+    const lat = +p.coords.latitude.toFixed(2), lon = +p.coords.longitude.toFixed(2);
     const nm = await reverseName(lat, lon);
     setCity({ name: nm?.name || T('myLoc'), nameEl: nm?.name || T('myLoc'), admin1: nm?.admin1, country: nm?.country, cc: nm?.cc || '', lat, lon, gps: true });
     res(true);
@@ -2403,8 +2415,7 @@ function init() {
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if ((window.innerWidth < 640) !== (lastW < 640) && state.page !== 'radar' && state.page !== 'globe') render(); lastW = window.innerWidth; }, 200); });
   if (!NAV.some(n => n[0] === state.page)) state.page = 'now';
   render();
-  if (state.firstRun) { state.locating = true; render(); locate(true).then(ok => { state.locating = false; if (!ok) loadAll(true); }); }
-  else loadAll(true);
+  loadAll(true);
   loadCityLive();
   localizePlaces();
   loadNews();
@@ -2413,5 +2424,10 @@ function init() {
   setInterval(() => { if (state.page === 'globe') globeTick(); if (document.visibilityState === 'visible' && state.view && state.page !== 'radar' && state.page !== 'globe') { recompute(); render(); } }, 60e3);
 }
 init();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
+if (!cacheAllowed()) {
+  try { for (const k of ['mono31_train','mono31_snapshot','mono31_climate']) localStorage.removeItem(k); } catch {}
+  if ('caches' in window) caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('mono-weather-')).map(k => caches.delete(k)))).catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.filter(r => r.active?.scriptURL === new URL('sw.js',location.href).href).map(r => r.unregister()))).catch(() => {});
+}
+if (cacheAllowed() && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
 })();

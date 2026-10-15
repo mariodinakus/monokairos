@@ -1,0 +1,15 @@
+name: Application checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: node --test tests/*.test.cjs
+      - run: |
+          for file in app.js sky.js cosmic.js space-weather.js privacy.js api/*.js; do node --check "$file"; done
