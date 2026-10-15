@@ -652,8 +652,13 @@ async function fetchWarnings(c) {
   return out.sort((a, b) => (b.local - a.local) || (rank[b.color] - rank[a.color]) || (a.onset - b.onset));
 }
 async function reverseName(lat, lon, lang = state.lang) {
-  try { const d = await getJSON(q('https://api.bigdatacloud.net/data/reverse-geocode-client', { latitude: lat, longitude: lon, localityLanguage: lang }), 8000);
-    return { name: d.city || d.locality || d.principalSubdivision, admin1: d.principalSubdivision, country: d.countryName, cc: d.countryCode }; } catch { return null; }
+  try {
+    const d = await getJSON(q('https://api.bigdatacloud.net/data/reverse-geocode-client', {
+      latitude: lat, longitude: lon, localityLanguage: lang
+    }), 8000);
+    // Prefer the suburb/neighbourhood, not the broader city or neighbouring municipality.
+    return window.MONOGeo.reverseName(d);
+  } catch { return null; }
 }
 
 /* ------------------------------------------------------------------ localized place names
@@ -662,6 +667,7 @@ async function reverseName(lat, lon, lang = state.lang) {
 const BUILTIN_KEYS = new Set(CITIES.map(c => ckey(c)));
 async function placeIn(c, lang) {
   try {
+    if (c.gpsApprox) return { name: lang === 'el' ? 'Προσεγγιστική θέση' : 'Approximate location' };
     if (c.geoId) {
       const d = await getJSON(q('https://geocoding-api.open-meteo.com/v1/get', { id: c.geoId, language: lang, format: 'json' }), 8000);
       if (d && d.name) return { name: d.name, admin1: d.admin1, country: d.country };
@@ -2340,14 +2346,23 @@ function setCity(c) {
 }
 const findCity = id => [...state.favorites, ...CITIES, state.city, ...(window.__results || [])].find(c => ckey(c) === id);
 function locate(silent = false) {
-  if (!silent && !window.confirm(state.lang === 'el' ? 'Το MONO θα χρησιμοποιήσει κατά προσέγγιση τοποθεσία (~1 km) για τον καιρό. Θα σταλεί σε Open-Meteo και στις πηγές καιρού/γεωκωδικοποίησης (BigDataCloud, IEM, NCEI) και στα API του MONO στη Vercel, όπως περιγράφεται στο Απόρρητο. Θέλεις να συνεχίσεις;' : 'MONO will use an approximate location (~1 km) for weather. It will be sent to Open-Meteo, weather/geocoding sources (BigDataCloud, IEM, NCEI), and MONO APIs on Vercel as explained in Privacy. Continue?')) return Promise.resolve(false);
+  if (!silent && !window.confirm(state.lang === 'el' ? 'Το MONO θα χρησιμοποιήσει το GPS με στρογγυλοποίηση συντεταγμένων σε ~100 m (η πραγματική ακρίβεια εξαρτάται από τη συσκευή). Θα σταλεί σε Open-Meteo και στις πηγές καιρού/γεωκωδικοποίησης (BigDataCloud, IEM, NCEI) και στα API του MONO στη Vercel, όπως περιγράφεται στο Απόρρητο. Θέλεις να συνεχίσεις;' : 'MONO rounds GPS coordinates to ~100 m; actual accuracy depends on your device. They are sent to Open-Meteo, weather/geocoding sources (BigDataCloud, IEM, NCEI), and MONO APIs on Vercel as explained in Privacy. Continue?')) return Promise.resolve(false);
   if (!navigator.geolocation) { if (!silent) toast(T('geoError')); return Promise.resolve(false); }
   return new Promise(res => navigator.geolocation.getCurrentPosition(async p => {
-    const lat = +p.coords.latitude.toFixed(2), lon = +p.coords.longitude.toFixed(2);
-    const nm = await reverseName(lat, lon);
-    setCity({ name: nm?.name || T('myLoc'), nameEl: nm?.name || T('myLoc'), admin1: nm?.admin1, country: nm?.country, cc: nm?.cc || '', lat, lon, gps: true });
-    res(true);
-  }, () => { if (!silent) toast(T('geoError')); res(false); }, { timeout: 12000, maximumAge: 10 * 60e3 }));
+    try {
+      const { lat, lon } = window.MONOGeo.roundCoordinates(p.coords.latitude, p.coords.longitude);
+      const approx = window.MONOGeo.isApproximateFix(p.coords.accuracy);
+      const nm = await reverseName(lat, lon);
+      const name = approx ? (state.lang === 'el' ? 'Προσεγγιστική θέση' : 'Approximate location') : (nm?.name || T('myLoc'));
+      setCity({ name, nameEl: name, admin1: nm?.admin1, country: nm?.country, cc: nm?.cc || '', lat, lon, gps: true,
+        gpsApprox: approx, i18n: { [state.lang]: { name, admin1: nm?.admin1, country: nm?.country } } });
+      if (approx && !silent) toast(state.lang === 'el'
+        ? `GPS ±${Math.round(p.coords.accuracy)} m: η περιοχή δεν είναι βέβαιη. Δοκίμασε εκ νέου έξω ή αναζήτησέ την.`
+        : `GPS ±${Math.round(p.coords.accuracy)} m: area uncertain. Retry outdoors or search manually.`);
+      res(true);
+    } catch { if (!silent) toast(T('geoError')); res(false); }
+  }, () => { if (!silent) toast(T('geoError')); res(false); },
+  { enableHighAccuracy: true, timeout: 15000, maximumAge: 60e3 }));
 }
 function csv() {
   const V = state.view; if (!V) return;
