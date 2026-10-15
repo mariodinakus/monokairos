@@ -26,12 +26,13 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=3.7">
+<link rel="stylesheet" href="styles.css?v=4.0">
+<link rel="stylesheet" href="mono-plus.css?v=4.0">
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><span class="mark">M<span class="mark-point">.</span></span><span class="brandcopy">MONO<span class="brand-detail">WEATHER · v3.5</span></span></div>
+    <div class="brand"><span class="mark">M<span class="mark-point">.</span></span><span class="brandcopy">MONO<span class="brand-detail">WEATHER · v4.0</span></span></div>
     <div class="sidecap" data-i18n="workspace">ΕΦΑΡΜΟΓΗ</div>
     <nav id="nav" class="nav" aria-label="Κύρια πλοήγηση"></nav>
     <div class="sidecap" data-i18n="saved">ΑΓΑΠΗΜΕΝΑ</div>
@@ -50,13 +51,16 @@
       </div>
     </header>
     <main id="content" class="content" aria-live="polite"></main>
-    <footer class="footer"><div>MONO / WEATHER · v3.5 · MONO-ML</div><div><span data-i18n="attribution"></span> · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · <a href="https://aviationweather.gov/data/api/" target="_blank" rel="noopener">AWC</a> · <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a> · <a href="https://meteostat.net/" target="_blank" rel="noopener">Meteostat</a> · <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> · <a href="https://meteoalarm.org/" target="_blank" rel="noopener">Meteoalarm</a></div></footer>
+    <footer class="footer"><div>MONO / WEATHER · v4.0 · MONO-ML</div><div><span data-i18n="attribution"></span> · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · <a href="https://aviationweather.gov/data/api/" target="_blank" rel="noopener">AWC</a> · <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a> · <a href="https://meteostat.net/" target="_blank" rel="noopener">Meteostat</a> · <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> · <a href="https://meteoalarm.org/" target="_blank" rel="noopener">Meteoalarm</a></div></footer>
   </div>
 </div>
 <nav id="tabbar" class="tabbar" aria-label="Πλοήγηση"></nav>
 <div id="toast" class="toast" role="status"></div>
 <script src="model.js"></script>
 <script src="climate.js"></script>
-<script src="app.js?v=3.7"></script>
+<script src="environment.js?v=4.0"></script>
+<script src="atmosphere.js?v=4.0"></script>
+<script src="space-weather.js?v=4.0"></script>
+<script src="app.js?v=4.0"></script>
 </body>
 </html>

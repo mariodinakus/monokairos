@@ -8,7 +8,7 @@
 'use strict';
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
-const VERSION = '3.6';
+const VERSION = '4.0';
 const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
@@ -142,8 +142,9 @@ el: {
   rainTimeline:'Πότε θα βρέξει', noRain:'Δεν αναμένεται βροχή τις επόμενες 72 ώρες.', from:'από', to:'έως', upTo:'έως', alerts:'Προσοχή',
   warnTitle:'Επίσημες προειδοποιήσεις', warnNone:'Δεν υπάρχουν ενεργές επίσημες προειδοποιήσεις για τη χώρα.', warnFail:'Οι επίσημες προειδοποιήσεις δεν φορτώθηκαν.', warnRegion:'για την περιοχή σου', warnCountry:'στη χώρα',
   hourlyProb:'Ωριαίες πιθανότητες (72 ώρες)',
-  envTitle:'Περιβάλλον', aqi:'Ποιότητα αέρα', pollen:'Γύρη σήμερα', sun:'Ήλιος & Σελήνη', sea:'Θάλασσα', daylight:'Διάρκεια ημέρας', uvMax:'Μέγ. UV',
-  seaTemp:'νερό', waves:'Κύμα', illum:'φωτισμένη', aq: ['Καλή','Μέτρια','Μέση','Κακή','Πολύ κακή','Επικίνδυνη'], dust:'Σκόνη',
+  space:'Διάστημα', spaceTitle:'Διαστημικός καιρός', spaceSub:'Ηλιακή δραστηριότητα, γεωμαγνητικές καταιγίδες, ραδιοεπικοινωνίες και όσα δεν βλέπουμε στον ουρανό.',
+  environment:'Περιβάλλον', envTitle:'Περιβάλλον', envSub:'Αέρας, αλλεργίες, ρύποι, σύννεφα, πίεση και ανώτερη ατμόσφαιρα για την περιοχή σου.', envOpen:'Πλήρης ανάλυση', aqi:'Ποιότητα αέρα', pollen:'Γύρη · επόμενο 24ωρο', sun:'Ήλιος & Σελήνη', sea:'Θάλασσα', daylight:'Διάρκεια ημέρας', uvMax:'Μέγ. UV',
+  seaTemp:'νερό', waves:'Κύμα', illum:'φωτισμένη', aq: ['Καλή','Σχετικά καλή','Μέτρια','Κακή','Πολύ κακή','Εξαιρετικά κακή'], dust:'Σκόνη',
   pol_birch:'Σημύδα', pol_grass:'Αγρωστώδη', pol_olive:'Ελιά', pol_ragweed:'Αμβροσία', pol_alder:'Σκλήθρα', pol_mugwort:'Αρτεμισία', lvl:['Χαμηλή','Μέτρια','Υψηλή'],
   moonNames:['Νέα σελήνη','Αύξων μηνίσκος','Πρώτο τέταρτο','Αύξουσα αμφίκυρτη','Πανσέληνος','Φθίνουσα αμφίκυρτη','Τελευταίο τέταρτο','Φθίνων μηνίσκος'],
   news:'Ειδήσεις', newsTitle:'Ειδήσεις καιρού', newsSub:'Τίτλοι από ελληνικά και διεθνή μέσα, με σύνδεσμο στο πλήρες άρθρο.', newsCity:'Η πόλη μου', newsGreece:'Ελλάδα', newsWorld:'Κόσμος (EN)',
@@ -260,7 +261,8 @@ en: {
   rainTimeline:'When it will rain', noRain:'No rain expected in the next 72 hours.', from:'from', to:'to', upTo:'up to', alerts:'Heads-up',
   warnTitle:'Official warnings', warnNone:'No active official warnings for the country.', warnFail:'Official warnings did not load.', warnRegion:'for your region', warnCountry:'in the country',
   hourlyProb:'Hourly probabilities (72 hours)',
-  envTitle:'Environment', aqi:'Air quality', pollen:'Pollen today', sun:'Sun & Moon', sea:'Sea', daylight:'Daylight', uvMax:'Max UV',
+  space:'Space', spaceTitle:'Space weather', spaceSub:'Solar activity, geomagnetic storms, radio communications and the invisible sky.',
+  environment:'Environment', envTitle:'Environment', envSub:'Air quality, allergies, pollutants, clouds, pressure and the upper atmosphere at your location.', envOpen:'Full analysis', aqi:'Air quality', pollen:'Pollen · next 24 h', sun:'Sun & Moon', sea:'Sea', daylight:'Daylight', uvMax:'Max UV',
   seaTemp:'water', waves:'Waves', illum:'illuminated', aq: ['Good','Fair','Moderate','Poor','Very poor','Extremely poor'], dust:'Dust',
   pol_birch:'Birch', pol_grass:'Grass', pol_olive:'Olive', pol_ragweed:'Ragweed', pol_alder:'Alder', pol_mugwort:'Mugwort', lvl:['Low','Moderate','High'],
   moonNames:['New moon','Waxing crescent','First quarter','Waxing gibbous','Full moon','Waning gibbous','Last quarter','Waning crescent'],
@@ -414,7 +416,7 @@ const state = {
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
   page: (location.hash || '').slice(1) || 'now', hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle',
-  aq: null, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
+  aq: null, atmosphere: null, space: null, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat,
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
 };
@@ -458,7 +460,7 @@ function desc(code) {
   const m = { 0: 'clear', 1: 'mainly', 2: 'partly', 3: 'overcast', 45: 'fog', 48: 'fog', 51: 'drizzle', 53: 'drizzle', 55: 'drizzle', 56: 'freezing', 57: 'freezing', 61: 'rainL', 63: 'rainM', 65: 'rainH', 66: 'freezing', 67: 'freezing', 71: 'snow', 73: 'snow', 75: 'snow', 77: 'snow', 80: 'showers', 81: 'showers', 82: 'showers', 85: 'snow', 86: 'snow', 95: 'storm', 96: 'storm', 99: 'storm' };
   return T(m[code] || 'unknown');
 }
-const iconSrc = name => (window.ICONS ? window.ICONS[name] : `icons/${name}.png`);
+const iconSrc = name => (window.ICONS ? window.ICONS[name] : `icons/${name}.svg`);
 const icon = (code, day = 1, cls = '') => `<img class="${cls}" src="${iconSrc(ico(code, day))}" alt="${esc(desc(code))}">`;
 const PH_ICON = { rain: 'rain', heavy: 'umbrella', storm: 'storm', snow: 'snow', fog: 'fog', wind: 'wind', frost: 'thermometer', heat: 'sun' };
 
@@ -603,8 +605,16 @@ async function fetchNetatmo(c) {
 }
 
 /* ------------------------------------------------------------------ extras: air, sea, warnings, place names */
-const fetchAir = c => getJSON(q('https://air-quality-api.open-meteo.com/v1/air-quality', { ...ll(c), timezone: 'auto', timeformat: 'unixtime', forecast_days: 2,
-  current: 'european_aqi,pm10,pm2_5,ozone,nitrogen_dioxide,dust', hourly: 'european_aqi,birch_pollen,grass_pollen,olive_pollen,ragweed_pollen,alder_pollen,mugwort_pollen' }));
+const fetchAir = c => getJSON(q('https://air-quality-api.open-meteo.com/v1/air-quality', { ...ll(c), timezone: 'auto', timeformat: 'unixtime', forecast_days: 4,
+  current: MonoEnvironment.CURRENT, hourly: MonoEnvironment.HOURLY }));
+const fetchAtmosphere = c => viaProxy(q('/api/atmosphere', { lat: (+c.lat).toFixed(4), lon: (+c.lon).toFixed(4) }), q(OM, { ...ll(c), models: 'gfs_global', timezone: 'auto', timeformat: 'unixtime', past_days: 1, forecast_days: 3, hourly: MonoAtmosphere.HOURLY }), 12000);
+async function loadSpace(force = false) {
+  if (state.spaceBusy || (!force && Date.now() - state.spaceAt < REFRESH_LIVE)) return;
+  state.spaceBusy = true;
+  try { state.space = await getJSON('/api/space-weather', 12000).catch(() => MonoSpaceWeather.fetchDirect()); }
+  catch { state.space = { error: true }; }
+  finally { state.spaceAt = Date.now(); state.spaceBusy = false; schedule(); }
+}
 async function fetchMarine(c) {
   const d = await getJSON(q('https://marine-api.open-meteo.com/v1/marine', { ...ll(c), timezone: 'auto', timeformat: 'unixtime', current: 'wave_height,wave_direction,wave_period,sea_surface_temperature' }));
   if (!fin(d?.current?.sea_surface_temperature) && !fin(d?.current?.wave_height)) throw new Error('inland');
@@ -683,6 +693,7 @@ async function localizePlaces() {
 function align(srcTimes, arr, idx) { const out = new Array(idx.size).fill(null); if (!arr) return out; srcTimes.forEach((t, i) => { const j = idx.get(t * 1000); if (j !== undefined && arr[i] != null) out[j] = arr[i]; }); return out; }
 
 async function loadAll(force = false) {
+  loadSpace(force);
   const c = state.city, gen = ++state.gen;
   state.mainErr = false; render();
   try {
@@ -713,7 +724,8 @@ async function loadAll(force = false) {
   jobs.push(getJSON(longURL(c)).then(d => { if (gen === state.gen) { state.long = d; schedule(); } }).catch(() => {}));
   jobs.push(fetchHolidays(c).then(h => { if (gen === state.gen) { state.hol = h; schedule(); } }).catch(() => {}));
   if (!state.clim) { const cc = read(K.clim, {})[ckey(c)]; if (cc?.dayNormals) state.clim = { ...cc, loading: false }; }
-  jobs.push(fetchAir(c).then(d => { if (gen === state.gen) { state.aq = d; schedule(); } }).catch(() => { if (gen === state.gen) state.aq = { error: true }; }));
+  jobs.push(fetchAir(c).then(d => { if (gen === state.gen) { state.aq = d; schedule(); } }).catch(() => { if (gen === state.gen) { state.aq = { error: true }; schedule(); } }));
+  jobs.push(fetchAtmosphere(c).then(d => { if (gen === state.gen) { state.atmosphere = d; schedule(); } }).catch(() => { if (gen === state.gen) { state.atmosphere = { error: true }; schedule(); } }));
   jobs.push(fetchMarine(c).then(d => { if (gen === state.gen) { state.marine = d; schedule(); } }).catch(() => { if (gen === state.gen) state.marine = { error: true }; }));
   jobs.push(fetchWarnings(c).then(d => { if (gen === state.gen) { state.warn = d; schedule(); } }).catch(() => { if (gen === state.gen) { state.warn = { error: true }; schedule(); } }));
   if (modelJobs.length) Promise.allSettled(modelJobs).then(() => { if (gen === state.gen) { recompute(); ensureTraining(c, gen); } });
@@ -908,7 +920,7 @@ function recompute() {
     const noon = rows.find(r => r.H === 13) || rows[Math.floor(rows.length / 2)];
     const mx = f => (fut.length ? Math.max(0, ...fut.map(f).filter(fin)) : 0);
     const heavy = M.ensembleDailyWet(famP, idxs, 20);
-    return { key: d, t: noon.t, hi: temps.length ? Math.max(...temps) : null, lo: temps.length ? Math.min(...temps) : null, pop,
+    return { key: d, t: noon.t, cloud: (() => { const all = rows.filter(r => fin(r.cloud)), day = all.filter(r => r.isDay); const s = day.length ? day : all; return s.length ? s.reduce((a, r) => a + r.cloud, 0) / s.length : null; })(), hi: temps.length ? Math.max(...temps) : null, lo: temps.length ? Math.min(...temps) : null, pop,
       mm: fut.reduce((a, r) => a + (fin(r.amount) ? r.amount : 0), 0), code: pop >= 0.5 && wettest ? wettest.code : noon.code,
       ev: { rain: pop, heavy: fin(heavy) ? heavy : mx(r => r.pHeavy), storm: mx(r => r.pStorm), snow: mx(r => r.pSnow), fog: mx(r => r.pFog), wind: mx(r => r.pWind), frost: mx(r => r.pFrost), heat: mx(r => r.pHeat) } };
   });
@@ -1030,7 +1042,7 @@ function nowPage() {
   const minis = `<div class="mini-grid">
     ${mini(T('rainChance'), pct(pop6), T('next6') + (today?.mm >= 0.1 ? ` · ${num(today.mm, 1)} mm ${T('today').toLowerCase()}` : ''), 'umbrella')}
     ${mini(T('wind'), `${num(cur.wind)} <small>km/h</small> ${dirArrow(cur.dir)}`, fin(cur.gust) ? `${T('gust')} ${num(cur.gust)} km/h` : '&nbsp;', 'wind')}
-    ${mini(T('humidity'), `${num(cur.rh)}%`, `${T('dew')} ${deg(cur.dew)}`, 'humidity')}
+    ${mini(T('humidity'), `${num(cur.rh)}%`, `${T('dew')} ${deg(cur.dew)} · ☁ ${ccTxt(rows[iN]?.cloud)}`, 'humidity')}
     ${mini(T('pressure'), `${num(cur.pres)} <small>hPa</small>`, fin(cur.vis) ? `${T('visibility')} ${num(cur.vis, cur.vis < 10 ? 1 : 0)} km` : '&nbsp;', 'pressure')}</div>`;
   const win = rows.slice(Math.max(0, iN - 24), iN + 49), past = r => r.t <= Date.now();
   const ch = chart({ rows: win, band: { lo: win.map(r => (past(r) ? null : r.lo)), hi: win.map(r => (past(r) ? null : r.hi)) },
@@ -1043,13 +1055,13 @@ function nowPage() {
     <section class="section dual"><div class="card"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</div>
       <div class="card">${engineSummary()}</div></section>${newsCard()}${holidaysCard()}${environment()}${glossary()}`;
 }
-function hoursStrip(rows, cur) {
-  return `<div class="scroll-hours">${rows.map((r, j) => `<div class="hourcard ${j === 0 ? 'active' : ''}"><span class="hourtime">${j === 0 ? T('now') : hh(r.t) + ':00'}</span>${icon(j === 0 && cur && fin(cur.code) ? cur.code : r.code, j === 0 && cur ? cur.isDay : r.isDay)}<span class="hourtemp">${deg(j === 0 && cur && fin(cur.temp) ? cur.temp : r.temp)}</span><span class="hoursub">☂ ${pct(r.pop)}</span>${(r.amount ?? 0) >= 0.1 ? `<span class="hoursub rn-hmm">${mm1(r.amount)} mm</span>` : ''}</div>`).join('')}</div>`;
+function ccTxt(c) { return Number.isFinite(c) ? Math.round(c) + '%' : '—'; } function hoursStrip(rows, cur) {
+  return `<div class="scroll-hours">${rows.map((r, j) => `<div class="hourcard ${j === 0 ? 'active' : ''}"><span class="hourtime">${j === 0 ? T('now') : hh(r.t) + ':00'}</span>${icon(j === 0 && cur && fin(cur.code) ? cur.code : r.code, j === 0 && cur ? cur.isDay : r.isDay)}<span class="hourtemp">${deg(j === 0 && cur && fin(cur.temp) ? cur.temp : r.temp)}</span><span class="hoursub">☂ ${pct(r.pop)}</span><span class="hoursub cc" title="${T('clouds')}">☁ ${ccTxt(r.cloud)}</span>${(r.amount ?? 0) >= 0.1 ? `<span class="hoursub rn-hmm">${mm1(r.amount)} mm</span>` : ''}</div>`).join('')}</div>`;
 }
 function dailyRows(d) {
   if (!d?.length) return `<p class="muted">—</p>`;
   const lo = Math.min(...d.map(x => x.lo)), hi = Math.max(...d.map(x => x.hi)), sp = Math.max(1, hi - lo);
-  return d.map((x, i) => `<div class="dailyrow"><strong>${esc(dayLabel(x.t, i))}</strong>${icon(x.code, 1)}<div class="dailybar"><span style="left:${(100 * (x.lo - lo) / sp).toFixed(1)}%;width:${Math.max(4, 100 * (x.hi - x.lo) / sp).toFixed(1)}%"></span></div><div class="dailytemps"><span class="min">${deg(x.lo)}</span><span>${deg(x.hi)}</span></div><div class="dailywet">☂ ${pct(x.pop)}${x.mm >= 0.1 ? ` · ${num(x.mm, 1)}mm` : ''}</div></div>`).join('');
+  return d.map((x, i) => `<div class="dailyrow"><strong>${esc(dayLabel(x.t, i))}</strong>${icon(x.code, 1)}<div class="dailybar"><span style="left:${(100 * (x.lo - lo) / sp).toFixed(1)}%;width:${Math.max(4, 100 * (x.hi - x.lo) / sp).toFixed(1)}%"></span></div><div class="dailytemps"><span class="min">${deg(x.lo)}</span><span>${deg(x.hi)}</span></div><div class="dailycc" title="${T('clouds')}">☁ ${ccTxt(x.cloud)}</div><div class="dailywet">☂ ${pct(x.pop)}${x.mm >= 0.1 ? ` · ${num(x.mm, 1)}mm` : ''}</div></div>`).join('');
 }
 function periodText(p) {
   const V = state.view, lab = t => { const i = V.daily.findIndex(d => d.key === dayKey(t, V.zone)); return i >= 0 ? dayLabel(t, i) : dt(t, { weekday: 'short' }); };
@@ -1084,18 +1096,15 @@ function engineSummary() {
    <div class="wide"><span class="label">${T('trainedOn')}</span><p>${trainTxt}</p></div>
    <div class="wide"><span class="label">${T('station2')}</span><p>${st}</p></div></div>`;
 }
-function environment() {
+function environment(full = false) {
   const V = state.view, W = state.main, cards = [];
-  const aq = state.aq && !state.aq.error ? state.aq : null;
-  if (aq?.current) {
-    const e = aq.current.european_aqi, band = !fin(e) ? null : e <= 20 ? 0 : e <= 40 ? 1 : e <= 60 ? 2 : e <= 80 ? 3 : e <= 100 ? 4 : 5;
-    const H = aq.hourly || {}, todayK = dayKey(Date.now(), V.zone);
-    const idx = (H.time || []).map((t, i) => [t, i]).filter(([t]) => dayKey(t * 1000, V.zone) === todayK).map(([, i]) => i);
-    const TH = { birch: [15, 90], grass: [10, 50], olive: [50, 200], ragweed: [5, 20], alder: [15, 90], mugwort: [10, 50] };
-    const pol = Object.keys(TH).map(k => ({ k, v: Math.max(-1, ...idx.map(i => H[k + '_pollen']?.[i]).filter(fin)) })).filter(p => p.v > 0).sort((a, b) => b.v - a.v).slice(0, 3);
-    cards.push(`<div class="card env"><div class="minihead"><span class="label">${T('aqi')}</span><span class="aqdot aq${band ?? 'x'}"></span></div><div class="minivalue">${num(e)} <small>EAQI</small></div><div class="mininote">${band != null ? T('aq')[band] : '—'}</div>
-      <div class="kvs"><span>PM2.5 <b>${num(aq.current.pm2_5)}</b></span><span>PM10 <b>${num(aq.current.pm10)}</b></span><span>O₃ <b>${num(aq.current.ozone)}</b></span><span>NO₂ <b>${num(aq.current.nitrogen_dioxide)}</b></span>${aq.current.dust > 5 ? `<span>${T('dust')} <b>${num(aq.current.dust)}</b></span>` : ''}</div>
-      ${pol.length ? `<div class="pollen"><span class="label">${T('pollen')}</span>${pol.map(p => { const lv = p.v >= TH[p.k][1] ? 2 : p.v >= TH[p.k][0] ? 1 : 0; return `<span>${T('pol_' + p.k)} <b class="lv${lv}">${T('lvl')[lv]}</b></span>`; }).join('')}</div>` : ''}</div>`);
+  if (!full) {
+    const A = MonoEnvironment.snapshot(state.aq), B = MonoAtmosphere.snapshot(state.atmosphere), band = MonoEnvironment.band(A.value('european_aqi'));
+    const pollen = A.pollen.filter(p => p.max !== null).sort((a, b) => b.level - a.level || b.max - a.max).slice(0, 3);
+    cards.push(`<div class="card env"><span class="label">${T('aqi')}</span><div class="minivalue">${num(A.value('european_aqi'))} <small>EAQI</small></div><div class="mininote">${band === null ? T('noData') : T('aq')[band]}</div><div class="kvs"><span>CO₂ <b>${num(A.value('carbon_dioxide'))} ppm</b></span><span>PM2.5 <b>${num(A.value('pm2_5'), 1)} μg/m³</b></span></div><small class="env-meta">CAMS · ${T('modelNow')}</small></div>`);
+    cards.push(`<div class="card env"><span class="label">${T('pollen')}</span><div class="env-summary-pollen">${pollen.map(p => `<span>${T('pol_' + p.key)} <b class="lv${p.level}">${T('lvl')[p.level]} · ${num(p.max, 1)}</b></span>`).join('') || T('noData')}</div><small class="env-meta">${state.lang === 'el' ? 'Μέγιστη συγκέντρωση · κόκκοι/m³. Όλα τα είδη στην πλήρη ανάλυση.' : 'Peak concentration · grains/m³. All species in the full analysis.'}</small></div>`);
+    cards.push(`<div class="card env"><span class="label">${state.lang === 'el' ? 'Σύννεφα & πίεση' : 'Clouds & pressure'}</span><div class="minivalue">${num(B.value('cloud_cover'))}<small>%</small></div><div class="kvs"><span>${T('pressure')} <b>${num(B.value('pressure_msl'), 1)} hPa</b></span><span>Δ 3h <b>${num(B.delta, 1)} hPa</b></span></div><small class="env-meta">NOAA GFS · ${T('modelNow')}</small></div>`);
+    cards.push(MonoSpaceWeather.miniCard(state.space, { lang: state.lang }));
   }
   const D = W?.daily;
   if (D?.time?.length) {
@@ -1107,8 +1116,15 @@ function environment() {
   }
   const mr = state.marine && !state.marine.error ? state.marine.current : null;
   if (mr) cards.push(`<div class="card env"><div class="minihead"><span class="label">${T('sea')}</span><img src="${iconSrc('humidity')}" alt=""></div><div class="minivalue">${deg(mr.sea_surface_temperature)} <small>${T('seaTemp')}</small></div><div class="mininote">${T('waves')} ${num(mr.wave_height, 1)} m ${dirArrow(mr.wave_direction)} · ${num(mr.wave_period)} s</div></div>`);
-  if (!cards.length) return '';
-  return `<section class="section"><div class="sectionhead"><h2 class="h2">${T('envTitle')}</h2></div><div class="env-grid">${cards.join('')}</div></section>`;
+  const sectionTitle = full ? (state.lang === 'el' ? 'Αέρας & αλλεργίες' : 'Air & allergies') : T('envTitle');
+  return `<section class="section environment-section" id="environment"><div class="sectionhead"><h2 class="h2">${sectionTitle}</h2>${full ? `<span class="env-meta">${esc(cityName(state.city))}</span>` : btn('goto', '↗ ' + T('envOpen'), 'data-page="environment"')}</div>${full ? MonoEnvironment.render(state.aq, { lang: state.lang, zone: V.zone }) + MonoAtmosphere.render(state.atmosphere, { lang: state.lang, zone: V.zone }) : ''}<div class="env-grid env-astronomy" id="sun-sea">${cards.join('')}</div></section>`;
+}
+function environmentPage() {
+  const jumps = [['environment', state.lang === 'el' ? 'Αέρας & γύρη' : 'Air & pollen'], ['cloud-pressure', state.lang === 'el' ? 'Σύννεφα & πίεση' : 'Clouds & pressure'], ['cloud-timeline', state.lang === 'el' ? 'Νέφωση κάθε ώρα' : 'Clouds hourly'], ['synoptic', state.lang === 'el' ? 'Χάρτης Υ/Χ' : 'H/L map'], ['vertical-profile', state.lang === 'el' ? 'Ανώτερα στρώματα' : 'Upper levels'], ['sun-sea', T('sun') + ' · ' + T('sea')]];
+  return header(T('envTitle'), T('envSub'), btn('reload', '↻ ' + T('refresh'))) + (state.view ? `<div class="chips">${jumps.map(([target, label]) => `<button class="chip" data-action="envJump" data-target="${target}">${label}</button>`).join('')}${btn('goto', '☄ ' + T('space'), 'data-page="space"')}</div>` + environment(true) : state.mainErr ? errorCard() : loadingCard());
+}
+function spacePage() {
+  return header(T('spaceTitle'), T('spaceSub'), btn('reload', '↻ ' + T('refresh'))) + MonoSpaceWeather.render(state.space, { lang: state.lang, zone: state.view?.zone || 'UTC', lat: +state.city.lat, lon: +state.city.lon });
 }
 
 /* ------------------------------------------------------------------ page: hourly */
@@ -1121,11 +1137,11 @@ function hourlyPage() {
   let last = '';
   const lines = rows.map(r => {
     const d = dayKey(r.t, V.zone); const div = d !== last ? `<div class="daydivider">${esc(dt(r.t, { weekday: 'long', day: 'numeric', month: 'long' }))}</div>` : ''; last = d;
-    return `${div}<div class="tableline hl"><strong>${hhmm(r.t)}</strong>${icon(r.code, r.isDay)}<span class="deg">${deg(r.temp)}</span><span class="rng hide-sm">${deg(r.lo)}–${deg(r.hi)}</span><div class="popcell"><div class="bar"><span style="width:${Math.round((r.pop ?? 0) * 100)}%"></span></div><span>${pct(r.pop)}</span></div><span class="hide-sm">${fin(r.amount) && r.amount >= 0.05 ? num(r.amount, 1) + ' mm' : '—'}</span><span>${num(r.wind)} <small>km/h</small> ${dirArrow(r.dir)}</span><span class="hide-sm">${num(r.rh)}%</span></div>`;
+    return `${div}<div class="tableline hl"><strong>${hhmm(r.t)}</strong>${icon(r.code, r.isDay)}<span class="deg">${deg(r.temp)}</span><span class="rng hide-sm">${deg(r.lo)}–${deg(r.hi)}</span><div class="popcell"><div class="bar"><span style="width:${Math.round((r.pop ?? 0) * 100)}%"></span></div><span>${pct(r.pop)}</span></div><span class="cc" title="${T('clouds')}">☁ ${ccTxt(r.cloud)}</span><span class="hide-sm">${fin(r.amount) && r.amount >= 0.05 ? num(r.amount, 1) + ' mm' : '—'}</span><span>${num(r.wind)} <small>km/h</small> ${dirArrow(r.dir)}</span><span class="hide-sm">${num(r.rh)}%</span></div>`;
   }).join('');
   return head + `<div class="chips">${[24, 48, 72, 168].map(n => `<button class="chip ${state.hours === n ? 'active' : ''}" data-action="hours" data-n="${n}">${T(n === 24 ? 'h24' : 'next' + n)}</button>`).join('')}</div>
     <div class="card">${ch}${legend([['mono', T('legendMono')], ['band', T('legendBand')], ['bar', T('legendRain')]])}</div>
-    <section class="section"><div class="tableline hl head"><span>${T('time')}</span><span></span><span>${T('temp')}</span><span class="hide-sm">${T('range')}</span><span>${T('rain')}</span><span class="hide-sm">${T('amount')}</span><span>${T('windCol')}</span><span class="hide-sm">${T('rh')}</span></div>${lines}</section>`;
+    <section class="section"><div class="tableline hl head"><span>${T('time')}</span><span></span><span>${T('temp')}</span><span class="hide-sm">${T('range')}</span><span>${T('rain')}</span><span>☁<span class="hide-sm"> ${T('clouds')}</span></span><span class="hide-sm">${T('amount')}</span><span>${T('windCol')}</span><span class="hide-sm">${T('rh')}</span></div>${lines}</section>`;
 }
 
 /* ------------------------------------------------------------------ page: rain (v3.5) */
@@ -1572,15 +1588,15 @@ function todoGroups() {
   if (fin(nMin) && nMin <= 1) add('home', 'snow', X('Βάλε τις ευαίσθητες γλάστρες μέσα', 'Bring sensitive plants indoors'), 1);
   if (rainSoon) add('home', 'drizzle', X('Μην ποτίσεις τον κήπο, θα το κάνει η βροχή', 'Skip watering; the rain will do it'));
   else if (dryDays >= 4 && (fMax ?? 0) >= 25) add('home', 'sun', X('Πότισε τα φυτά· δεν φαίνεται βροχή για μέρες', 'Water the plants; no rain for days'));
-  if (pop14 < 0.2 && fin(fMax) && fMax >= 15 && fMax <= 28 && !(eaqi > 50) && !(dust > 50)) add('home', 'partly-day', X('Άνοιξε τα παράθυρα για αερισμό το μεσημέρι', 'Air out the house around midday'));
+  const airSnapshot = MonoEnvironment.snapshot(state.aq), pollenKnown = airSnapshot.pollen.every(p => p.max !== null), pollenElevated = airSnapshot.pollen.some(p => p.level >= 1);
+  if (pop14 < 0.2 && fin(fMax) && fMax >= 15 && fMax <= 28 && fin(eaqi) && eaqi <= 40 && fin(dust) && dust <= 20 && pollenKnown && !pollenElevated) add('home', 'partly-day', X('Αέρισε σύντομα, ελέγχοντας τον αέρα και τη γύρη εκείνη την ώρα', 'Air out briefly, checking air quality and pollen at that time'));
 
   // ---- health
   if (fin(fMax) && fMax >= 35) add('health', 'sun', X('Καύσωνας: νερό συχνά, έξω μόνο πριν τις 11:00 και μετά τις 18:00', 'Heat: drink often; go out only before 11:00 or after 18:00'), 2);
   else if (fin(fMax) && fMax >= 30) add('health', 'sun', X('Ζέστη: νερό στην τσάντα', 'Hot: carry water'));
   if (fin(fMax) && fMax >= 28 && (rhDay ?? 0) >= 60) add('health', 'humidity', X('Αποπνικτική υγρασία: κόψε την έντονη άσκηση', 'Muggy: ease off hard exercise'));
   if (eaqi > 60) add('health', 'wind', X('Κακή ποιότητα αέρα: λιγότερη άσκηση έξω', 'Poor air quality: less outdoor exercise'), 1);
-  const H = state.aq?.hourly, polMax = H ? Math.max(0, ...['grass', 'birch', 'olive', 'ragweed'].map(k => Math.max(0, ...(H[k + '_pollen'] || []).slice(0, 24).filter(fin)))) : 0;
-  if (polMax >= 50) add('health', 'partly-day', X('Υψηλή γύρη: αν έχεις αλλεργία, πάρε το αντιισταμινικό σου', 'High pollen: take your antihistamine if you have allergies'));
+  if (airSnapshot.pollen.some(p => p.level === 2)) add('health', 'partly-day', X('Αυξημένη γύρη: αν έχεις αλλεργία, έλεγξε το είδος που σε επηρεάζει στο Περιβάλλον και περιόρισε την έκθεση', 'Elevated pollen: if you have allergies, check the type affecting you under Environment and limit exposure'));
   if (fin(dP) && dP <= -6) add('health', 'pressure', X(`Πέφτει απότομα η πίεση (${num(dP)} hPa σε 24 ώρες)· όσοι έχουν ημικρανίες ίσως το νιώσουν`, `Pressure drops fast (${num(dP)} hPa in 24 h); migraine-prone people may feel it`));
   if (fin(nMin) && nMin < 3) add('health', 'thermometer', X('Πολύ κρύο βράδυ: έλεγξε τους ηλικιωμένους γείτονες', 'Very cold night: check on elderly neighbours'));
 
@@ -2256,7 +2272,7 @@ async function loadCityLive() {
 }
 
 /* ------------------------------------------------------------------ shell */
-const NAV = [['now', '◐'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['radar', '◎'], ['globe', '◍'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
+const NAV = [['now', '◐'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
 const TABS = ['now', 'rain', 'radar', 'globe', 'phen'];
 function navRender() {
   document.documentElement.lang = state.lang; document.documentElement.dataset.theme = state.theme;
@@ -2272,9 +2288,13 @@ function render() {
   navRender();
   if (state.page === 'radar' && map && $('#map')) return;   // keep the live map running
   if (state.page === 'globe' && globe && $('#globe')) { updateGlobeCtl(); return; }
-  const pages = { now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, radar: radarPage, globe: globePage, models: modelsPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
+  const pages = { now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, environment: environmentPage, space: spacePage, radar: radarPage, globe: globePage, models: modelsPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
   const y = window.scrollY;
+  const openEnvDetails = [...document.querySelectorAll('.environment-section details[open]')].map(el => el.id);
+  const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap')].map(el => [el.id, el.scrollLeft]);
   $('#content').innerHTML = (pages[state.page] || nowPage)();
+  openEnvDetails.forEach(id => { const el = document.getElementById(id); if (el) el.open = true; });
+  envScroll.forEach(([id, left]) => { const el = document.getElementById(id); if (el) el.scrollLeft = left; });
   window.scrollTo(0, y);
   const r = $('#selHour'); if (r) r.addEventListener('input', e => { state.sel = +e.target.value; const yy = window.scrollY; render(); window.scrollTo(0, yy); $('#selHour')?.focus(); });
   if (state.page === 'radar') mountRadar();
@@ -2294,7 +2314,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true); localizePlaces();
@@ -2336,6 +2356,7 @@ function onClick(e) {
   const b = e.target.closest('[data-action]'); if (!b) return;
   const a = b.dataset.action;
   if (a === 'goto') goto(b.dataset.page);
+  else if (a === 'envJump') document.getElementById(b.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   else if (a === 'menu') $('.sidebar').classList.toggle('open');
   else if (a === 'reload') loadAll(true);
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
