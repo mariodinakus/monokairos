@@ -164,6 +164,93 @@ html[data-theme=dark]{--warm:#fb923c;--cold:#60a5fa;--w-yellow:#f2c94c;--w-orang
 .zoorow.me{background:var(--soft);margin:0 -10px;padding:11px 10px;border-radius:10px;border-top-color:transparent}
 .kv.strong span,.kv.strong b{color:var(--ink);font-weight:800}
 /* environment */
+.environment-section h3{font-size:13px;margin:0;line-height:1.5}
+.environment-section h3.label{font-size:10px}
+.environment-section p{margin:0}
+.environment-section .panelhead{gap:12px;flex-wrap:wrap}
+.environment-section .minihead{gap:10px;align-items:center}
+.env-air-layout{display:grid;grid-template-columns:.85fr 1.25fr 1fr;gap:13px;align-items:stretch}
+.env-air-layout>*{min-width:0}
+.env-copy{font-size:12px;line-height:1.75;color:var(--sub)}
+.env-meta{font-size:10px;line-height:1.7;color:var(--sub);font-weight:400}
+.env-status{font-size:15px;font-weight:650}
+.env-tag{font-size:9px;color:var(--sub);white-space:nowrap}
+.env-scale{display:flex;gap:4px;margin:5px 0 3px}
+.env-scale span{height:5px;border-radius:3px;flex:1;opacity:.35}
+.env-scale span.selected{opacity:1;outline:1px solid var(--ink);outline-offset:2px}
+.env-explain{font-size:10px;color:var(--sub);line-height:1.8;margin-top:auto}
+.env-explain summary{cursor:pointer;font-weight:600;text-underline-offset:3px}
+.environment-section .env-explain p{margin-top:8px}
+.env-pollen-list{display:grid;gap:0}
+.env-pollen-row{display:grid;grid-template-columns:1fr 42px 94px;gap:7px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:11px}
+.env-pollen-row>b{text-align:right;font-variant-numeric:tabular-nums}
+.env-level{text-align:right;font-size:10px;font-weight:600}
+.env-gas-title{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--sub)}
+.env-gas-title b{color:var(--ink);font-size:17px}
+.env-dust{margin-top:auto;padding-top:15px;border-top:1px solid var(--line);display:grid;gap:9px}
+.env-dust strong{font-size:23px;font-weight:600}
+.env-dust strong small{font-size:11px;color:var(--sub);font-weight:400}
+.env-pollutants,.env-forecast,.env-profile{margin-top:13px}
+.env-pollutant-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px;margin-top:20px}
+.env-pollutant-grid>div{display:grid;gap:6px;border-left:1px solid var(--line);padding-left:16px}
+.env-pollutant-grid>div:first-child{border:0;padding:0}
+.env-pollutant-grid b{font-size:12px}
+.env-pollutant-grid span{font-size:10px;color:var(--sub);min-height:30px;line-height:1.5}
+.env-pollutant-grid strong{font-size:26px;letter-spacing:-.06em;font-weight:600;font-variant-numeric:tabular-nums}
+.env-pollutant-grid small{font-size:10px;color:var(--sub)}
+.env-forecast-summary{display:grid;grid-template-columns:.6fr 1.4fr;gap:24px;margin:20px 0}
+.env-forecast-summary>div{display:grid;gap:10px;align-content:start}
+.env-forecast-summary strong{font-size:21px;letter-spacing:-.035em;font-weight:600}
+.env-forecast-summary strong small{font-size:11px;letter-spacing:0;color:var(--sub)}
+.env-forecast-summary>div>small{font-size:10px;color:var(--sub);line-height:1.7}
+.env-hour-scroll{display:flex;overflow-x:auto;gap:8px;padding:2px 2px 12px;scrollbar-width:thin;margin:15px 0 5px}
+.env-hour{flex:0 0 100px;border:1px solid var(--line);border-radius:10px;padding:14px 9px;display:flex;align-items:center;flex-direction:column;gap:8px;font-size:11px;font-variant-numeric:tabular-nums}
+.env-hour>strong{font-size:23px;font-weight:600;letter-spacing:-.04em}
+.env-hour>small{font-size:9px;color:var(--sub);text-align:center;line-height:1.5}
+.env-hour>span:last-of-type{font-size:9px;color:var(--sub);white-space:nowrap}
+.environment-section .env-source{font-size:10px;line-height:1.85;color:var(--sub);margin:13px 0 22px}
+.env-source a{text-decoration:underline;text-underline-offset:3px}
+.env-atmosphere-heading{padding-top:24px;border-top:1px solid var(--line);align-items:end;gap:14px;flex-wrap:wrap}
+.env-atmosphere-heading .h2{line-height:1.5}
+.env-weather-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.env-cloud-layers{display:grid;gap:18px;margin:15px 0}
+.env-cloud-layers>div{display:grid;grid-template-columns:1fr auto;gap:9px;font-size:12px}
+.env-cloud-layers small{color:var(--sub);font-size:10px;margin-left:5px}
+.env-cloud-track{height:5px;border-radius:4px;background:var(--soft);grid-column:1/-1;overflow:hidden}
+.env-cloud-track span{height:100%;display:block;background:var(--ink);opacity:.65;border-radius:4px}
+.env-pressure-stats{display:grid;gap:15px;padding:16px 0;border-block:1px solid var(--line);margin:10px 0}
+.env-pressure-stats>div{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px}
+.env-pressure-stats span{color:var(--sub)}
+.env-pressure-stats b{text-align:right;font-weight:600}
+.env-table-scroll{overflow-x:auto;margin-top:20px;scrollbar-width:thin}
+.env-profile-table{border-collapse:collapse;width:100%;min-width:540px;text-align:left;font-size:12px;font-variant-numeric:tabular-nums}
+.env-profile-table td,.env-profile-table th{padding:15px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.env-profile-table thead th{font-size:10px;color:var(--sub);font-weight:500}
+.env-profile-table tbody th{font-size:12px;font-weight:650}
+.env-profile-table td small{color:var(--sub);margin-left:7px}
+.environment-section .env-profile>.env-copy{margin-top:15px}
+.env-extra-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;border-top:1px solid var(--line);margin-top:20px;padding-top:20px}
+.env-extra-grid>div{display:grid;gap:9px}
+.env-extra-grid strong{font-size:23px;letter-spacing:-.03em;font-weight:600}
+.env-astronomy{margin-top:13px}
+.env-summary-pollen{display:grid;gap:12px;font-size:12px;margin:10px 0}
+.env-summary-pollen span{display:flex;justify-content:space-between;gap:12px}
+.env-summary-pollen b{font-size:11px}
+#environment,#cloud-pressure,#vertical-profile,#sun-sea{scroll-margin-top:22px}
+.space-section h3{font-size:13px;line-height:1.5;margin:0}
+.space-section h3.label{font-size:10px}
+.space-section p{margin:0}
+.space-section .panelhead{flex-wrap:wrap;gap:12px}
+.space-section .minivalue{font-size:36px}
+.space-section .env-source{font-size:10px;color:var(--sub);line-height:1.85;margin:16px 0}
+.space-scales{margin-top:20px}
+.space-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-top:13px}
+.space-explain{margin-top:13px}
+.space-section .env-hour{flex-basis:135px}
+@media(max-width:1220px){.space-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:610px){.space-metrics{grid-template-columns:1fr}}
+@media(max-width:1220px){.env-air-layout{grid-template-columns:1fr 1fr}.env-atmosphere{grid-column:1/-1}.env-pollutant-grid{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:24px}.env-pollutant-grid>div:nth-child(4){border:0;padding:0}}
+@media(max-width:610px){.env-air-layout,.env-weather-grid{grid-template-columns:1fr}.env-atmosphere{grid-column:auto}.env-forecast-summary,.env-extra-grid{grid-template-columns:1fr;gap:20px}.env-pollutant-grid{gap:20px 10px}.env-pollutant-grid>div{padding-left:10px}.env-pollutant-grid strong{font-size:24px}.env-pressure-stats>div{align-items:start}.env-pressure-stats span{max-width:50%}.env-pollen-row{grid-template-columns:1fr 38px 94px}.env-atmosphere-heading{align-items:start}.environment-section .minivalue{font-size:34px}}
 .env-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
 .env{display:flex;flex-direction:column;gap:10px}
 .env .minihead img{width:28px;height:28px;filter:var(--iconfilter,none)}
