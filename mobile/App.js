@@ -5,6 +5,7 @@ import { ActivityIndicator, BackHandler, Linking, Platform, Pressable, StatusBar
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
+import { refreshForecastAlertsOnLaunch } from './LocalAlertService';
 
 // Keep the current Vercel website and its APIs. This is a separate Expo client.
 const APP_URL = 'https://monokairos.vercel.app/';
@@ -37,6 +38,7 @@ function MonoScreen() {
   const [hint, setHint] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  useEffect(()=>{refreshForecastAlertsOnLaunch().catch(()=>{});},[]);
 
   const reload = useCallback(() => {
     setError(''); setLoading(true); setProgress(0); backAvailable.current = false;
