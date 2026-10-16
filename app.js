@@ -434,7 +434,11 @@ const AN = k => ALG_NAMES[state.lang][k] || k;
 const persist = () => write(K.prefs, { lang: state.lang, theme: state.theme, city: state.city, favorites: state.favorites });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const locOf = c => (c && c.i18n && c.i18n[state.lang]) || null;
-const cityName = c => (locOf(c) && locOf(c).name) || (state.lang === 'el' && c.nameEl ? c.nameEl : c.name);
+const cityName = c => {
+  const raw = (locOf(c) && locOf(c).name) || (state.lang === 'el' && c.nameEl ? c.nameEl : c.name);
+  // Repair previously saved GPS names too; do not alter the forecast coordinates.
+  return window.MONOGeo.normalizeName(raw, state.lang) || (c.gps ? T('myLoc') : (c.nameEl || c.name || T('myLoc')));
+};
 const adminName = c => (locOf(c) && locOf(c).admin1) || c.admin1;
 const countryName = c => (locOf(c) && locOf(c).country) || (COUNTRY[c.cc] ? COUNTRY[c.cc][state.lang === 'el' ? 0 : 1] : c.country || c.cc || '');
 
@@ -661,7 +665,7 @@ async function reverseName(lat, lon, lang = state.lang) {
       latitude: lat, longitude: lon, localityLanguage: lang
     }), 8000);
     // Prefer the suburb/neighbourhood, not the broader city or neighbouring municipality.
-    return window.MONOGeo.reverseName(d);
+    return window.MONOGeo.reverseName(d, lang);
   } catch { return null; }
 }
 
