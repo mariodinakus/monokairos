@@ -262,7 +262,7 @@ function render(data, options = {}) {
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px"><span aria-hidden="true" style="font-size:23px">🌍</span><h2 style="margin:0;font-size:clamp(19px,2vw,24px);letter-spacing:-.03em">${guide.title}</h2></div>
     <p class="env-meta" style="margin:0 0 16px">${guide.sub}</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:9px">
-      ${guide.items.map(([abbr,title,desc]) => `<details style="min-width:0;border:1px solid var(--border,rgba(140,160,180,.18));border-radius:12px;padding:12px;background:var(--bg,rgba(127,150,170,.045))"><summary style="cursor:pointer;list-style:revert;font-weight:700;line-height:1.5"><span style="font-weight:800">${abbr}</span><span style="display:block;font-size:12px;font-weight:450;opacity:.78">${title}</span></summary><p style="font-size:13px;line-height:1.65;margin:10px 0 0">${desc}</p></details>`).join('')}
+      ${guide.items.map(([abbr,title,desc], i) => `<details id="mx-env-guide-${i}" style="min-width:0;border:1px solid var(--border,rgba(140,160,180,.18));border-radius:12px;padding:12px;background:var(--bg,rgba(127,150,170,.045))"><summary style="cursor:pointer;list-style:revert;font-weight:700;line-height:1.5"><span style="font-weight:800">${abbr}</span><span style="display:block;font-size:12px;font-weight:450;opacity:.78">${title}</span></summary><p style="font-size:13px;line-height:1.65;margin:10px 0 0">${desc}</p></details>`).join('')}
     </div><p class="env-meta" style="margin:13px 0 0;font-size:12px">${guide.note}</p>
   </section>`;
   return `${guideHtml}<div class="env-air-layout mx-airtop">
