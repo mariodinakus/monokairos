@@ -52,6 +52,9 @@ const copy = {
     columns: ['Επίπεδο', 'Ύψος', 'Θερμοκρασία', 'Υγρασία', 'Άνεμος'], below: 'Κάτω από το έδαφος', unavailable: 'Μη διαθέσιμο',
     tempL: 'Θερμοκρασία', dewL: 'Σημείο δρόσου', zeroL: '0°C',
     jet: 'Αεροχείμαρρος', jetYes: 'Ισχυρός αεροχείμαρρος από πάνω σου', jetNo: 'Χωρίς ισχυρό αεροχείμαρρο από πάνω σου',
+    jetQuick: 'Αεροχείμαρρος = στενή ζώνη πολύ γρήγορων ανέμων ψηλά στην ατμόσφαιρα. Δεν σημαίνει ότι φυσάει με αυτή την ταχύτητα στο έδαφος.',
+    jetHelp: 'Τι σημαίνει «ισχυρός» και πώς επηρεάζει τον καιρό;',
+    jetDetail: 'Το MONO χαρακτηρίζει «ισχυρό» τον υπολογισμένο άνεμο από 120 km/h και πάνω στα επίπεδα 300–200 hPa (συχνά περίπου 9–12 km ψηλά). Είναι ενδεικτικός κανόνας της εφαρμογής, όχι επίσημη προειδοποίηση για θυελλώδεις ανέμους στην επιφάνεια. Οι αεροχείμαρροι κατευθύνουν και επηρεάζουν τα βαρομετρικά συστήματα, μπορούν να συνεισφέρουν στην ανάπτυξη κακοκαιρίας υπό κατάλληλες συνθήκες και είναι σημαντικοί για την αεροπλοΐα και τις αναταράξεις. Η ίδια ένδειξη δεν προβλέπει από μόνη της καταιγίδα ή ισχυρούς επιφανειακούς ανέμους.',
     stability: 'Αστάθεια & υγρασία ατμόσφαιρας',
     cape: 'CAPE', capeName: 'Ενέργεια ανοδικών ρευμάτων', capeBands: ['Αμελητέα', 'Ασθενής', 'Μέτρια', 'Ισχυρή', 'Ακραία'],
     li: 'Lifted Index', liName: 'Δείκτης ανύψωσης', liBands: ['Σταθερή', 'Οριακή', 'Ασταθής', 'Πολύ ασταθής'],
@@ -85,6 +88,9 @@ const copy = {
     columns: ['Level', 'Height', 'Temperature', 'Humidity', 'Wind'], below: 'Below ground', unavailable: 'Unavailable',
     tempL: 'Temperature', dewL: 'Dew point', zeroL: '0°C',
     jet: 'Jet stream', jetYes: 'Strong jet stream overhead', jetNo: 'No strong jet stream overhead',
+    jetQuick: 'A jet stream is a narrow band of fast winds high in the atmosphere. It does not mean winds at ground level are that strong.',
+    jetHelp: 'What does “strong” mean, and how does it affect weather?',
+    jetDetail: 'MONO uses 120 km/h or higher in the sampled 300–200 hPa levels (often about 9–12 km above ground) to label upper-level flow as strong. This is an app-specific indicator, not an official warning for strong surface winds. Jet streams steer and influence weather systems, may help storms develop under suitable conditions, and matter for aviation and turbulence. The indicator alone does not forecast a storm or strong ground-level winds.',
     stability: 'Instability & moisture',
     cape: 'CAPE', capeName: 'Updraft energy', capeBands: ['Negligible', 'Weak', 'Moderate', 'Strong', 'Extreme'],
     li: 'Lifted Index', liName: 'Lifted index', liBands: ['Stable', 'Marginal', 'Unstable', 'Very unstable'],
@@ -406,7 +412,12 @@ function render(data, options = {}) {
     <p class="env-meta">${X.physical}</p><p class="env-meta">${X.unit}</p>
   </details>
   <div class="mx-profgrid"><div>${profileChart(S)}</div><div>
-  <div class="mx-jetbox ${jetLv && jetLv.wind >= 120 ? 'mx-jeton' : ''}"><span class="label">${c.jet}</span><strong>${jetLv ? fmt(jetLv.wind) : '—'} <small>km/h</small></strong><b>${jetLv && jetLv.wind >= 120 ? c.jetYes : c.jetNo}</b>${jetLv ? `<small class="env-meta">${jetLv.p} hPa · ~${fmt(jetLv.height / 1000, 1)} km</small>` : ''}</div>
+  <div class="mx-jetbox ${jetLv && jetLv.wind >= 120 ? 'mx-jeton' : ''}"><span class="label">${c.jet}</span><strong>${jetLv ? fmt(jetLv.wind) : '—'} <small>km/h</small></strong><b>${jetLv ? (jetLv.wind >= 120 ? c.jetYes : c.jetNo) : c.unavailable}</b>${jetLv ? `<small class="env-meta">${jetLv.p} hPa · ~${fmt(jetLv.height / 1000, 1)} km</small>` : ''}</div>
+  <p class="env-meta" style="margin:9px 0 8px;line-height:1.6">${c.jetQuick}</p>
+  <details id="mx-jet-help" class="env-explain" style="margin:0 0 14px">
+    <summary style="cursor:pointer;font-weight:650;line-height:1.5">${c.jetHelp}</summary>
+    <p class="env-copy" style="margin-top:8px;line-height:1.65">${c.jetDetail}</p>
+  </details>
   <div class="env-table-scroll"><table class="env-profile-table"><thead><tr>${c.columns.map(x => `<th scope="col">${x}</th>`).join('')}</tr></thead><tbody>${S.profile.slice().reverse().map(r => `<tr><th scope="row">${r.p}</th>${r.belowGround ? `<td colspan="4" class="env-meta">${c.below}</td>` : `<td>${fmt(r.height)} m</td><td class="mx-tcell" style="--tc:${Number.isFinite(r.temp) ? (r.temp > 0 ? '#ff8a3d' : '#5aa9ff') : 'inherit'}">${fmt(r.temp, 1)} °C</td><td>${fmt(r.rh)}%</td><td>${fmt(r.wind)} <small>${Number.isFinite(r.dir) ? `<span class="arrow" style="display:inline-block;transform:rotate(${Math.round(r.dir)}deg)">↓</span>` : ''}</small></td>`}</tr>`).join('')}</tbody></table></div></div></div></article>
 <article class="card mx-block"><div class="panelhead"><h3>${c.stability}</h3><span class="env-meta">GFS · ${S.time === null ? '—' : date(S.time)}</span></div>
   <div class="mx-stats">
