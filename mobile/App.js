@@ -38,10 +38,11 @@ function MonoScreen() {
   const [hint, setHint] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [showLaunch, setShowLaunch] = useState(true);
   useEffect(()=>{refreshForecastAlertsOnLaunch().catch(()=>{});},[]);
 
   const reload = useCallback(() => {
-    setError(''); setLoading(true); setProgress(0); backAvailable.current = false;
+    setError(''); setLoading(true); setProgress(0); setShowLaunch(true); backAvailable.current = false;
     setReloadKey(k => k + 1);
   }, []);
 
@@ -130,7 +131,7 @@ function MonoScreen() {
           onNavigationStateChange={state => { backAvailable.current = !!state.canGoBack; }}
           onLoadStart={() => { setLoading(true); setProgress(0); }}
           onLoadProgress={({nativeEvent}) => setProgress(nativeEvent.progress || 0)}
-          onLoadEnd={() => setLoading(false)}
+          onLoadEnd={() => { setLoading(false); setShowLaunch(false); }}
           onError={({nativeEvent}) => { setError(nativeEvent.description || 'Η σύνδεση απέτυχε.'); setLoading(false); }}
           onHttpError={({nativeEvent}) => {
             if (nativeEvent.statusCode >= 400 && nativeEvent.url === APP_URL) {
@@ -150,7 +151,7 @@ function MonoScreen() {
         {!error && loading && progress < 1 && <View pointerEvents="none" style={s.progressTrack}>
           <View style={[s.progressFill, {width: String(Math.max(8, Math.round(progress * 100))) + '%'}]}/>
         </View>}
-        {!error && loading && progress < .92 && <MonoSplash progress={progress}/>} 
+
         {!!error && <View style={s.errorScreen}>
           <Text style={s.errorSymbol}>◌</Text>
           <Text style={s.errorTitle}>Δεν ήταν δυνατή η σύνδεση</Text>
@@ -162,6 +163,7 @@ function MonoScreen() {
         </View>}
       </View>
       <NotificationSettings visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
+      {!error && showLaunch && loading && <MonoSplash progress={progress} />}
     </SafeAreaView>
   );
 }

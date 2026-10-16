@@ -1,55 +1,151 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-const BLUE = '#82baff';
+// Brand-matched monochrome screen: same off-white, charcoal and warm greys as MONO Web.
+// Everything is native React Native (including the actual loading progress).
+const COLOR = {
+  paper: '#f7f7f5',
+  charcoal: '#171717',
+  secondary: '#858585',
+  contour: '#e6e6e2',
+  track: '#d6d6d2',
+};
 
-export default function MonoSplash({progress = 0}) {
-  const orbit = useRef(new Animated.Value(0)).current;
-  const pulse = useRef(new Animated.Value(.5)).current;
+export default function MonoSplash({ progress = 0 }) {
+  const { width } = useWindowDimensions();
+  const appearance = useRef(new Animated.Value(0)).current;
+  const veil = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    const spin = Animated.loop(Animated.timing(orbit, {toValue:1,duration:11000,easing:Easing.linear,useNativeDriver:true}));
-    const breathe = Animated.loop(Animated.sequence([
-      Animated.timing(pulse,{toValue:1,duration:1400,easing:Easing.inOut(Easing.quad),useNativeDriver:true}),
-      Animated.timing(pulse,{toValue:.5,duration:1400,easing:Easing.inOut(Easing.quad),useNativeDriver:true})
-    ]));
-    spin.start(); breathe.start();
-    return () => {spin.stop();breathe.stop();};
-  },[orbit,pulse]);
-  const rotation=orbit.interpolate({inputRange:[0,1],outputRange:['0deg','360deg']});
-  return <View style={s.outer}>
-    <View style={s.backdropCircle}/>
-    <View style={s.brand}>
-      <Animated.View style={[s.orbit,{transform:[{rotate:rotation}],opacity:pulse}]}>
-        <View style={s.satellite} />
+    Animated.parallel([
+      Animated.timing(appearance, {
+        toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      }),
+      Animated.timing(veil, {
+        toValue: 1, duration: 950, easing: Easing.out(Easing.quad), useNativeDriver: true,
+      }),
+    ]).start();
+  }, [appearance, veil]);
+
+  const barWidth = Math.max(160, Math.min(width - 100, 210));
+  const percent = Math.min(100, Math.max(5, Math.round((Number(progress) || 0) * 100)));
+
+  return (
+    <View pointerEvents="none" style={styles.full}>
+      {/* Discreet, low-contrast isobars. No blue, gradients, gold or fake status bar. */}
+      <View style={styles.contourTopOuter}/>
+      <View style={styles.contourTopInner}/>
+      <View style={styles.contourSideOuter}/>
+      <View style={styles.contourSideInner}/>
+      <View style={styles.contourBottomOuter}/>
+      <View style={styles.contourBottomInner}/>
+      <Animated.View style={[styles.ambientLeft, {opacity: veil}]}/>
+      <Animated.View style={[styles.ambientRight, {opacity: veil}]}/>
+
+      <Animated.View
+        accessibilityLabel="MONO Weather. LIVE. Φόρτωση εφαρμογής"
+        style={[styles.center, {
+          opacity: appearance,
+          transform: [{ translateY: appearance.interpolate({
+            inputRange: [0, 1], outputRange: [12, 0],
+          }) }],
+        }]}>
+        <View style={styles.mark}>
+          <Text allowFontScaling={false} style={styles.markText}>M.</Text>
+        </View>
+        <View style={styles.wordmark}>
+          <Text allowFontScaling={false} style={styles.wordStrong}>MONO</Text>
+          <Text allowFontScaling={false} style={styles.wordLight}> WEATHER</Text>
+        </View>
+        <Text allowFontScaling={false} style={styles.live}>LIVE</Text>
       </Animated.View>
-      <View style={s.monogram}>
-        <Text style={s.letter}>M<Text style={s.dot}>.</Text></Text>
-        <View style={s.glint}/>
+
+      <View style={styles.progressArea}>
+        <View style={[styles.progressTrack, {width: barWidth}]}>
+          <View style={[styles.progressFill, {width: percent + '%'}]}/>
+        </View>
       </View>
     </View>
-    <Text style={s.wordmark}>MONO</Text>
-    <Text style={s.submark}>W E A T H E R</Text>
-    <Text style={s.message}>Ο καιρός, με περισσότερη ακρίβεια.</Text>
-    <View style={s.track}><View style={[s.fill,{width:Math.max(9,Math.round(Math.min(progress,1)*100))+'%'}]}/></View>
-    <Text style={s.status}>ΣΥΝΔΕΣΗ ΜΕ ΖΩΝΤΑΝΑ ΔΕΔΟΜΕΝΑ</Text>
-    <Text style={s.bottom}>ATMOSPHERE · FORECAST · INTELLIGENCE</Text>
-  </View>;
+  );
 }
-const s=StyleSheet.create({
- outer:{position:'absolute',top:0,right:0,bottom:0,left:0,alignItems:'center',justifyContent:'center',backgroundColor:'#101b2b',overflow:'hidden'},
- backdropCircle:{position:'absolute',width:340,height:340,borderRadius:170,borderColor:'#243b59',borderWidth:1,backgroundColor:'#14243a',top:'24%'},
- brand:{width:168,height:168,alignItems:'center',justifyContent:'center'},
- orbit:{position:'absolute',width:157,height:157,borderRadius:90,borderWidth:1.5,borderColor:'#3d70a9',borderStyle:'dashed'},
- satellite:{width:10,height:10,backgroundColor:'#9dccff',borderRadius:5,position:'absolute',top:-5,left:'48%',shadowColor:'#9dccff',shadowOpacity:.9,shadowRadius:12,elevation:4},
- monogram:{width:112,height:112,borderRadius:28,alignItems:'center',justifyContent:'center',backgroundColor:'#eaf3ff',borderColor:'#b2d3fa',borderWidth:1,transform:[{rotate:'-8deg'}],elevation:12},
- letter:{fontSize:73,fontWeight:'900',letterSpacing:-8,color:'#10213a',transform:[{rotate:'8deg'}]},
- dot:{color:'#448ee6'},
- glint:{position:'absolute',width:14,height:3,borderRadius:3,backgroundColor:'#83b9fa',top:15,right:18},
- wordmark:{color:'#eef5ff',fontSize:41,letterSpacing:8,fontWeight:'900',marginTop:25,marginLeft:9},
- submark:{color:BLUE,fontSize:10,fontWeight:'800',letterSpacing:4,marginTop:7,marginLeft:6},
- message:{color:'#98afc7',fontSize:12,marginTop:28},
- track:{width:172,height:3,backgroundColor:'#2a405f',borderRadius:5,overflow:'hidden',marginTop:31},
- fill:{height:3,backgroundColor:BLUE,borderRadius:4},
- status:{color:'#7191b6',fontWeight:'700',letterSpacing:1.1,fontSize:9,marginTop:15},
- bottom:{position:'absolute',bottom:36,fontSize:9,letterSpacing:1.4,color:'#637c9b',fontWeight:'600'}
+
+const styles = StyleSheet.create({
+  full: {
+    position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+    backgroundColor: COLOR.paper, overflow: 'hidden', zIndex: 100,
+  },
+  center: {
+    position: 'absolute', top: '31%', left: 0, right: 0,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  mark: {
+    height: 106, width: 106, borderRadius: 25,
+    backgroundColor: COLOR.charcoal,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#171717', shadowOpacity: 0.10,
+    shadowRadius: 14, shadowOffset: {width: 0, height: 7}, elevation: 3,
+  },
+  markText: {
+    color: '#ffffff', fontSize: 64, fontWeight: '800',
+    letterSpacing: -5.5, marginLeft: -5, marginTop: -4,
+  },
+  wordmark: {
+    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center',
+    marginTop: 29,
+  },
+  wordStrong: {fontSize: 29, fontWeight: '750', letterSpacing: -1.5, color: COLOR.charcoal},
+  wordLight: {fontSize: 27, fontWeight: '400', letterSpacing: -1.5, color: COLOR.secondary},
+  live: {
+    color: COLOR.secondary, letterSpacing: 7, fontSize: 12, marginTop: 15,
+    paddingLeft: 7, fontWeight: '500',
+  },
+  progressArea: {
+    position: 'absolute', left: 0, right: 0, bottom: '15%',
+    alignItems: 'center',
+  },
+  progressTrack: {
+    height: 4, borderRadius: 6, backgroundColor: COLOR.track, overflow: 'hidden',
+  },
+  progressFill: {
+    height: 4, borderRadius: 6, backgroundColor: COLOR.charcoal,
+  },
+  contourTopOuter: {
+    position: 'absolute', width: 520, height: 650, borderWidth: 1,
+    borderColor: COLOR.contour, borderRadius: 280,
+    left: -330, top: -340, transform: [{rotate: '25deg'}],
+  },
+  contourTopInner: {
+    position: 'absolute', width: 430, height: 580, borderWidth: 1,
+    borderColor: COLOR.contour, borderRadius: 240,
+    left: -310, top: -335, transform: [{rotate: '25deg'}],
+  },
+  contourSideOuter: {
+    position: 'absolute', width: 550, height: 660, borderWidth: 1,
+    borderColor: COLOR.contour, borderRadius: 310,
+    right: -425, top: '43%', transform: [{rotate: '-24deg'}],
+  },
+  contourSideInner: {
+    position: 'absolute', width: 460, height: 560, borderWidth: 1,
+    borderColor: COLOR.contour, borderRadius: 280,
+    right: -380, top: '48%', transform: [{rotate: '-24deg'}],
+  },
+  contourBottomOuter: {
+    position: 'absolute', width: 760, height: 650, borderWidth: 1,
+    borderColor: COLOR.contour, borderRadius: 380,
+    left: -400, bottom: -535, transform: [{rotate: '10deg'}],
+  },
+  contourBottomInner: {
+    position: 'absolute', width: 690, height: 590, borderWidth: 1,
+    borderColor: COLOR.contour, borderRadius: 380,
+    left: -380, bottom: -510, transform: [{rotate: '10deg'}],
+  },
+  ambientLeft: {
+    position: 'absolute', left: -55, bottom: '17%', width: 180, height: 110,
+    borderRadius: 100, backgroundColor: '#eaeae7', opacity: 0.55,
+    transform: [{rotate: '-16deg'}],
+  },
+  ambientRight: {
+    position: 'absolute', right: -78, top: '22%', width: 140, height: 145,
+    borderRadius: 100, backgroundColor: '#efefec', opacity: 0.40,
+  },
 });

@@ -3,7 +3,7 @@
     "name": "MONO Kairos",
     "slug": "mono-kairos-mobile",
     "scheme": "monokairos",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -25,7 +25,7 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#f7f7f5"
       },
-      "versionCode": 3
+      "versionCode": 4
     },
     "plugins": [
       [
@@ -37,15 +37,15 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#101b2b",
+          "backgroundColor": "#f7f7f5",
           "image": "./assets/icon.png",
-          "imageWidth": 150
+          "imageWidth": 110
         }
       ],
       [
         "expo-notifications",
         {
-          "color": "#378bf2",
+          "color": "#171717",
           "defaultChannel": "weather-alerts"
         }
       ]

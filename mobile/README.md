@@ -48,3 +48,6 @@ No Vercel secrets/API tokens are bundled into this mobile project.
 ## Native forecast alerts v1.2
 
 Opt in from the notification-settings icon. The app fetches the current Open-Meteo forecast and schedules local warnings (rain, severe weather, gusts, air quality) and morning summaries for the next 48h. The Android system can show these later while the app is closed. Forecast changes are **not** pushed continuously while closed; FCM v1 and an independently running backend are still needed for that. See `PUSH_SETUP.md`.
+
+## Splash v1.3 — matched to MONO website
+Native Android splash and full-window, real-progress React Native loading screen use #f7f7f5 background, charcoal M. logo, grey MONO WEATHER/LIVE label, soft contours and grey-to-black loading bar. No blue artwork, fake status bar or hard-coded loading progress. Web app and forecast features remain unchanged.
