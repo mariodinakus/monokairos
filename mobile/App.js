@@ -95,7 +95,7 @@ function MonoScreen() {
           <View style={s.logo}><Text style={s.logoText}>M.</Text></View>
           <View>
             <Text style={s.title}>MONO <Text style={s.titleLight}>WEATHER</Text></Text>
-            <Text style={s.subtitle}>LIVE · EXPO MOBILE</Text>
+            <Text style={s.subtitle}>LIVE</Text>
           </View>
         </View>
         <View style={s.actions}>
