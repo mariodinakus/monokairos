@@ -349,11 +349,28 @@ if (typeof document !== 'undefined' && !root.__mxAtmoBound) {
   document.addEventListener('click', e => { const t = e.target.closest?.('[data-mx="synupper"]'); if (t) { syn.upper = !syn.upper; paintSyn(); } });
 }
 
+/* Pressure coordinates are meteorological model surfaces, not fixed physical atmosphere layers. */
+const levelExplain = {
+  el: {
+    title: 'Πώς διαβάζεται το ύψος της ατμόσφαιρας;',
+    intro: 'Το hPa είναι μονάδα ατμοσφαιρικής πίεσης. Όσο μικρότερο, τόσο ψηλότερα βρισκόμαστε. Τα ύψη είναι ενδεικτικά και εξαρτώνται από τον καιρό. Οι τιμές δεν αφορούν «θερμοκρασία εδάφους».',
+    physical: 'Η τροπόσφαιρα εκτείνεται περίπου μέχρι 8–18 km (ανάλογα με το γεωγραφικό πλάτος και την εποχή). Πάνω της αρχίζει η στρατόσφαιρα. Εδώ βλέπεις κυρίως την τροπόσφαιρα σε επίπεδα πίεσης.',
+    levels: ['1000–925 hPa: κοντά στο έδαφος έως ~0,8 km', '850 hPa: περίπου 1,5 km — θερμές/ψυχρές αέριες μάζες', '700 hPa: περίπου 3 km — υγρασία και μεσαία νέφη', '500 hPa: περίπου 5,5 km — αυλώνες, ράχες, ψυχρές εισβολές', '300–200 hPa: περίπου 9–12 km — ισχυροί άνεμοι και αεροχείμαρροι'],
+    unit: 'Η θερμοκρασία στο γράφημα και στον πίνακα δίνεται σε βαθμούς Κελσίου (°C).'
+  },
+  en: {
+    title: 'How do atmospheric pressure levels work?',
+    intro: 'hPa measures atmospheric pressure. The lower the pressure, the higher the altitude. Heights vary with weather. These values are not ground-level temperatures.',
+    physical: 'The troposphere extends to roughly 8–18 km depending on latitude and season; above it lies the stratosphere. This view mainly samples the troposphere at pressure levels.',
+    levels: ['1000–925 hPa: surface to around 0.8 km', '850 hPa: around 1.5 km — warm/cold air masses', '700 hPa: around 3 km — humidity and mid-level clouds', '500 hPa: around 5.5 km — troughs, ridges and cold outbreaks', '300–200 hPa: around 9–12 km — strong winds and jet streams'],
+    unit: 'Temperatures in the graph and table are degrees Celsius (°C).'
+  }
+};
 /* ------------------------------------------------------------ render */
 function band5(v, edges) { if (!Number.isFinite(v)) return null; let i = 0; while (i < edges.length && v >= edges[i]) i++; return i; }
 function render(data, options = {}) {
   last = { lang: options.lang === 'en' ? 'en' : 'el', zone: options.zone || 'UTC' };
-  const c = C(), now = options.now ?? Date.now(), S = snapshot(data, now), sec = now / 1000;
+  const c = C(), X = levelExplain[last.lang], now = options.now ?? Date.now(), S = snapshot(data, now), sec = now / 1000;
   if (Number.isFinite(S.lat)) ensureSyn(options.lat ?? S.lat, options.lon ?? S.lon);
   const cover = S.value('cloud_cover'), cb = cloudBand(cover), day = S.value('is_day') ?? 1;
   const p = S.value('pressure_msl'), p3 = Number.isFinite(p) && Number.isFinite(S.delta) ? p - S.delta : null;
@@ -383,9 +400,14 @@ function render(data, options = {}) {
 <article id="synoptic" class="card mx-block"><div class="panelhead"><h3>${c.syn}</h3><span class="env-meta">${c.synSub}</span></div><div id="mx-synoptic">${synInner()}</div></article>
 <article class="card mx-block"><div class="panelhead"><h3>${c.pressureChart}</h3><span class="env-meta">hPa · <span class="mx-hc">●</span> ${c.high} · <span class="mx-lc">●</span> ${c.low}</span></div>${lineChart(S.rows, 'pressure', sec, 'hPa', 1)}</article>
 <article id="vertical-profile" class="card env-profile mx-block"><div class="panelhead"><h3>${c.profile}</h3><span class="env-meta">${c.profileSub}</span></div>
+  <details class="mx-atmo-explain" style="margin:12px 0 18px;border:1px solid var(--line,rgba(140,160,180,.3));border-radius:14px;padding:13px 15px;background:var(--soft,transparent)">
+    <summary style="cursor:pointer;font-weight:750;line-height:1.6">${X.title}</summary>
+    <p class="env-copy">${X.intro}</p><ul style="padding-left:22px;line-height:1.85;font-size:13px">${X.levels.map(t => `<li>${t}</li>`).join('')}</ul>
+    <p class="env-meta">${X.physical}</p><p class="env-meta">${X.unit}</p>
+  </details>
   <div class="mx-profgrid"><div>${profileChart(S)}</div><div>
   <div class="mx-jetbox ${jetLv && jetLv.wind >= 120 ? 'mx-jeton' : ''}"><span class="label">${c.jet}</span><strong>${jetLv ? fmt(jetLv.wind) : '—'} <small>km/h</small></strong><b>${jetLv && jetLv.wind >= 120 ? c.jetYes : c.jetNo}</b>${jetLv ? `<small class="env-meta">${jetLv.p} hPa · ~${fmt(jetLv.height / 1000, 1)} km</small>` : ''}</div>
-  <div class="env-table-scroll"><table class="env-profile-table"><thead><tr>${c.columns.map(x => `<th scope="col">${x}</th>`).join('')}</tr></thead><tbody>${S.profile.slice().reverse().map(r => `<tr><th scope="row">${r.p}</th>${r.belowGround ? `<td colspan="4" class="env-meta">${c.below}</td>` : `<td>${fmt(r.height)} m</td><td class="mx-tcell" style="--tc:${Number.isFinite(r.temp) ? (r.temp > 0 ? '#ff8a3d' : '#5aa9ff') : 'inherit'}">${fmt(r.temp, 1)}°</td><td>${fmt(r.rh)}%</td><td>${fmt(r.wind)} <small>${Number.isFinite(r.dir) ? `<span class="arrow" style="display:inline-block;transform:rotate(${Math.round(r.dir)}deg)">↓</span>` : ''}</small></td>`}</tr>`).join('')}</tbody></table></div></div></div></article>
+  <div class="env-table-scroll"><table class="env-profile-table"><thead><tr>${c.columns.map(x => `<th scope="col">${x}</th>`).join('')}</tr></thead><tbody>${S.profile.slice().reverse().map(r => `<tr><th scope="row">${r.p}</th>${r.belowGround ? `<td colspan="4" class="env-meta">${c.below}</td>` : `<td>${fmt(r.height)} m</td><td class="mx-tcell" style="--tc:${Number.isFinite(r.temp) ? (r.temp > 0 ? '#ff8a3d' : '#5aa9ff') : 'inherit'}">${fmt(r.temp, 1)} °C</td><td>${fmt(r.rh)}%</td><td>${fmt(r.wind)} <small>${Number.isFinite(r.dir) ? `<span class="arrow" style="display:inline-block;transform:rotate(${Math.round(r.dir)}deg)">↓</span>` : ''}</small></td>`}</tr>`).join('')}</tbody></table></div></div></div></article>
 <article class="card mx-block"><div class="panelhead"><h3>${c.stability}</h3><span class="env-meta">GFS · ${S.time === null ? '—' : date(S.time)}</span></div>
   <div class="mx-stats">
   ${stat(c.cape, c.capeName, fmt(cape), 'J/kg', capeB === null ? '' : c.capeBands[capeB], 'mx-b' + (capeB ?? 0))}
