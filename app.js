@@ -1416,26 +1416,32 @@ function loadLeaflet() {
     const s = document.createElement('script'); s.src = 'vendor/leaflet.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s);
   });
 }
-function killMap() { if (radar.timer) { clearInterval(radar.timer); radar.timer = 0; } if (map) { map.remove(); map = null; } radar.layers = []; }
-async function mountRadar() {
-  if (!$('#map') || map) return;
-  try {
-    await loadLeaflet();
-    if (!$('#map') || map) return;
-    const c = state.city, Lf = window.L;
-    map = Lf.map('map', { zoomControl: true, scrollWheelZoom: false }).setView([c.lat, c.lon], 8);
-    radar.baseLayers = baseLayers(Lf);
-    radar.baseLayers.forEach(l => l.addTo(map));
-    setTimeout(() => map && $('#map') && map.invalidateSize(), 120);
-    Lf.circleMarker([c.lat, c.lon], { radius: 6, color: state.theme === 'dark' ? '#f1f1f1' : '#171717', weight: 2, fillOpacity: 0.9 }).addTo(map).bindTooltip(esc(cityName(c)));
-    for (const s of state.view?.stations || []) if (s.last) Lf.marker([s.lat, s.lon], { icon: Lf.divIcon({ className: 'stmark', html: `<span>${deg(s.last.temp)}</span>`, iconSize: [38, 20] }) }).addTo(map).bindTooltip(`${esc(s.id)} · ${esc(s.name || '')}<br>${deg(s.last.temp)} · ${hhmm(s.last.t)}`);
-    const d = await getJSON('https://api.rainviewer.com/public/weather-maps.json', 12000);
-    radar.host = d.host; radar.frames = [...(d.radar?.past || []), ...(d.radar?.nowcast || [])]; radar.layers = radar.frames.map(() => null);
-    const ir = d.satellite?.infrared?.at(-1);
-    if (ir) radar.sat = Lf.tileLayer(`${d.host}${ir.path}/256/{z}/{x}/{y}/0/0_0.png`, { opacity: state.radarSat ? 0.55 : 0, maxNativeZoom: 7, maxZoom: 12, zIndex: 4, attribution: 'RainViewer' }).addTo(map);
-    const sl = $('#radarSlider'); if (sl) { sl.max = Math.max(0, radar.frames.length - 1); sl.oninput = e => showFrame(+e.target.value); }
-    showFrame(radar.frames.length - 1);
-  } catch { const m = $('#map'); if (m && !map) m.innerHTML = `<div class="placeholder">${T('radarFail')}</div>`; else toast(T('radarFail')); }
+function killMap() { if (radar.timer) { clearInterval(radar.timer); radar.timer = 0; } if (map) { map.remove(); map = null; } radar.layers = []; radar.frames = []; radar.sat = null; radar.baseLayers = []; }
+async function mountRadar(){
+ if(!$('#map')||map)return;
+ try{
+  await loadLeaflet();
+  if(!$('#map')||map)return;
+  const c=state.city,Lf=window.L;
+  const instance=Lf.map('map',{zoomControl:true,scrollWheelZoom:false}).setView([c.lat,c.lon],8);
+  map=instance;radar.baseLayers=baseLayers(Lf);radar.baseLayers.forEach(layer=>layer.addTo(instance));
+  Lf.circleMarker([c.lat,c.lon],{radius:7,color:'#fff',weight:2,fillColor:'#216eea',fillOpacity:1}).addTo(instance).bindTooltip(esc(cityName(c)));
+  for(const st of (state.view?.stations||[]).filter(st=>st.last).slice(0,55))
+   Lf.marker([st.lat,st.lon],{icon:Lf.divIcon({className:'stmark',html:`<span>${deg(st.last.temp)}</span>`,iconSize:[38,20]})}).addTo(instance).bindTooltip(`${esc(st.id)} · ${esc(st.name||'')}`);
+  setTimeout(()=>{if(map===instance)instance.invalidateSize();},150);
+  const d=await getJSON('https://api.rainviewer.com/public/weather-maps.json',12000);
+  if(map!==instance||!$('#map'))return;
+  radar.host=d.host;radar.frames=d.radar?.past||[];radar.layers=radar.frames.map(()=>null);
+  const ir=d.satellite?.infrared?.at(-1);
+  if(ir)radar.sat=Lf.tileLayer(`${d.host}${ir.path}/256/{z}/{x}/{y}/0/0_0.png`,{opacity:state.radarSat?0.45:0,maxNativeZoom:7,maxZoom:12,zIndex:4,attribution:'RainViewer'}).addTo(instance);
+  if(!radar.frames.length)throw new Error('No radar frames');
+  const slider=$('#radarSlider');if(slider){slider.disabled=false;slider.max=String(radar.frames.length-1);slider.oninput=e=>showFrame(+e.target.value);}
+  const play=$('#radarPlay');if(play)play.disabled=radar.frames.length<2;
+  showFrame(radar.frames.length-1);instance.invalidateSize();
+ }catch{
+  const st=$('#radarStatus');if(st)st.textContent=state.lang==='el'?'Δεν φορτώθηκαν λήψεις · ο χάρτης παραμένει διαθέσιμος':'Radar frames unavailable · basemap still works';
+  if(!map){const host=$('#map');if(host)host.innerHTML=`<div class="placeholder">${T('radarFail')}</div>`;}
+ }
 }
 /* Keyless basemap: Esri Canvas (light/dark) with labels; OpenStreetMap if Esri tiles fail. */
 function baseLayers(Lf){
@@ -1465,15 +1471,17 @@ function toggleSat() {
   if (radar.sat) radar.sat.setOpacity(state.radarSat ? 0.55 : 0);
   const b = $('#radarSat'); if (b) b.classList.toggle('active', state.radarSat);
 }
-function showFrame(i) {
-  if (!map || !radar.frames.length) return;
-  i = (i + radar.frames.length) % radar.frames.length;
-  const f = radar.frames[i];
-  if (!radar.layers[i]) radar.layers[i] = window.L.tileLayer(`${radar.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0, maxNativeZoom: 7, maxZoom: 12, zIndex: 5, attribution: 'RainViewer' }).addTo(map);
-  radar.layers.forEach((l, j) => l && l.setOpacity(j === i ? 0.75 : 0));
-  radar.i = i;
-  const sl = $('#radarSlider'); if (sl) sl.value = i;
-  const tt = $('#radarTime'); if (tt) tt.textContent = dt(f.time * 1000, { weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+function showFrame(i){
+ if(!map||!radar.frames.length)return;
+ i=(i+radar.frames.length)%radar.frames.length;
+ const frame=radar.frames[i];
+ if(!radar.layers[i])radar.layers[i]=window.L.tileLayer(`${radar.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`,{opacity:0,maxNativeZoom:7,maxZoom:12,zIndex:5,attribution:'RainViewer'}).addTo(map);
+ radar.layers.forEach((layer,j)=>layer&&layer.setOpacity(j===i?0.88:0));
+ radar.i=i;
+ const slider=$('#radarSlider');if(slider)slider.value=i;
+ const stamp=dt(frame.time*1000,{weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+ const out=$('#radarTime');if(out)out.textContent=stamp;
+ const st=$('#radarStatus');if(st)st.textContent=(state.lang==='el'?'Πραγματική λήψη · ':'Observed frame · ')+stamp;
 }
 function toggleRadar() {
   const b = $('#radarPlay');
