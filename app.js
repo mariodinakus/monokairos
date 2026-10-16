@@ -404,6 +404,8 @@ Object.assign(L.en, {
 
 Object.assign(L.el,{maps:'Χάρτες & τάσεις',mapsTitle:'Χάρτες & ό,τι έρχεται',mapsSub:'Δες την εξέλιξη των συστημάτων, τα σήματα κακοκαιρίας και τις τάσεις του μήνα.'});
 Object.assign(L.en,{maps:'Maps & outlook',mapsTitle:'Maps & what comes next',mapsSub:'Follow weather systems, severe-weather signals and monthly trends.'});
+Object.assign(L.el,{checkingStations:'Έλεγχος κοντινών σταθμών… Επιβεβαιώνεται η πηγή της θερμοκρασίας.'});
+Object.assign(L.en,{checkingStations:'Checking nearby stations… Confirming the temperature source.'});
 
 /* ------------------------------------------------------------------ state */
 const $ = s => document.querySelector(s);
@@ -420,7 +422,7 @@ const state = {
   city: P.city || CITIES[0], firstRun: !P.city,
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
   page: (location.hash || '').slice(1) || 'now', hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
-  gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle',
+  gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat,
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
@@ -438,7 +440,7 @@ const countryName = c => (locOf(c) && locOf(c).country) || (COUNTRY[c.cc] ? COUN
 const loc = () => (state.lang === 'el' ? 'el-GR' : 'en-GB');
 const nf = {};
 function num(v, d = 0) { if (!fin(v)) return '—'; const k = loc() + d; nf[k] ||= new Intl.NumberFormat(loc(), { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: false }); const s = nf[k].format(v); return /^-0([.,]0+)?$/.test(s) ? s.slice(1) : s; }
-const deg = v => (fin(v) ? `${num(Math.round(v))}°` : '—');
+const deg = v => (fin(v) ? `${num(Math.round(v))} °C` : '—');
 const pct = v => (fin(v) ? `${Math.round(v * 100)}%` : '—');
 const sgn = (v, d = 1) => (fin(v) ? (v > 0.0001 ? '+' : '') + num(v, d) : '—');
 const tz = () => state.main?.timezone || 'UTC';
@@ -722,6 +724,7 @@ async function loadAll(force = false) {
   } catch {
     if (gen !== state.gen) return;
     if (!state.main) { const snap = read(K.snap, {})[ckey(c)]; if (snap) { state.view = snap.view; state.main = snap.main; state.snapshot = true; } else state.mainErr = true; }
+    state.obsReady = true; // A saved snapshot may be shown only with its saved-source label.
     render(); toast(T('loadFail')); return;
   }
   recompute(); render();
@@ -738,7 +741,7 @@ async function loadAll(force = false) {
       .catch(() => { if (gen === state.gen) { state.ens[e.id] = { error: true }; schedule(); } })));
   }
   jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) state.rain15 = null; }));
-  jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; schedule(); } }));
+  jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; state.obsReady = true; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; state.obsReady = true; schedule(); } }));
   if (location.protocol.startsWith('http')) jobs.push(fetchNetatmo(c).then(d => { if (gen === state.gen) { state.pws = d; schedule(); } }).catch(() => { if (gen === state.gen) state.pws = { off: true }; }));
   jobs.push(getJSON(longURL(c)).then(d => { if (gen === state.gen) { state.long = d; schedule(); } }).catch(() => {}));
   jobs.push(fetchHolidays(c).then(h => { if (gen === state.gen) { state.hol = h; schedule(); } }).catch(() => {}));
@@ -986,7 +989,7 @@ function recompute() {
 }
 
 function saveSnapshot() {
-  if (!state.view || !state.main) return;
+  if (!state.view || !state.main || !state.obsReady) return;
   const V = state.view;
   const v = { ...V, md: {}, live: {}, famP: [], stations: [], station: V.station ? { ...V.station, list: V.station.list.slice(-6) } : null,
     rows: V.rows.map(r => ({ ...r, models: {}, codes: [], ens: null, methods: {} })) };
@@ -1015,7 +1018,7 @@ function chart({ rows, series = [], band, points, bars, nowT, unit = '°', h = 2
   const n = rows.length, x = i => l + (W - l - r) * i / Math.max(1, n - 1), y = v => top + (H - top - bot) * (hi - v) / (hi - lo || 1);
   const path = a => { let d = '', pen = false; a.forEach((v, i) => { if (fin(v)) { d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; } else pen = false; }); return d; };
   let g = '';
-  for (let v = lo; v <= hi + 1e-9; v += stp) g += `<line class="chart-grid" x1="${l}" x2="${W - r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="chart-axis" x="${l - 6}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end">${num(v, stp < 1 ? 1 : 0)}${unit === '°' ? '°' : unit === '%' ? '%' : ''}</text>`;
+  for (let v = lo; v <= hi + 1e-9; v += stp) g += `<line class="chart-grid" x1="${l}" x2="${W - r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="chart-axis" x="${l - 6}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end">${num(v, stp < 1 ? 1 : 0)}${unit === '°' ? ' °C' : unit === '%' ? '%' : ''}</text>`;
   if (bars) {
     const bm = Math.max(2, ...bars.filter(fin)), bh = (H - top - bot) * (unit === 'mm' ? 0.9 : 0.32), bw = Math.max(1.5, (W - l - r) / n * 0.62);
     const yb = unit === 'mm' ? (v => y(v)) : null;
@@ -1051,12 +1054,14 @@ function nowPage() {
   const c = state.city, V = state.view;
   const head = header(esc(cityName(c)), esc([adminName(c), countryName(c)].filter(Boolean).join(' · ')), `${favBtn(c)}${btn('reload', '↻ ' + T('refresh'))}`);
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard(state.locating ? T('locating') : ''));
+  // Do not flash the raw model temperature and then silently replace it with a station observation.
+  if (!state.obsReady && !state.snapshot) return head + loadingCard(T('checkingStations'));
   const cur = V.current, rows = V.rows, iN = V.iNow, today = V.daily[0];
   const pop6 = Math.max(0, ...rows.slice(iN + 1, iN + 7).map(r => r.pop ?? 0));
   const src = cur.source === 'obs' ? `${T('observed')} · ${esc(V.station.id)} · ${num(V.station.dist)} km · ${hhmm(cur.t)}` : `${T('modelNow')} · ${hhmm(cur.t)}`;
   const condition = cur.wx ? esc(cur.wx[0].toUpperCase() + cur.wx.slice(1)) : desc(cur.code ?? rows[iN]?.code);
   const hero = `<article class="card hero"><div class="hero-header"><div><div class="hero-place">${esc(cityName(c))}</div><div class="hero-country">${esc(dt(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' }))} · ${hhmm(Date.now())}</div></div>${icon(cur.code ?? rows[iN]?.code ?? 3, cur.isDay, 'hero-icon')}</div>
-    <div class="temperature">${fin(cur.temp) ? num(Math.round(cur.temp)) : '—'}<span>°</span></div>
+    <div class="temperature" aria-label="${fin(cur.temp) ? num(Math.round(cur.temp)) + ' °C' : '—'}">${fin(cur.temp) ? num(Math.round(cur.temp)) : '—'}<span class="temp-unit">°C</span></div>
     <div class="hero-bottom"><div><div class="condition">${condition}</div><div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div></div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
   const minis = `<div class="mini-grid">
     ${mini(T('rainChance'), pct(pop6), T('next6') + (today?.mm >= 0.1 ? ` · ${num(today.mm, 1)} mm ${T('today').toLowerCase()}` : ''), 'umbrella')}
@@ -2339,7 +2344,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true); localizePlaces();
