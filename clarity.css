@@ -67,3 +67,18 @@
 .guide-day em{font-style:normal;font-size:11px;font-weight:700;margin-top:7px}
 @media(max-width:980px){.guide-week{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:530px){.guide-week{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Wind force: Beaufort describes the mean 10m wind, not gust speeds. */
+.minivalue .wind-beaufort{
+  display:inline-flex;align-items:center;vertical-align:middle;
+  margin-left:8px;padding:7px 10px;border-radius:999px;
+  background:var(--soft);border:1px solid var(--line);
+  font-size:clamp(11px,1.1vw,13px);font-weight:800;
+  letter-spacing:0;line-height:1.2;white-space:nowrap;color:var(--ink);
+}
+.wind-hourly-cell{display:flex;flex-direction:column;gap:2px;align-items:flex-start;justify-content:center;font-variant-numeric:tabular-nums}
+.wind-hourly-bft{font-size:10px!important;font-weight:800;line-height:1.2;color:var(--sub);white-space:nowrap}
+@media(max-width:640px){
+  .minivalue .wind-beaufort{padding:6px 8px;margin-left:4px;font-size:11px}
+  .wind-hourly-bft{font-size:10px!important}
+}
