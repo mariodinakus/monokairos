@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   android-apk:
-    name: Build installable debug APK
+    name: Build standalone Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 55
     defaults:
@@ -48,12 +48,12 @@ jobs:
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: MONO-Kairos-Android-APK
-          path: mobile/android/app/build/outputs/apk/debug/*.apk
+          path: mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
