@@ -1445,21 +1445,52 @@ async function mountRadar(){
   if(!map){const host=$('#map');if(host)host.innerHTML=`<div class="placeholder">${T('radarFail')}</div>`;}
  }
 }
-/* Keyless basemap: Esri Canvas (light/dark) with labels; OpenStreetMap if Esri tiles fail. */
-function baseLayers(Lf){
- const satellite=state.radarBasemap==='satellite';
- const source=satellite?'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}':'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
- const layer=Lf.tileLayer(source,{maxZoom:18,maxNativeZoom:satellite?17:19,attribution:satellite?'Tiles © Esri':'© OpenStreetMap contributors'});
- let failures=0;
- layer.on('tileerror',()=>{
-  if(++failures===8 && map && map.hasLayer(layer)){
-   map.removeLayer(layer);
-   const backup=Lf.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© CARTO · OpenStreetMap'});
-   backup.addTo(map).bringToBack();
-   const st=$('#radarStatus');if(st)st.textContent=state.lang==='el'?'Εναλλακτικός χάρτης διαθέσιμος':'Fallback basemap active';
-  }
- });
- return [layer];
+/* Keyless Esri basemap. Never request blocked OSMF or key-required CARTO tiles. */
+function baseLayers(Lf) {
+  const satellite = state.radarBasemap === 'satellite';
+  const services = satellite
+    ? ['World_Imagery', 'World_Topo_Map', 'World_Street_Map']
+    : ['World_Street_Map', 'World_Topo_Map', 'World_Imagery'];
+  const tag = (name) => name === 'World_Imagery'
+    ? 'Tiles © Esri, Maxar, Earthstar Geographics and the GIS User Community'
+    : 'Tiles © Esri, HERE, Garmin, USGS and the GIS User Community';
+  let stopped = false;
+  const make = (step) => {
+    const name = services[step];
+    const url = `https://server.arcgisonline.com/ArcGIS/rest/services/${name}/MapServer/tile/{z}/{y}/{x}`;
+    const layer = Lf.tileLayer(url, {
+      maxZoom: 18, maxNativeZoom: 16, updateWhenIdle: true,
+      keepBuffer: 1, attribution: tag(name)
+    });
+    let errors = 0;
+    layer.on('load', () => {
+      if (radar.baseLayers?.[0] !== layer || stopped) return;
+      const pill = $('#radarStatus');
+      if (pill && pill.textContent.includes('χάρτης')) pill.textContent = state.lang === 'el' ? 'Χάρτης φορτώθηκε' : 'Map loaded';
+    });
+    layer.on('tileerror', () => {
+      if (!map || !map.hasLayer(layer) || radar.baseLayers?.[0] !== layer || stopped) return;
+      if (++errors < 2) return;
+      stopped = true;
+      map.removeLayer(layer);
+      if (step + 1 < services.length) {
+        const replacement = make(step + 1);
+        radar.baseLayers = [replacement];
+        replacement.addTo(map).bringToBack();
+        const pill = $('#radarStatus');
+        if (pill) pill.textContent = state.lang === 'el'
+          ? 'Αλλαγή παρόχου χάρτη…' : 'Switching map source…';
+      } else {
+        const pill = $('#radarStatus');
+        if (pill) pill.textContent = state.lang === 'el'
+          ? 'Ο χάρτης δεν είναι διαθέσιμος · δοκίμασε ανανέωση.'
+          : 'Basemap unavailable · try refreshing.';
+      }
+    });
+    stopped = false;
+    return layer;
+  };
+  return [make(0)];
 }
 function setRadarBasemap(){
  if(!map)return;
