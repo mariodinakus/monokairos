@@ -42,7 +42,8 @@
   function reverseName(data, lang = 'auto') {
     if (!data || typeof data !== 'object' || data.lookupSource === 'ipGeolocation') return null;
     const choices = [data.locality, data.localityName, data.city];
-    const name = choices.map(x => normalizeName(x, lang)).find(Boolean);
+    const specific = choices.filter(x => !administrative.test(text(x)) && !greekDistrict.test(text(x))).map(x => normalizeName(x, lang)).find(Boolean);
+    const name = specific || choices.map(x => normalizeName(x, lang)).find(Boolean);
     if (!name) return null;
     return { name, admin1: text(data.principalSubdivision),
       country: text(data.countryName), cc: text(data.countryCode).toUpperCase() };
