@@ -5,3 +5,7 @@ build/
 .env*
 *.log
 .DS_Store
+
+# Never commit service-account credentials.
+mobile/google-services.json
+mobile/service-account*.json

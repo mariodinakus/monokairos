@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import MonoSplash from './MonoSplash';
+import NotificationSettings from './NotificationSettings';
 import { ActivityIndicator, BackHandler, Linking, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -34,6 +36,7 @@ function MonoScreen() {
   const [gpsBusy, setGpsBusy] = useState(false);
   const [hint, setHint] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [settingsVisible, setSettingsVisible] = useState(false);
 
   const reload = useCallback(() => {
     setError(''); setLoading(true); setProgress(0); backAvailable.current = false;
@@ -96,6 +99,10 @@ function MonoScreen() {
           </View>
         </View>
         <View style={s.actions}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Ρυθμίσεις ειδοποιήσεων" onPress={() => setSettingsVisible(true)}
+            style={({pressed}) => [s.iconButton, pressed && s.pressed]}>
+            <Text style={[s.icon,{fontSize:21}]}>♧</Text>
+          </Pressable>
           <Pressable accessibilityLabel="Εντοπισμός θέσης GPS" accessibilityRole="button" disabled={gpsBusy || !!error} onPress={locate}
             style={({pressed}) => [s.iconButton, pressed && s.pressed]}>
             {gpsBusy ? <ActivityIndicator size="small" color={C.accent}/> : <Text style={s.icon}>◎</Text>}
@@ -141,11 +148,7 @@ function MonoScreen() {
         {!error && loading && progress < 1 && <View pointerEvents="none" style={s.progressTrack}>
           <View style={[s.progressFill, {width: String(Math.max(8, Math.round(progress * 100))) + '%'}]}/>
         </View>}
-        {!error && loading && progress < .2 && <View pointerEvents="none" style={s.loading}>
-          <ActivityIndicator size="large" color={C.accent}/>
-          <Text style={s.loadingTitle}>MONO WEATHER</Text>
-          <Text style={s.loadingText}>Σύνδεση με τη ζωντανή πρόγνωση…</Text>
-        </View>}
+        {!error && loading && progress < .92 && <MonoSplash progress={progress}/>} 
         {!!error && <View style={s.errorScreen}>
           <Text style={s.errorSymbol}>◌</Text>
           <Text style={s.errorTitle}>Δεν ήταν δυνατή η σύνδεση</Text>
@@ -156,6 +159,7 @@ function MonoScreen() {
           </Pressable>
         </View>}
       </View>
+      <NotificationSettings visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
     </SafeAreaView>
   );
 }
