@@ -496,3 +496,11 @@ html[data-theme=dark]{--r1:#46648c;--r2:#3f7fd8;--r3:#5b9cf0;--r4:#9cc6ff;--r5:#
 ::-webkit-scrollbar-thumb:active{background-color:color-mix(in srgb,var(--ink) 58%,transparent)}
 ::-webkit-scrollbar-button{display:none;width:0;height:0}
 @supports not selector(::-webkit-scrollbar){*{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ink) 28%,transparent) transparent}}
+
+/* v4.6: make Celsius visually explicit without crowding the temperature reading. */
+.temperature{display:flex;align-items:flex-start;gap:clamp(4px,.7vw,12px);letter-spacing:-.095em}
+.temperature .temp-unit{font-size:clamp(29px,3.3vw,45px);font-weight:750;letter-spacing:-.04em;line-height:1;vertical-align:initial;padding-top:clamp(8px,1.4vw,18px);color:var(--ink);opacity:.86;white-space:nowrap}
+@media(max-width:610px){.temperature{font-size:clamp(76px,18vw,100px);gap:4px}.temperature .temp-unit{font-size:clamp(27px,7vw,37px);padding-top:9px}}
+/* Keep the extra atmospheric explanation readable in either theme. */
+.mx-atmo-explain summary:focus-visible,.mx-env-guide summary:focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:4px}
+.mx-atmo-explain[open]{background:var(--soft,transparent)}
