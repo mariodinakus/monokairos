@@ -229,6 +229,11 @@ function render(data, options = {}) {
       ['Σκόνη & AOD', 'Αφρικανική σκόνη και θολότητα', 'Η σκόνη κοντά στο έδαφος εμφανίζεται σε μg/m³. Το AOD είναι αδιάστατος δείκτης θολότητας όλης της ατμοσφαιρικής στήλης, όχι συγκέντρωση σκόνης στο έδαφος.'],
       ['PM2.5 / PM10', 'Μικροσκοπικά αιωρούμενα σωματίδια', 'PM2.5: διάμετρος έως 2,5 μm · PM10: έως 10 μm. Μετρώνται σε μg/m³· η χαμηλότερη έκθεση είναι γενικά προτιμότερη.'],
       ['O₃ / NO₂ / SO₂ / CO', 'Αέριοι ατμοσφαιρικοί ρύποι', 'O₃: όζον χαμηλής ατμόσφαιρας · NO₂: διοξείδιο αζώτου · SO₂: διοξείδιο θείου · CO: μονοξείδιο άνθρακα. Όλα εμφανίζονται σε μg/m³.'],
+      ['Στρώματα νεφών', 'Χαμηλά, μεσαία, υψηλά', 'Χαμηλά συνήθως έως ~2 km, μεσαία ~2–6 km, υψηλά πάνω από ~6 km. Τα ποσοστά τους επικαλύπτονται: δεν τα προσθέτουμε.'],
+      ['Επίπεδα hPa', 'Η πίεση δείχνει το ύψος στην ατμόσφαιρα', '1000 hPa κοντά στη θάλασσα, 850 hPa περίπου 1,5 km, 700 hPa περίπου 3 km, 500 hPa περίπου 5,5 km και 300 hPa περίπου 9 km. Τα υψόμετρα μεταβάλλονται.'],
+      ['Κατακόρυφο προφίλ', 'Τι συμβαίνει από το έδαφος προς τα πάνω', 'Δείχνει θερμοκρασία (°C), υγρασία (%) και άνεμο (km/h) ανά επίπεδο πίεσης. Δεν είναι τα φυσικά στρώματα τροπόσφαιρας/στρατόσφαιρας.'],
+      ['CAPE / LI / CIN', 'Ενέργεια και αστάθεια καταιγίδας', 'CAPE: διαθέσιμη ενέργεια ανοδικών ρευμάτων (J/kg). Αρνητικός LI υποδηλώνει πιθανή αστάθεια. CIN: αναστολή της ανόδου. Κανένα μόνο του δεν προβλέπει καταιγίδα.'],
+      ['Βαρομετρικά / αεροχείμαρρος', 'Υ/Χ, 500 hPa και ισχυροί άνεμοι', 'Υ/Χ: υψηλή/χαμηλή πίεση. Στα 500 hPa (~5,5 km) διακρίνονται αυλώνες και ράχες. Αεροχείμαρρος: ζώνη πολύ ισχυρών ανέμων ψηλά.'],
       ['Όρια ΠΟΥ', 'Σύγκριση με κατευθυντήριες τιμές', 'Οι μπάρες συγκρίνουν προβλεπόμενη έκθεση με οδηγίες του ΠΟΥ για καθορισμένες περιόδους μέσου όρου. Δεν είναι ζωντανή μέτρηση ούτε άμεση διάγνωση κινδύνου.']
     ]
   } : {
@@ -245,6 +250,11 @@ function render(data, options = {}) {
       ['Dust & AOD', 'Saharan dust and haze', 'Near-surface dust in μg/m³. AOD measures total-column atmospheric haze; it is not ground-level dust concentration.'],
       ['PM2.5 / PM10', 'Airborne fine particles', 'Particles up to 2.5 μm / 10 μm across. Concentrations in μg/m³; lower exposure is generally preferable.'],
       ['O₃ / NO₂ / SO₂ / CO', 'Gaseous air pollutants', 'Ground-level ozone, nitrogen dioxide, sulphur dioxide and carbon monoxide, each shown in μg/m³.'],
+      ['Cloud layers', 'Low, middle and high clouds', 'Low clouds usually form below ~2 km; middle clouds roughly 2–6 km; high clouds above ~6 km. Their percentages overlap and do not add up.'],
+      ['hPa levels', 'Pressure levels up through the sky', '1000 hPa is near sea level, 850 hPa around 1.5 km, 700 hPa around 3 km, 500 hPa around 5.5 km and 300 hPa around 9 km. Altitude varies with weather.'],
+      ['Vertical profile', 'Temperature, humidity and wind with height', 'The plot shows temperatures in °C, humidity (%) and wind speed (km/h) at different pressure levels, not separate physical layers of the atmosphere.'],
+      ['CAPE / LI / CIN', 'Storm potential and resistance', 'CAPE = energy for upward motion (J/kg); more may support strong convection. LI below zero often indicates instability; CIN is a barrier to rising air. None alone predicts a storm.'],
+      ['Pressure / jet stream', 'Highs, lows and fast winds aloft', 'H/L on the map indicate pressure systems; 500 hPa shows upper-air troughs and ridges. A jet stream is a band of strong wind aloft.'],
       ['WHO guidelines', 'Context for pollutant bars', 'Bars compare forecast concentrations against WHO guideline levels defined for specific averaging periods, not against instantaneous safe/unsafe cutoffs.']
     ]
   };
