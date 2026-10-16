@@ -1428,7 +1428,7 @@ async function mountRadar(){
   const instance=Lf.map('map',{zoomControl:true,scrollWheelZoom:false}).setView([c.lat,c.lon],8);
   map=instance;radar.baseLayers=baseLayers(Lf);radar.baseLayers.forEach(layer=>layer.addTo(instance));
   Lf.circleMarker([c.lat,c.lon],{radius:7,color:'#fff',weight:2,fillColor:'#216eea',fillOpacity:1}).addTo(instance).bindTooltip(esc(cityName(c)));
-  for(const st of (state.view?.stations||[]).filter(st=>st.last).slice(0,55))
+  for(const st of (state.view?.stations||[]).filter(st=>st.last).slice(0,18))
    Lf.marker([st.lat,st.lon],{icon:Lf.divIcon({className:'stmark',html:`<span>${deg(st.last.temp)}</span>`,iconSize:[38,20]})}).addTo(instance).bindTooltip(`${esc(st.id)} · ${esc(st.name||'')}`);
   setTimeout(()=>{if(map===instance)instance.invalidateSize();},150);
   const d=await getJSON('https://api.rainviewer.com/public/weather-maps.json',12000);
@@ -1469,9 +1469,9 @@ function setRadarBasemap(){
  const btn=$('#radarStyle');if(btn)btn.textContent=state.lang==='el'?(state.radarBasemap==='satellite'?'▧ Δρόμοι':'▧ Δορυφόρος'):(state.radarBasemap==='satellite'?'▧ Streets':'▧ Satellite');
 }
 function toggleSat() {
-  state.radarSat = !state.radarSat;
-  if (radar.sat) radar.sat.setOpacity(state.radarSat ? 0.55 : 0);
-  const b = $('#radarSat'); if (b) b.classList.toggle('active', state.radarSat);
+  state.radarSat = !state.radarSat; persistUI();
+  if (radar.sat) radar.sat.setOpacity(state.radarSat ? 0.45 : 0);
+  const b = $('#radarSat'); if (b) b.setAttribute('aria-pressed', String(state.radarSat));
 }
 function showFrame(i){
  if(!map||!radar.frames.length)return;
@@ -1486,6 +1486,7 @@ function showFrame(i){
  const st=$('#radarStatus');if(st)st.textContent=(state.lang==='el'?'Πραγματική λήψη · ':'Observed frame · ')+stamp;
 }
 function toggleRadar() {
+  if (!map || radar.frames.length < 2) return;
   const b = $('#radarPlay');
   if (radar.timer) { clearInterval(radar.timer); radar.timer = 0; if (b) b.textContent = `▶ ${T('play')}`; return; }
   radar.timer = setInterval(() => { if (!$('#map')) { clearInterval(radar.timer); radar.timer = 0; return; } showFrame(radar.i + 1); }, 700);
