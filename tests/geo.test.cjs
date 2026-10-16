@@ -36,3 +36,34 @@ test('coarse GPS fixes cannot claim a precise neighbourhood', () => {
   assert.equal(Geo.isApproximateFix(900), true);
   assert.equal(Geo.isApproximateFix(30), false);
 });
+
+test('numbered English districts are not presented as precise neighbourhood names', () => {
+  const raw = {
+    locality: '5th District of Thessaloniki',
+    city: 'Thessaloniki',
+    principalSubdivision: 'Central Macedonia',
+    countryName: 'Greece',
+    countryCode: 'GR'
+  };
+  assert.equal(Geo.reverseName(raw, 'el').name, 'Θεσσαλονίκη');
+  assert.equal(Geo.reverseName(raw, 'en').name, 'Thessaloniki');
+  assert.equal(Geo.normalizeName('5th District of Thessaloniki', 'el'), 'Θεσσαλονίκη');
+  assert.equal(Geo.normalizeName('5th District of Thessaloniki', 'en'), 'Thessaloniki');
+  assert.equal(Geo.normalizeName('5th District', 'el'), '');
+});
+
+test('a real, named locality wins over an administrative district', () => {
+  const r = Geo.reverseName({
+    locality: '5th District of Thessaloniki',
+    localityName: 'Menemeni',
+    city: 'Thessaloniki',
+    principalSubdivision: 'Central Macedonia'
+  }, 'el');
+  assert.equal(r.name, 'Μενεμένη');
+});
+
+test('do not invent a neighbourhood from an unusable administrative label', () => {
+  assert.equal(Geo.reverseName({ locality: '5th District', city: '' }, 'el'), null);
+  assert.equal(Geo.normalizeName('Menemeni', 'el'), 'Μενεμένη');
+  assert.equal(Geo.normalizeName('Μενεμένη', 'en'), 'Menemeni');
+});
