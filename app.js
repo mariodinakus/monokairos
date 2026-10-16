@@ -424,7 +424,7 @@ const state = {
   page: (location.hash || '').slice(1) || 'now', hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
-  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat,
+  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street',
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
@@ -1423,8 +1423,10 @@ async function mountRadar() {
     await loadLeaflet();
     if (!$('#map') || map) return;
     const c = state.city, Lf = window.L;
-    map = Lf.map('map', { zoomControl: true }).setView([c.lat, c.lon], 7);
-    baseLayers(Lf).forEach(l => l.addTo(map));
+    map = Lf.map('map', { zoomControl: true, scrollWheelZoom: false }).setView([c.lat, c.lon], 8);
+    radar.baseLayers = baseLayers(Lf);
+    radar.baseLayers.forEach(l => l.addTo(map));
+    setTimeout(() => map && $('#map') && map.invalidateSize(), 120);
     Lf.circleMarker([c.lat, c.lon], { radius: 6, color: state.theme === 'dark' ? '#f1f1f1' : '#171717', weight: 2, fillOpacity: 0.9 }).addTo(map).bindTooltip(esc(cityName(c)));
     for (const s of state.view?.stations || []) if (s.last) Lf.marker([s.lat, s.lon], { icon: Lf.divIcon({ className: 'stmark', html: `<span>${deg(s.last.temp)}</span>`, iconSize: [38, 20] }) }).addTo(map).bindTooltip(`${esc(s.id)} · ${esc(s.name || '')}<br>${deg(s.last.temp)} · ${hhmm(s.last.t)}`);
     const d = await getJSON('https://api.rainviewer.com/public/weather-maps.json', 12000);
@@ -1436,13 +1438,27 @@ async function mountRadar() {
   } catch { const m = $('#map'); if (m && !map) m.innerHTML = `<div class="placeholder">${T('radarFail')}</div>`; else toast(T('radarFail')); }
 }
 /* Keyless basemap: Esri Canvas (light/dark) with labels; OpenStreetMap if Esri tiles fail. */
-function baseLayers(Lf) {
-  const dark = state.theme === 'dark', name = dark ? 'Dark_Gray' : 'Light_Gray';
-  const esri = Lf.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${name}_Base/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 16, attribution: 'Esri, HERE, Garmin, © OpenStreetMap' });
-  const labels = Lf.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${name}_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 16, zIndex: 8, pane: 'overlayPane' });
-  let fails = 0;
-  esri.on('tileerror', () => { if (++fails === 4 && map) { map.removeLayer(esri); map.removeLayer(labels); Lf.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map).bringToBack(); } });
-  return [esri, labels];
+function baseLayers(Lf){
+ const satellite=state.radarBasemap==='satellite';
+ const source=satellite?'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}':'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+ const layer=Lf.tileLayer(source,{maxZoom:18,maxNativeZoom:satellite?17:19,attribution:satellite?'Tiles © Esri':'© OpenStreetMap contributors'});
+ let failures=0;
+ layer.on('tileerror',()=>{
+  if(++failures===8 && map && map.hasLayer(layer)){
+   map.removeLayer(layer);
+   const backup=Lf.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© CARTO · OpenStreetMap'});
+   backup.addTo(map).bringToBack();
+   const st=$('#radarStatus');if(st)st.textContent=state.lang==='el'?'Εναλλακτικός χάρτης διαθέσιμος':'Fallback basemap active';
+  }
+ });
+ return [layer];
+}
+function setRadarBasemap(){
+ if(!map)return;
+ for(const layer of (radar.baseLayers||[]))if(map.hasLayer(layer))map.removeLayer(layer);
+ radar.baseLayers=baseLayers(window.L);
+ radar.baseLayers.forEach(layer=>layer.addTo(map).bringToBack());
+ const btn=$('#radarStyle');if(btn)btn.textContent=state.lang==='el'?(state.radarBasemap==='satellite'?'▧ Δρόμοι':'▧ Δορυφόρος'):(state.radarBasemap==='satellite'?'▧ Streets':'▧ Satellite');
 }
 function toggleSat() {
   state.radarSat = !state.radarSat;
@@ -1780,7 +1796,7 @@ const lhm = t => dt(t, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
 const ldate = t => dt(t, { day: 'numeric', month: 'short' }, LZ);
 const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 const isoMin = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
-function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat }); }
+function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap }); }
 function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
 
 // Latest IMERG half-hour that already has data (latency is a few hours): probe tiny images backwards in time.
@@ -2418,6 +2434,9 @@ function onClick(e) {
   else if (a === 'climLoad') { loadClimate(1991); render(); }
   else if (a === 'radarPlay') toggleRadar();
   else if (a === 'radarSat') toggleSat();
+  else if (a === 'radarHome' && map) { map.setView([state.city.lat,state.city.lon],8); map.invalidateSize(); }
+  else if (a === 'radarStyle') { state.radarBasemap=state.radarBasemap==='street'?'satellite':'street';persistUI();setRadarBasemap(); }
+  else if (a === 'radarReload') { killMap(); mountRadar(); }
   else if (a === 'gBase') { state.gBase = b.dataset.v; persistUI(); paintGlobe(); render(); }
   else if (a === 'gLayer') { const k = b.dataset.v; state.gLayers[k] = !state.gLayers[k]; persistUI(); if (k === 'radar' || k === 'rain') paintGlobe(); if (k === 'grid' && state.gLayers.grid) fetchGrid().then(() => updateGlobeCtl()); render(); }
   else if (a === 'gSpin') { state.gSpin = !state.gSpin; if (globe) globe.controls().autoRotate = state.gSpin; render(); }
