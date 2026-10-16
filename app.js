@@ -1418,7 +1418,7 @@ function loadLeaflet() {
     const s = document.createElement('script'); s.src = 'vendor/leaflet.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s);
   });
 }
-function killMap() { if (radar.timer) { clearInterval(radar.timer); radar.timer = 0; } if (map) { map.remove(); map = null; } radar.layers = []; radar.frames = []; radar.sat = null; radar.baseLayers = []; }
+function killMap() { if (radar.timer) { clearInterval(radar.timer); radar.timer = 0; } if (map) { map.remove(); map = null; } radar.layers = []; radar.frames = []; radar.sat = null; radar.rainLayer = null; radar.baseLayers = []; }
 async function mountRadar(){
  if(!$('#map')||map)return;
  try{
@@ -1504,23 +1504,36 @@ function toggleSat() {
   if (radar.sat) radar.sat.setOpacity(state.radarSat ? 0.45 : 0);
   const b = $('#radarSat'); if (b) b.setAttribute('aria-pressed', String(state.radarSat));
 }
-function showFrame(i){
- if(!map||!radar.frames.length)return;
- i=(i+radar.frames.length)%radar.frames.length;
- const frame=radar.frames[i];
- if(!radar.layers[i])radar.layers[i]=window.L.tileLayer(`${radar.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`,{opacity:0,maxNativeZoom:7,maxZoom:12,zIndex:5,attribution:'RainViewer'}).addTo(map);
- radar.layers.forEach((layer,j)=>layer&&layer.setOpacity(j===i?0.88:0));
- radar.i=i;
- const slider=$('#radarSlider');if(slider)slider.value=i;
- const stamp=dt(frame.time*1000,{weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
- const out=$('#radarTime');if(out)out.textContent=stamp;
- const st=$('#radarStatus');if(st)st.textContent=(state.lang==='el'?'Πραγματική λήψη · ':'Observed frame · ')+stamp;
+function showFrame(i) {
+  if (!map || !radar.frames.length) return;
+  i = (i + radar.frames.length) % radar.frames.length;
+  const frame = radar.frames[i];
+  const tileURL = `${radar.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+  // Keep a single active radar layer. Invisible past layers still consume tile requests.
+  if (!radar.rainLayer) {
+    radar.rainLayer = window.L.tileLayer(tileURL, {
+      opacity: 0.88, maxNativeZoom: 7, maxZoom: 16,
+      zIndex: 5, keepBuffer: 1, updateWhenIdle: true, attribution: 'RainViewer'
+    }).addTo(map);
+  } else {
+    radar.rainLayer.setUrl(tileURL);
+  }
+  radar.i = i;
+  const slider = $('#radarSlider');
+  if (slider) slider.value = String(i);
+  const time = dt(frame.time * 1000, {
+    weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  });
+  const output = $('#radarTime');
+  if (output) output.textContent = time;
+  const status = $('#radarStatus');
+  if (status) status.textContent = (state.lang === 'el' ? 'Πραγματική λήψη · ' : 'Radar observation · ') + time;
 }
 function toggleRadar() {
   if (!map || radar.frames.length < 2) return;
   const b = $('#radarPlay');
   if (radar.timer) { clearInterval(radar.timer); radar.timer = 0; if (b) b.textContent = `▶ ${T('play')}`; return; }
-  radar.timer = setInterval(() => { if (!$('#map')) { clearInterval(radar.timer); radar.timer = 0; return; } showFrame(radar.i + 1); }, 700);
+  radar.timer = setInterval(() => { if (!$('#map')) { clearInterval(radar.timer); radar.timer = 0; return; } showFrame(radar.i + 1); }, 1200);
   if (b) b.textContent = `❚❚ ${T('pause')}`;
 }
 
