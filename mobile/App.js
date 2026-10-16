@@ -124,7 +124,7 @@ function MonoScreen() {
           onLoadEnd={() => setLoading(false)}
           onError={({nativeEvent}) => { setError(nativeEvent.description || 'Η σύνδεση απέτυχε.'); setLoading(false); }}
           onHttpError={({nativeEvent}) => {
-            if (nativeEvent.statusCode >= 400 && internalUrl(nativeEvent.url)) {
+            if (nativeEvent.statusCode >= 400 && nativeEvent.url === APP_URL) {
               setError('Ο διακομιστής επέστρεψε HTTP ' + nativeEvent.statusCode);
               setLoading(false);
             }
