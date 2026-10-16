@@ -49,11 +49,40 @@ async function mount(options,loadLeaflet){
   map.on('click',e=>showPoint(nearest(e.latlng.lat,e.latlng.lng),e.latlng));map.on('moveend',sampleCenter);await loadMap(true);
  }catch{set('fm-map-status',X('Ο χάρτης δεν φορτώθηκε.','Map could not load.'));}
 }
-function baseMap(L,theme){
- const target=map,name=theme==='dark'?'Dark_Gray':'Light_Gray',base='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_'+name;
- const tiles=L.tileLayer(base+'_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:12,attribution:'Esri, HERE, Garmin · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>'}).addTo(target);
- const labels=L.tileLayer(base+'_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:12,pane:'overlayPane',zIndex:3}).addTo(target);let failures=0;
- tiles.on('tileerror',()=>{if(++failures!==4||target!==map)return;target.removeLayer(tiles);target.removeLayer(labels);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:12,referrerPolicy:'strict-origin-when-cross-origin',attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'}).addTo(target).bringToBack();});
+function baseMap(L, theme) {
+  const target = map;
+  const name = theme === 'dark' ? 'Dark_Gray' : 'Light_Gray';
+  const root = `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${name}`;
+  const base = L.tileLayer(root + '_Base/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 13, maxNativeZoom: 12, keepBuffer: 1,
+    attribution: '© Esri, HERE, Garmin and contributors'
+  }).addTo(target);
+  const labels = L.tileLayer(root + '_Reference/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 13, maxNativeZoom: 12, pane: 'overlayPane', zIndex: 3
+  }).addTo(target);
+  let errors = 0, fallback = false;
+  base.on('tileerror', () => {
+    if (target !== map || fallback || ++errors < 3) return;
+    fallback = true;
+    target.removeLayer(base);
+    target.removeLayer(labels);
+    const services = ['World_Topo_Map', 'World_Street_Map'];
+    function next(i) {
+      if (target !== map || i >= services.length) return;
+      const alternative = L.tileLayer(
+        `https://server.arcgisonline.com/ArcGIS/rest/services/${services[i]}/MapServer/tile/{z}/{y}/{x}`, {
+          maxZoom: 13, maxNativeZoom: 13, keepBuffer: 1,
+          attribution: '© Esri, HERE, Garmin, USGS and contributors'
+        }).addTo(target).bringToBack();
+      let misses = 0;
+      alternative.on('tileerror', () => {
+        if (target !== map || !target.hasLayer(alternative) || ++misses < 3) return;
+        target.removeLayer(alternative);
+        next(i + 1);
+      });
+    }
+    next(0);
+  });
 }
 function update(options){const zoneChanged=context?.zone!==options.zone;context=options;if(document.getElementById('fm-signals'))set('fm-signals',signalsHTML(options));if(zoneChanged){if(mapData&&map&&panel==='map')paint();if(outlook&&panel==='month')paintOutlook();}if(map&&mapData&&!mapBusy&&Date.now()-mapData.at>(mapData.ttl||3600)*1000)loadMap(false);}
 const views={world:[[-60,-180],[78,180]],europe:[[28,-20],[66,45]],americas:[[-57,-165],[73,-30]],africa:[[-36,-22],[38,57]],asia:[[-12,43],[72,160]],pacific:[[-53,110],[57,245]]};
