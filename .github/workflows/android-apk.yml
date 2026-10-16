@@ -9,6 +9,10 @@ on:
       - mobile/**
       - .github/workflows/android-apk.yml
 
+concurrency:
+  group: mono-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -43,6 +47,9 @@ jobs:
 
       - name: Install mobile packages
         run: npm install --no-audit --no-fund
+
+      - name: Check forecast alert planner
+        run: node --test tests/*.test.cjs
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install

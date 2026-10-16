@@ -44,3 +44,7 @@ For iOS: `npx eas-cli build --platform ios --profile preview` (Apple signing and
 - Telegram alerts are part of the original backend, not native push notifications
 
 No Vercel secrets/API tokens are bundled into this mobile project.
+
+## Native forecast alerts v1.2
+
+Opt in from the notification-settings icon. The app fetches the current Open-Meteo forecast and schedules local warnings (rain, severe weather, gusts, air quality) and morning summaries for the next 48h. The Android system can show these later while the app is closed. Forecast changes are **not** pushed continuously while closed; FCM v1 and an independently running backend are still needed for that. See `PUSH_SETUP.md`.
