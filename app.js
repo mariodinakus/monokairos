@@ -316,7 +316,7 @@ en: {
     ['80% range','The temperature will fall inside this range 8 times out of 10. The wider it is, the less certain the forecast.'],
     ['Feels like','How warm or cold your body feels once wind, humidity and sun are counted.'],
     ['Gust','The strongest burst of wind for a few seconds; always stronger than the average wind.'],
-    ['Beaufort','A 0–12 scale of wind strength. From 6 it feels strong, from 8 it is a gale.'],
+    ['Beaufort','A 0–12 scale of mean wind speed at 10 metres above ground. Gusts are separate, brief peaks.'],
     ['Dew point','Above 18° the air feels muggy. When it nears the temperature, fog or dew forms.'],
     ['UV','Sun radiation index. From 6 use sunscreen; from 8 protect yourself even for short periods.'],
     ['Air quality (EAQI)','European index: 0–20 good, 20–40 fair, 40–60 moderate, above 60 poor.'],
@@ -1071,7 +1071,7 @@ function nowPage() {
     <div class="hero-bottom"><div><div class="condition">${condition}</div><div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div></div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
   const minis = `<div class="mini-grid">
     ${mini(T('rainChance'), pct(pop6), T('next6') + (today?.mm >= 0.1 ? ` · ${num(today.mm, 1)} mm ${T('today').toLowerCase()}` : ''), 'umbrella')}
-    ${mini(T('wind'), `${num(cur.wind)} <small>km/h</small> ${dirArrow(cur.dir)}`, fin(cur.gust) ? `${T('gust')} ${num(cur.gust)} km/h` : '&nbsp;', 'wind')}
+    ${mini(T('wind'), `${num(cur.wind)} <small>km/h</small> ${dirArrow(cur.dir)}${fin(cur.wind) ? `<span class="wind-beaufort" title="${state.lang === 'el' ? 'Κλίμακα Μποφόρ για μέση ταχύτητα ανέμου' : 'Beaufort scale for mean wind speed'}">${windBft(cur.wind)}</span>` : ''}`, fin(cur.gust) ? `${T('gust')} ${num(cur.gust)} km/h` : '&nbsp;', 'wind')}
     ${mini(T('humidity'), `${num(cur.rh)}%`, `${T('dew')} ${deg(cur.dew)} · ☁ ${ccTxt(rows[iN]?.cloud)}`, 'humidity')}
     ${mini(T('pressure'), `${num(cur.pres)} <small>hPa</small>`, fin(cur.vis) ? `${T('visibility')} ${num(cur.vis, cur.vis < 10 ? 1 : 0)} km` : '&nbsp;', 'pressure')}</div>`;
   const win = rows.slice(Math.max(0, iN - 24), iN + 49), past = r => r.t <= Date.now();
@@ -1170,7 +1170,7 @@ function hourlyPage() {
   let last = '';
   const lines = rows.map(r => {
     const d = dayKey(r.t, V.zone); const div = d !== last ? `<div class="daydivider">${esc(dt(r.t, { weekday: 'long', day: 'numeric', month: 'long' }))}</div>` : ''; last = d;
-    return `${div}<div class="tableline hl"><strong>${hhmm(r.t)}</strong>${icon(r.code, r.isDay)}<span class="deg">${deg(r.temp)}</span><span class="rng hide-sm">${deg(r.lo)}–${deg(r.hi)}</span><div class="popcell"><div class="bar"><span style="width:${Math.round((r.pop ?? 0) * 100)}%"></span></div><span>${pct(r.pop)}</span></div><span class="cc" title="${T('clouds')}">☁ ${ccTxt(r.cloud)}</span><span class="hide-sm">${fin(r.amount) && r.amount >= 0.05 ? num(r.amount, 1) + ' mm' : '—'}</span><span>${num(r.wind)} <small>km/h</small> ${dirArrow(r.dir)}</span><span class="hide-sm">${num(r.rh)}%</span></div>`;
+    return `${div}<div class="tableline hl"><strong>${hhmm(r.t)}</strong>${icon(r.code, r.isDay)}<span class="deg">${deg(r.temp)}</span><span class="rng hide-sm">${deg(r.lo)}–${deg(r.hi)}</span><div class="popcell"><div class="bar"><span style="width:${Math.round((r.pop ?? 0) * 100)}%"></span></div><span>${pct(r.pop)}</span></div><span class="cc" title="${T('clouds')}">☁ ${ccTxt(r.cloud)}</span><span class="hide-sm">${fin(r.amount) && r.amount >= 0.05 ? num(r.amount, 1) + ' mm' : '—'}</span><span class="wind-hourly-cell">${num(r.wind)} <small>km/h</small> ${dirArrow(r.dir)}${fin(r.wind) ? `<small class="wind-hourly-bft">${windBft(r.wind)}</small>` : ''}</span><span class="hide-sm">${num(r.rh)}%</span></div>`;
   }).join('');
   return head + `<div class="chips">${[24, 48, 72, 168].map(n => `<button class="chip ${state.hours === n ? 'active' : ''}" data-action="hours" data-n="${n}">${T(n === 24 ? 'h24' : 'next' + n)}</button>`).join('')}</div>
     <div class="card">${ch}${legend([['mono', T('legendMono')], ['band', T('legendBand')], ['bar', T('legendRain')]])}</div>
@@ -1544,6 +1544,8 @@ function toggleRadar() {
 /* ------------------------------------------------------------------ plain-language summary */
 const BFT = [1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118];
 const beaufort = k => { const i = BFT.findIndex(x => k < x); return i < 0 ? 12 : i; };
+// Beaufort applies to sustained/mean 10 m wind, not short-lived gusts.
+const windBft = kmh => fin(kmh) && kmh >= 0 ? `${beaufort(kmh)} ${state.lang === 'el' ? 'Μποφόρ' : 'Bft'}` : '—';
 function probWord(p) { const w = T('probWords'); return p < 0.1 ? w[0] : p < 0.3 ? w[1] : p < 0.6 ? w[2] : w[3]; }
 function feelWord(t) { const w = T('feelWords'); return t < 0 ? w[0] : t < 8 ? w[1] : t < 15 ? w[2] : t < 23 ? w[3] : t < 29 ? w[4] : t < 35 ? w[5] : w[6]; }
 function skyWord(code, pop) {
@@ -1874,7 +1876,7 @@ return head+
 <div class="guide-grid">
 ${panel(X('Αυτή τη στιγμή','Right now'),`${temp} · ${esc(cur.wx||desc(cur.code||first.code))}`,fact(X('Αίσθηση','Feels like'),Number.isFinite(cur.feels)?deg(cur.feels):'—')+fact(X('Μετρήθηκε ή προβλέφθηκε;','Observed or modelled?'),esc(source)),'now')}
 ${panel(X('Επόμενο 12ωρο','Next 12 hours'),`${pct(pop)} ${X('μέγιστη ωριαία πιθανότητα','maximum hourly rain chance')}`,fact(X('Τι να καταλάβω','What it means'),rainText)+fact(X('Καταιγίδα','Thunderstorm'),`${pct(storm)} ${X('μέγιστη εκτίμηση ανά ώρα','peak hourly estimate')}`),'rain')}
-${panel(X('Άνεμος','Wind'),`${num(gust)} km/h ${X('μέγιστη ριπή','peak gust')}`,fact(X('Πρακτικά','In practice'),windText)+fact(X('Ποια η διαφορά;','What is the difference?'),X('Ριπή = στιγμιαία κορύφωση. Δεν είναι ο συνεχής άνεμος.','A gust is a short peak, not sustained wind.')),'hourly')}
+${panel(X('Άνεμος','Wind'),`${fin(cur.wind) ? windBft(cur.wind) : '—'}`,fact(X('Μέση ταχύτητα ανέμου','Mean wind speed'),`${num(cur.wind)} km/h`)+fact(X('Μέγιστη ριπή 12ώρου','Peak gust, next 12h'),`${num(gust)} km/h`)+fact(X('Πρακτικά','In practice'),windText)+fact(X('Ποια η διαφορά;','What is the difference?'),X('Ριπή = στιγμιαία κορύφωση. Δεν είναι ο συνεχής άνεμος.','A gust is a short peak, not sustained wind.')),'hourly')}
 ${panel(X('Σήμερα και αύριο','Today and tomorrow'),today?`${deg(today.lo)} – ${deg(today.hi)}`:'—',fact(X('Αύριο','Tomorrow'),tom?`${deg(tom.lo)} – ${deg(tom.hi)} · ${pct(tom.pop)}`:'—')+fact(X('Πρόσεξε','Remember'),X('Η πιθανότητα βροχής και τα χιλιοστά βροχής είναι διαφορετικά.','Rain probability and rainfall amount are different.')),'phen')}
 ${panel(X('Περιβάλλον','Environment'),Number.isFinite(air)?`EAQI ${num(air)}`:X('Δεν υπάρχουν ακόμη δεδομένα','Data not yet available'),fact(X('Πώς διαβάζεται','How to read it'),X('Χαμηλότερος δείκτης = καλύτερος αέρας. Η τιμή είναι συνήθως εκτίμηση μοντέλου.','Lower EAQI is better. This value is usually modelled, not a street-level sensor reading.')),'environment')}
 ${panel(X('Πόσο αξιόπιστο;','How reliable?'),X('Πρόγνωση ≠ βεβαιότητα','Forecast ≠ certainty'),fact(X('Εύρος 80%','80% interval'),Number.isFinite(first.lo)&&Number.isFinite(first.hi)?`${deg(first.lo)} – ${deg(first.hi)}`:X('Δεν διατίθεται','Unavailable'))+fact(X('Σημαντικό','Important'),X('Το εύρος και τα πολλά μοντέλα δεν εγγυώνται σωστή πρόγνωση.','An ensemble and its interval cannot guarantee accuracy.')),'models')}
@@ -2035,7 +2037,7 @@ function probeCard() {
   const c = P.cur, t = c.time * 1000;
   return `<div class="gprobe"><button class="gx" data-action="gProbeClose" aria-label="×">×</button><b class="gpn">${where}</b>
     <div class="gpt">${icon(c.weather_code, c.is_day)}<span>${deg(c.temperature_2m)}</span><em>${esc(desc(c.weather_code))}<br><small>${T('feels')} ${deg(c.apparent_temperature)}</small></em></div>
-    <div class="gpk"><span>${T('gWindL')} <b>${num(c.wind_speed_10m)} km/h ${dirArrow(c.wind_direction_10m)}</b></span><span>${T('gust')} <b>${num(c.wind_gusts_10m)}</b></span><span>${T('gHumL')} <b>${num(c.relative_humidity_2m)}%</b></span><span>${T('gCloudL')} <b>${num(c.cloud_cover)}%</b></span>
+    <div class="gpk"><span>${T('gWindL')} <b>${num(c.wind_speed_10m)} km/h ${dirArrow(c.wind_direction_10m)}${fin(c.wind_speed_10m) ? ` · ${windBft(c.wind_speed_10m)}` : ''}</b></span><span>${T('gust')} <b>${num(c.wind_gusts_10m)}</b></span><span>${T('gHumL')} <b>${num(c.relative_humidity_2m)}%</b></span><span>${T('gCloudL')} <b>${num(c.cloud_cover)}%</b></span>
     <span class="w">${T('gNext6')} <b>${P.pp >= 0.05 || P.mm >= 0.1 ? `${pct(P.pp)} · ${mm1(P.mm)} mm` : T('gNoRain6')}</b></span></div>
     <small class="muted">${T('rUpdated')} ${lhm(t)} · ${esc(ageText(t))}</small>
     <button class="outline-btn" data-action="gProbeOpen">${T('gOpenHere')}</button></div>`;
@@ -2273,7 +2275,7 @@ function stationsPage() {
   if (!V.stations.length) return head + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
   const cards = V.stations.slice(0, 30).map(s => { const o = s.last, inUse = V.station?.id === s.id;
     return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div></div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
-      <div class="stvals"><span class="citytemp">${deg(o?.temp)}</span><div class="compact">${T('humidity')} ${num(M.rhFromDew(o?.temp, o?.dewp))}% · ${T('dew')} ${deg(o?.dewp)}<br>${T('wind')} ${num(o?.wspd)} km/h ${dirArrow(o?.wdir)}${fin(o?.wgst) ? ` · ${T('gust')} ${num(o.wgst)}` : ''}<br>${num(o?.pres)} hPa${fin(o?.vis) ? ` · ${num(o.vis, o.vis < 10 ? 1 : 0)} km` : ''}</div></div>
+      <div class="stvals"><span class="citytemp">${deg(o?.temp)}</span><div class="compact">${T('humidity')} ${num(M.rhFromDew(o?.temp, o?.dewp))}% · ${T('dew')} ${deg(o?.dewp)}<br>${T('wind')} ${num(o?.wspd)} km/h ${dirArrow(o?.wdir)}${fin(o?.wspd) ? ` · ${windBft(o.wspd)}` : ''}${fin(o?.wgst) ? ` · ${T('gust')} ${num(o.wgst)} km/h` : ''}<br>${num(o?.pres)} hPa${fin(o?.vis) ? ` · ${num(o.vis, o.vis < 10 ? 1 : 0)} km` : ''}</div></div>
       <div class="compact">${o?.wx?.length ? esc(wxText(o)) + ' · ' : ''}${o ? esc(ageText(o.t)) : ''}</div>
       <div class="citybottom">${inUse ? `<span class="badge">✓ ${T('stInUse')}</span>` : `<button class="cityopen" data-action="station" data-id="${esc(s.id)}">${T('stUse')}</button>`}</div></article>`; }).join('');
   const s = V.station;
