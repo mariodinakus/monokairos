@@ -215,7 +215,47 @@ function render(data, options = {}) {
   const pollutants = [['pm2_5', 'PM2.5'], ['pm10', 'PM10'], ['ozone', 'O₃'], ['nitrogen_dioxide', 'NO₂'], ['sulphur_dioxide', 'SO₂'], ['carbon_monoxide', 'CO']];
   const empty = data?.error ? C.failed : !data ? C.loading : '';
   const gaugeDeg = finite(e) ? Math.min(100, e) / 100 * 180 : 0;
-  return `<div class="env-air-layout mx-airtop">
+  const guide = lang === 'el' ? {
+    title: 'Οδηγός περιβαλλοντικών ενδείξεων',
+    sub: 'Τι σημαίνει κάθε αριθμός και πότε χρειάζεται προσοχή. Πάτησε κάθε ένδειξη για σύντομη εξήγηση.',
+    note: 'Οι τιμές προέρχονται κυρίως από προγνωστικά μοντέλα περιοχής, όχι από αισθητήρα στη διεύθυνσή σου. Δεν αποτελούν ιατρική διάγνωση.',
+    items: [
+      ['EAQI', 'Ευρωπαϊκός δείκτης ποιότητας αέρα', '0–20 καλή · 21–40 σχετικά καλή · 41–60 μέτρια · 61–80 κακή · 81–100 πολύ κακή · πάνω από 100 εξαιρετικά κακή. Όσο χαμηλότερος, τόσο καλύτερα.'],
+      ['US AQI', 'Αμερικανικός δείκτης αέρα', 'Εναλλακτική κλίμακα ποιότητας αέρα (0–50 καλή, 51–100 μέτρια, 101+ αυξανόμενη επιβάρυνση). Δεν συγκρίνεται αριθμητικά απευθείας με τον EAQI.'],
+      ['Γύρη', 'Πιθανή έκθεση σε αλλεργιογόνα', 'Κόκκοι ανά κυβικό μέτρο αέρα (κόκκοι/m³) για ελιά, αγρωστώδη κ.ά. Οι αντιδράσεις διαφέρουν ανά άνθρωπο και φυτό.'],
+      ['Δείκτης υπαίθρου', 'Πότε είναι προτιμότερο να βγεις', 'Ενδεικτικός συνδυασμός ποιότητας αέρα, γύρης και ηλιακής UV. Συγκρίνει ώρες, δεν είναι επίσημος ιατρικός δείκτης.'],
+      ['UV', 'Ένταση υπεριώδους ακτινοβολίας', '0–2 χαμηλή · 3–5 μέτρια · 6–7 υψηλή · 8–10 πολύ υψηλή · 11+ ακραία. Όσο ανεβαίνει, αυξάνεται η ανάγκη αντηλιακής προστασίας.'],
+      ['CO₂', 'Διοξείδιο άνθρακα έξω', 'Μονάδα ppm (μέρη ανά εκατομμύριο). Προέρχεται από ατμοσφαιρικό μοντέλο, όχι από μέτρηση μέσα στο σπίτι.'],
+      ['Σκόνη & AOD', 'Αφρικανική σκόνη και θολότητα', 'Η σκόνη κοντά στο έδαφος εμφανίζεται σε μg/m³. Το AOD είναι αδιάστατος δείκτης θολότητας όλης της ατμοσφαιρικής στήλης, όχι συγκέντρωση σκόνης στο έδαφος.'],
+      ['PM2.5 / PM10', 'Μικροσκοπικά αιωρούμενα σωματίδια', 'PM2.5: διάμετρος έως 2,5 μm · PM10: έως 10 μm. Μετρώνται σε μg/m³· η χαμηλότερη έκθεση είναι γενικά προτιμότερη.'],
+      ['O₃ / NO₂ / SO₂ / CO', 'Αέριοι ατμοσφαιρικοί ρύποι', 'O₃: όζον χαμηλής ατμόσφαιρας · NO₂: διοξείδιο αζώτου · SO₂: διοξείδιο θείου · CO: μονοξείδιο άνθρακα. Όλα εμφανίζονται σε μg/m³.'],
+      ['Όρια ΠΟΥ', 'Σύγκριση με κατευθυντήριες τιμές', 'Οι μπάρες συγκρίνουν προβλεπόμενη έκθεση με οδηγίες του ΠΟΥ για καθορισμένες περιόδους μέσου όρου. Δεν είναι ζωντανή μέτρηση ούτε άμεση διάγνωση κινδύνου.']
+    ]
+  } : {
+    title: 'Environmental indicators explained',
+    sub: 'What each number means and when to take care. Tap an indicator for a quick explanation.',
+    note: 'Values mainly come from regional forecast models, not a sensor at your address. They are not medical diagnoses.',
+    items: [
+      ['EAQI', 'European Air Quality Index', '0–20 good · 21–40 fair · 41–60 moderate · 61–80 poor · 81–100 very poor · over 100 extremely poor. Lower is better.'],
+      ['US AQI', 'US Air Quality Index', 'An alternative scale (0–50 good, 51–100 moderate, 101+ increasing pollution concern). Do not compare its numbers directly with EAQI.'],
+      ['Pollen', 'Potential allergen exposure', 'Grains per cubic metre of air (grains/m³), including olive and grass. Sensitivity varies by person and species.'],
+      ['Outdoor index', 'Better times to go outside', 'An indicative combination of air quality, pollen and UV. Helps compare hours; not an official medical index.'],
+      ['UV', 'Ultraviolet exposure', '0–2 low · 3–5 moderate · 6–7 high · 8–10 very high · 11+ extreme. Higher values call for greater sun protection.'],
+      ['CO₂', 'Outdoor carbon dioxide', 'Shown in ppm (parts per million). Modelled outdoor concentration, not a measurement inside your home.'],
+      ['Dust & AOD', 'Saharan dust and haze', 'Near-surface dust in μg/m³. AOD measures total-column atmospheric haze; it is not ground-level dust concentration.'],
+      ['PM2.5 / PM10', 'Airborne fine particles', 'Particles up to 2.5 μm / 10 μm across. Concentrations in μg/m³; lower exposure is generally preferable.'],
+      ['O₃ / NO₂ / SO₂ / CO', 'Gaseous air pollutants', 'Ground-level ozone, nitrogen dioxide, sulphur dioxide and carbon monoxide, each shown in μg/m³.'],
+      ['WHO guidelines', 'Context for pollutant bars', 'Bars compare forecast concentrations against WHO guideline levels defined for specific averaging periods, not against instantaneous safe/unsafe cutoffs.']
+    ]
+  };
+  const guideHtml = `<section class="mx-env-guide" aria-label="${guide.title}" style="margin-bottom:18px;padding:clamp(16px,2vw,24px);border:1px solid var(--border,rgba(140,160,180,.2));border-radius:20px;background:var(--card,rgba(127,150,170,.06))">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px"><span aria-hidden="true" style="font-size:23px">🌍</span><h2 style="margin:0;font-size:clamp(19px,2vw,24px);letter-spacing:-.03em">${guide.title}</h2></div>
+    <p class="env-meta" style="margin:0 0 16px">${guide.sub}</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:9px">
+      ${guide.items.map(([abbr,title,desc]) => `<details style="min-width:0;border:1px solid var(--border,rgba(140,160,180,.18));border-radius:12px;padding:12px;background:var(--bg,rgba(127,150,170,.045))"><summary style="cursor:pointer;list-style:revert;font-weight:700;line-height:1.5"><span style="font-weight:800">${abbr}</span><span style="display:block;font-size:12px;font-weight:450;opacity:.78">${title}</span></summary><p style="font-size:13px;line-height:1.65;margin:10px 0 0">${desc}</p></details>`).join('')}
+    </div><p class="env-meta" style="margin:13px 0 0;font-size:12px">${guide.note}</p>
+  </section>`;
+  return `${guideHtml}<div class="env-air-layout mx-airtop">
   <article class="card env env-air mx-aircard mx-ab${b ?? 'x'}"><div class="minihead"><h3 class="label">${C.air}</h3><span class="aqdot aq${b ?? 'x'}"></span></div>
     <div class="mx-gauge"><svg viewBox="0 0 120 70" aria-hidden="true"><defs><linearGradient id="mx-aqg" x1="0" x2="1"><stop offset="0" stop-color="var(--aq0)"/><stop offset=".25" stop-color="var(--aq1)"/><stop offset=".5" stop-color="var(--aq2)"/><stop offset=".7" stop-color="var(--aq3)"/><stop offset=".85" stop-color="var(--aq4)"/><stop offset="1" stop-color="var(--aq5)"/></linearGradient></defs>
       <path d="M10 62 A50 50 0 0 1 110 62" fill="none" stroke="url(#mx-aqg)" stroke-width="10" stroke-linecap="round"/>
