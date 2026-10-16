@@ -400,7 +400,7 @@ function render(data, options = {}) {
 <article id="synoptic" class="card mx-block"><div class="panelhead"><h3>${c.syn}</h3><span class="env-meta">${c.synSub}</span></div><div id="mx-synoptic">${synInner()}</div></article>
 <article class="card mx-block"><div class="panelhead"><h3>${c.pressureChart}</h3><span class="env-meta">hPa · <span class="mx-hc">●</span> ${c.high} · <span class="mx-lc">●</span> ${c.low}</span></div>${lineChart(S.rows, 'pressure', sec, 'hPa', 1)}</article>
 <article id="vertical-profile" class="card env-profile mx-block"><div class="panelhead"><h3>${c.profile}</h3><span class="env-meta">${c.profileSub}</span></div>
-  <details class="mx-atmo-explain" style="margin:12px 0 18px;border:1px solid var(--line,rgba(140,160,180,.3));border-radius:14px;padding:13px 15px;background:var(--soft,transparent)">
+  <details id="mx-atmo-help" class="mx-atmo-explain" style="margin:12px 0 18px;border:1px solid var(--line,rgba(140,160,180,.3));border-radius:14px;padding:13px 15px;background:var(--soft,transparent)">
     <summary style="cursor:pointer;font-weight:750;line-height:1.6">${X.title}</summary>
     <p class="env-copy">${X.intro}</p><ul style="padding-left:22px;line-height:1.85;font-size:13px">${X.levels.map(t => `<li>${t}</li>`).join('')}</ul>
     <p class="env-meta">${X.physical}</p><p class="env-meta">${X.unit}</p>
