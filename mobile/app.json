@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "MONO Kairos",
+    "slug": "mono-kairos-mobile",
+    "scheme": "monokairos",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#f7f7f5",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mariodinakus.monokairos",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Το MONO χρησιμοποιεί την τοποθεσία μόνο όταν ζητάς GPS, για τον καιρό στην περιοχή σου."
+      }
+    },
+    "android": {
+      "package": "com.mariodinakus.monokairos",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#f7f7f5"
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Το MONO χρησιμοποιεί το GPS μόνο με την άδειά σου για την τοπική πρόγνωση."
+        }
+      ]
+    ],
+    "extra": {
+      "siteUrl": "https://monokairos.vercel.app/"
+    }
+  }
+}
