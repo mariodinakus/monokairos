@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { DEFAULT_ALERTS, saveAlertPrefs, syncForecastAlerts, scheduledMonoAlerts, cancelMonoForecastAlerts } from './LocalAlertService';
 
 const KEY = 'mono_mobile_alert_options_v1';
 const OPTIONS = [
@@ -11,7 +12,7 @@ const OPTIONS = [
   {id:'daily',icon:'☀',name:'Πρωινή πρόγνωση',desc:'Μια ημερήσια σύνοψη'},
   {id:'air',icon:'◌',name:'Ατμοσφαιρική ποιότητα',desc:'Σκόνη, ρύπανση, γύρη'},
 ];
-const DEFAULTS = Object.fromEntries(OPTIONS.map(x=>[x.id,false]));
+const DEFAULTS = DEFAULT_ALERTS;
 const BG='#f7f9fc',INK='#0f2038',BLUE='#3177d4';
 Notifications.setNotificationHandler({
   handleNotification: async()=>({
@@ -20,6 +21,9 @@ Notifications.setNotificationHandler({
 });
 export default function NotificationSettings({visible,onClose}) {
  const [prefs,setPrefs]=useState(DEFAULTS), [ready,setReady]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ const [queued,setQueued]=useState([]),[forecastBusy,setForecastBusy]=useState(false);
+ const refreshList=useCallback(()=>scheduledMonoAlerts().then(setQueued).catch(()=>{}),[]);
+ useEffect(()=>{if(visible)refreshList()},[visible,refreshList]);
  useEffect(()=>{ let alive=true;
   AsyncStorage.getItem(KEY).then(raw=>{
    if(raw && alive){ const data=JSON.parse(raw);
@@ -29,8 +33,23 @@ export default function NotificationSettings({visible,onClose}) {
   return()=>{alive=false}
  },[]);
  const setOption=useCallback((id,value)=>{
-  setPrefs(current=>{const next={...current,[id]:value};AsyncStorage.setItem(KEY,JSON.stringify(next)).catch(()=>{});return next;});
+  setPrefs(current=>{const next={...current,[id]:value};
+    saveAlertPrefs(next).then(async()=>{if(!Object.values(next).some(Boolean))await cancelMonoForecastAlerts();
+      else { try{await syncForecastAlerts()}catch{} }
+      refreshList();
+    }).catch(()=>{});
+    return next;});
  },[]);
+ const refreshForecast=async()=>{
+   setForecastBusy(true);setMessage('');
+   try{
+     const result=await syncForecastAlerts({requestPermissions:true,refreshLocation:true});
+     await refreshList();
+     setMessage(result.count+' ειδοποιήσεις προγραμματίστηκαν από την τρέχουσα πρόγνωση για έως 48 ώρες.'+
+       (result.warning?' '+result.warning:''));
+   }catch(e){setMessage('Δεν ενεργοποιήθηκαν οι προγνωστικές ειδοποιήσεις: '+String(e?.message||e).slice(0,150))}
+   finally{setForecastBusy(false)}
+ };
  const testLocal=async()=>{
   setBusy(true);setMessage('');
   try {
@@ -54,11 +73,23 @@ export default function NotificationSettings({visible,onClose}) {
     <View style={s.card}>{OPTIONS.map((o,i)=><View key={o.id} style={[s.option,i>0&&s.border]}>
      <View style={s.icon}><Text style={s.iconText}>{o.icon}</Text></View><View style={s.words}><Text style={s.name}>{o.name}</Text><Text style={s.desc}>{o.desc}</Text></View>
      <Switch accessibilityLabel={o.name} value={!!prefs[o.id]} disabled={!ready} onValueChange={v=>setOption(o.id,v)} trackColor={{false:'#d4d9e0',true:'#8bb8ed'}} thumbColor={prefs[o.id]?BLUE:'#f7f7f7'}/></View>)}</View>
-    <View style={s.warning}><Text style={s.warningTitle}>Απομακρυσμένες ειδοποιήσεις: όχι ακόμη ενεργές</Text>
-      <Text style={s.warningText}>Η σύνδεση Firebase Cloud Messaging v1, το Expo EAS project, η ασφαλής καταχώριση συσκευών και ο server αποστολής απαιτούν διαμόρφωση πριν λειτουργήσουν ειδοποιήσεις με κλειστή εφαρμογή. Οι διακόπτες δεν τις ενεργοποιούν μόνοι τους.</Text></View>
+    <View style={s.info}><Text style={s.infoTitle}>Τοπικές ειδοποιήσεις πρόγνωσης</Text>
+      <Text style={s.infoText}>Με την άδειά σου, το MONO διαβάζει την πρόγνωση Open-Meteo για την περιοχή σου και προγραμματίζει ειδοποιήσεις έως 48 ώρες μπροστά. Θα εμφανίζονται και αν κλείσεις την εφαρμογή, αλλά δεν ενημερώνονται όσο παραμένει κλειστή.</Text></View>
+    <Pressable accessibilityRole="button" disabled={forecastBusy||!ready} style={s.test} onPress={refreshForecast}>
+      {forecastBusy?<ActivityIndicator color="#fff"/>:<Text style={s.testLabel}>ΕΝΕΡΓΟΠΟΙΗΣΗ / ΑΝΑΝΕΩΣΗ ΠΡΟΓΝΩΣΗΣ  ↗</Text>}
+    </Pressable>
+    <Text style={[s.section,{marginTop:18}]}>ΕΠΟΜΕΝΕΣ ΠΡΟΓΡΑΜΜΑΤΙΣΜΕΝΕΣ ({queued.length})</Text>
+    <View style={s.card}>{queued.length===0?
+      <Text style={[s.desc,{padding:15}]}>Δεν υπάρχουν ακόμη προγραμματισμένες ειδοποιήσεις. Ενεργοποίησε τουλάχιστον μία κατηγορία και πάτησε το κουμπί παραπάνω.</Text>:
+      queued.slice(0,6).map((q,i)=><View key={q.identifier} style={[s.option,i>0&&s.border]}>
+        <View style={s.words}><Text style={s.name}>{q.content.title}</Text>
+        <Text style={s.desc}>{new Date(Number(q.content?.data?.when)).toLocaleString('el-GR')}</Text></View>
+      </View>)}</View>
+    <View style={s.warning}><Text style={s.warningTitle}>Συνεχώς ενημερωμένα push: εκκρεμούν</Text>
+      <Text style={s.warningText}>Για νέες προειδοποιήσεις ενώ η εφαρμογή παραμένει κλειστή, χρειάζονται Firebase FCM v1, EAS credentials, αποθήκευση συνδρομών και περιοδικός server ελέγχου. Αυτό δεν είναι ακόμη ενεργό.</Text></View>
     <Pressable disabled={busy} accessibilityRole="button" style={s.test} onPress={testLocal}>{busy?<ActivityIndicator color="#fff"/>:<Text style={s.testLabel}>ΔΟΚΙΜΗ ΤΟΠΙΚΗΣ ΕΙΔΟΠΟΙΗΣΗΣ  ↗</Text>}</Pressable>
     {!!message&&<Text style={s.result}>{message}</Text>}
-    <Text style={s.foot}>Οι πραγματικές προβλέψεις και επίσημες προειδοποιήσεις συνεχίζουν να εμφανίζονται στο MONO. Η τοπική δοκιμή δεν χρησιμοποιεί πραγματικά μετεωρολογικά δεδομένα.</Text>
+    <Text style={s.foot}>Οι προγραμματισμένες ειδοποιήσεις είναι εκτιμήσεις μοντέλου από τη στιγμή της ανανέωσης, όχι επίσημες προειδοποιήσεις της ΕΜΥ. Η δοκιμαστική ειδοποίηση δεν χρησιμοποιεί δεδομένα καιρού.</Text>
    </ScrollView>
   </View>
  </Modal>;
