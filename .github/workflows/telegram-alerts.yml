@@ -1,8 +1,6 @@
 name: Telegram alerts
 
 on:
-  schedule:
-    - cron: '7,22,37,52 * * * *'  # 15-minute checks, shifted away from the top of the hour; best-effort, not guaranteed
   workflow_dispatch:
     inputs:
       test:
@@ -20,6 +18,8 @@ permissions:
 
 jobs:
   alerts:
+    # Paused by owner: remove this condition to re-enable Telegram alerts.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
