@@ -2080,17 +2080,23 @@ function applyGlobeData() {
   globe.ringsData(G.filter(p => (p.precip ?? 0) >= 0.1));
   const html = state.gLayers.temps ? globePoints() : [];
   if (state.probe) html.push({ probe: true, c: { lat: state.probe.lat, lon: state.probe.lon } });
-  globe.htmlElementsData(html);
+  const markers=window.MONOEarthGlobe ? window.MONOEarthGlobe.embellish(state.lang,html) : html;
+  globe.htmlElementsData(markers);
+  if(window.MONOEarthGlobe)window.MONOEarthGlobe.sync(globe);
 }
 function updateGlobeCtl() {
   const set = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
   set('#globeCtl', globeCtl()); set('#globeFresh', globeFresh()); set('#globeLegend', globeLegend()); set('#globeProbe', probeCard());
+  if(window.MONOEarthGlobe){set('#earthGlobeCtl',window.MONOEarthGlobe.toolbar(state.lang));set('#earthGlobeSide',window.MONOEarthGlobe.info(state.lang));set('#earthGlobeTime',window.MONOEarthGlobe.timeline(state.lang));}
   applyGlobeData();
 }
 function globePage() {
-  return header(T('globeTitle'), T('globeSub')) + `<div class="earth-globe-cta"><button class="outline-btn" data-action="goto" data-page="earth">◈ ${T('earth')} · ENSO / NAO / MJO ↗</button></div><div id="globeCtl">${globeCtl()}</div>
-    <div class="card globecard"><div id="globe" class="globe"></div><div id="globeProbe" class="gprobe-wrap">${probeCard()}</div><div id="globeLegend">${globeLegend()}</div></div>
-    <section class="section card" id="globeFresh">${globeFresh()}</section>`;
+  return header(T('globeTitle'), T('globeSub')) + `<div class="earth-globe-cta"><button class="outline-btn" data-action="goto" data-page="earth">◈ ${T('earth')} · ENSO / NAO / MJO ↗</button></div>
+    <section id="earthGlobeCtl"></section>
+    <details class="earth-globe-details"><summary>${state.lang==='el'?'Δορυφόρος, καιρικά επίπεδα & περιστροφή':'Satellite, weather layers & rotation'}</summary><div id="globeCtl">${globeCtl()}</div></details>
+    <div class="earth-globe-split"><div class="card globecard earth-globecard"><div id="globe" class="globe"></div><div id="globeProbe" class="gprobe-wrap">${probeCard()}</div><div id="globeLegend">${globeLegend()}</div></div><aside id="earthGlobeSide" class="earth-globe-side"></aside></div>
+    <section class="earth-timeline" id="earthGlobeTime"></section>
+    <details class="earth-globe-details"><summary>${state.lang==='el'?'Χρόνοι ενημέρωσης πηγών':'Source update times'}</summary><section class="card" id="globeFresh">${globeFresh()}</section></details>`;
 }
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.integrity = 'sha384-UIZDw6UdEIau7arIrg1Ug9IeMaLlfIHHF6awQRUsvId92iYakt5KLbHNEDQJF5QP'; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
 async function mountGlobe() {
@@ -2108,6 +2114,7 @@ async function mountGlobe() {
       .onGlobeClick(({ lat, lng }) => probeAt(lat, lng))
       .htmlLat(p => p.c.lat).htmlLng(p => p.c.lon).htmlAltitude(p => (p.probe ? 0.02 : 0.01))
       .htmlElement(p => {
+        if(p.earth && window.MONOEarthGlobe)return window.MONOEarthGlobe.makeMarker(p.marker,state.lang);
         const d = document.createElement(p.probe ? 'div' : 'button');
         if (p.probe) { d.className = 'gpin'; d.innerHTML = '<i></i>'; return d; }
         d.className = 'gchip' + (p.me ? ' me' : ''); d.style.setProperty('--c', tempColor(p.t)); d.innerHTML = `<b>${deg(p.t)}</b><span>${esc(cityName(p.c))}</span>`;
@@ -2120,6 +2127,7 @@ async function mountGlobe() {
     applyGlobeData();
     paintGlobe();
     fetchGrid().then(() => updateGlobeCtl());
+    if(window.MONOEarth)window.MONOEarth.load(false).then(()=>{if(globe && $('#globe'))updateGlobeCtl();});
   } catch { const g = $('#globe'); if (g) g.innerHTML = `<div class="placeholder">${T('gFail')}</div>`; }
 }
 function refreshGlobe(force) { if (!globe) return; imergCache = force ? null : imergCache; paintGlobe(); fetchGrid(force).then(() => updateGlobeCtl()); loadCityLive(); }
@@ -2419,17 +2427,33 @@ async function loadCityLive() {
       const d = await getJSON(q(OM, { latitude: b.map(c => c.lat).join(','), longitude: b.map(c => c.lon).join(','), current: 'temperature_2m,weather_code,is_day', timezone: 'UTC' }));
       const arr = Array.isArray(d) ? d : [d]; b.forEach((c, j) => (state.cityLive[ckey(c)] = { current: arr[j]?.current, at: Date.now() }));
     } catch { b.forEach(c => (state.cityLive[ckey(c)] = { error: true, at: Date.now() })); }
-    if (state.page === 'cities') render(); else { navRender(); if (state.page === 'globe') updateGlobeCtl(); }
+    if (state.page === 'cities') render(); else { navRender(); if (state.page === 'globe' || state.page === 'earth') updateGlobeCtl(); }
   }
 }
 
 /* ------------------------------------------------------------------ shell */
+const NAV_GROUPS = [
+  {id:'weather',el:'ΚΑΙΡΟΣ',en:'WEATHER',symbol:'◐',pages:['now','guide','hourly','rain','radar','maps']},
+  {id:'earth',el:'ΓΗ & ΚΛΙΜΑ',en:'EARTH & CLIMATE',symbol:'◈',pages:['globe','earth','phen','climate','environment']},
+  {id:'data',el:'ΔΕΔΟΜΕΝΑ & ΕΡΓΑΛΕΙΑ',en:'DATA & TOOLS',symbol:'▤',pages:['models','lab','stations','news','cities']},
+  {id:'space',el:'ΔΙΑΣΤΗΜΑ',en:'SPACE',symbol:'☄',pages:['space']}
+];
+const NAV_OPEN_KEY='mono-nav-groups-v1';
+let navOpen=read(NAV_OPEN_KEY,{weather:true,earth:true,data:false,space:false});
+if(!navOpen || typeof navOpen!=='object') navOpen={weather:true,earth:true,data:false,space:false};
 const NAV = [['now', '◐'], ['guide', '☷'], ['maps','▱'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['earth', '◈'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
 const TABS = ['now', 'guide', 'rain', 'radar', 'globe'];
 function navRender() {
   document.documentElement.lang = state.lang; document.documentElement.dataset.theme = state.theme;
   $('#search').placeholder = T('search'); $('#theme').textContent = state.theme === 'dark' ? '☀' : '☾'; $('#language').textContent = state.lang === 'el' ? 'ΕΛ / EN' : 'EN / ΕΛ';
-  $('#nav').innerHTML = NAV.map(([p, i]) => `<button class="navbtn ${state.page === p ? 'active' : ''}" data-action="goto" data-page="${p}"><span class="navico">${i}</span>${T(p)}</button>`).join('');
+  const navQuery=($('#navFilter')?.value||'').toLocaleLowerCase(state.lang==='el'?'el-GR':'en-US').trim();
+  $('#nav').innerHTML = NAV_GROUPS.map(group=>{
+    const pages=group.pages.map(p=>({p,i:NAV.find(n=>n[0]===p)?.[1]||'•',text:T(p)}))
+      .filter(x=>!navQuery || x.text.toLocaleLowerCase(state.lang==='el'?'el-GR':'en-US').includes(navQuery));
+    if(!pages.length)return '';
+    const expanded=!!navQuery || !!navOpen[group.id] || group.pages.includes(state.page);
+    return `<section class="nav-group"><button type="button" class="nav-group-toggle" data-action="navGroup" data-v="${group.id}" aria-expanded="${expanded}"><span>${group.symbol}</span><strong>${esc(state.lang==='el'?group.el:group.en)}</strong><small>${pages.length}</small><i>${expanded?'⌄':'›'}</i></button><div class="nav-group-items ${expanded?'':'nav-collapsed'}">${pages.map(({p,i,text})=>`<button class="navbtn ${state.page===p?'active':''}" data-action="goto" data-page="${p}"><span class="navico">${i}</span>${text}</button>`).join('')}</div></section>`;
+  }).join('');
   $('#sideCities').innerHTML = state.favorites.map(c => { const v = state.cityLive[ckey(c)]; return `<button data-action="city" data-id="${ckey(c)}" class="citylink ${ckey(c) === ckey(state.city) ? 'active' : ''}"><b>${esc(cityName(c))}</b><small>${v?.current ? deg(v.current.temperature_2m) : ''}</small></button>`; }).join('');
   document.querySelectorAll('[data-i18n]').forEach(n => (n.textContent = T(n.dataset.i18n)));
   const V = state.view;
@@ -2440,7 +2464,7 @@ function render() {
   navRender();
   if (state.page === 'maps' && MonoForecast.isMounted(forecastOptions())) { MonoForecast.update(forecastOptions()); return; }
   if (state.page === 'radar' && map && $('#map')) return;   // keep the live map running
-  if (state.page === 'globe' && globe && $('#globe')) { updateGlobeCtl(); return; }
+  if ((state.page === 'globe' || state.page === 'earth') && globe && $('#globe')) { updateGlobeCtl(); return; }
   const pages = { maps: forecastPage, guide: guidePage, now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, environment: environmentPage, space: spacePage, radar: radarPage, globe: globePage, earth: () => window.MONOEarth.page(state.lang), models: modelsPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
   const y = window.scrollY;
   const openEnvDetails = [...document.querySelectorAll('.environment-section details[open]')].map(el => el.id);
@@ -2452,7 +2476,7 @@ function render() {
   const r = $('#selHour'); if (r) r.addEventListener('input', e => { state.sel = +e.target.value; const yy = window.scrollY; render(); window.scrollTo(0, yy); $('#selHour')?.focus(); });
   if (state.page === 'maps') MonoForecast.mount(forecastOptions(),loadLeaflet);
   if (state.page === 'radar') mountRadar();
-  if (state.page === 'globe') mountGlobe();
+  if (state.page === 'globe' || state.page === 'earth') mountGlobe();
   if (state.page === 'earth') window.MONOEarth.mount(state.lang);
 }
 let toastT;
@@ -2460,7 +2484,8 @@ function toast(m) { const n = $('#toast'); n.textContent = m; n.classList.add('s
 function goto(p) {
   if (p !== 'maps') MonoForecast.destroy();
   if (p !== 'radar') killMap();
-  if (p !== 'globe') killGlobe();
+  if (p !== state.page || (p !== 'globe' && p !== 'earth')) killGlobe();
+  const grp=NAV_GROUPS.find(g=>g.pages.includes(p)); if(grp)navOpen[grp.id]=true;
   state.page = p; $('.sidebar').classList.remove('open');
   try { history.replaceState(null, '', '#' + p); } catch {}
   render(); window.scrollTo(0, 0);
@@ -2524,6 +2549,7 @@ function onClick(e) {
   if (a === 'goto') goto(b.dataset.page);
   else if (a === 'envJump') document.getElementById(b.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   else if (a === 'menu') $('.sidebar').classList.toggle('open');
+  else if (a === 'navGroup') { const key=b.dataset.v; if(NAV_GROUPS.some(g=>g.id===key)){navOpen[key]=!navOpen[key];write(NAV_OPEN_KEY,navOpen);navRender();} }
   else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); }
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
   else if (a === 'retrain') ensureTraining(state.city, state.gen, true);
@@ -2545,6 +2571,8 @@ function onClick(e) {
   else if (a === 'radarHome' && map) { map.setView([state.city.lat,state.city.lon],8); map.invalidateSize(); }
   else if (a === 'radarStyle') { state.radarBasemap=state.radarBasemap==='street'?'satellite':'street';persistUI();setRadarBasemap(); }
   else if (a === 'radarReload') { killMap(); mountRadar(); }
+  else if (a === 'eLayer' && window.MONOEarthGlobe) {window.MONOEarthGlobe.toggle(b.dataset.v);updateGlobeCtl();}
+  else if (a === 'eOpenImpact' && window.MONOEarthGlobe) {const id=b.dataset.v;goto('earth');window.MONOEarthGlobe.openImpact(id);}
   else if (a === 'gBase') { state.gBase = b.dataset.v; persistUI(); paintGlobe(); render(); }
   else if (a === 'gLayer') { const k = b.dataset.v; state.gLayers[k] = !state.gLayers[k]; persistUI(); if (k === 'radar' || k === 'rain') paintGlobe(); if (k === 'grid' && state.gLayers.grid) fetchGrid().then(() => updateGlobeCtl()); render(); }
   else if (a === 'gSpin') { state.gSpin = !state.gSpin; if (globe) globe.controls().autoRotate = state.gSpin; render(); }
@@ -2556,6 +2584,9 @@ function onClick(e) {
 }
 function init() {
   document.addEventListener('click', onClick);
+  window.MONOEarthGlobe.onRefresh=()=>{if((state.page==='earth'||state.page==='globe') && globe && $('#globe'))updateGlobeCtl();};
+  document.addEventListener('change',e=>{if(e.target.id==='eYearRange'){window.MONOEarthGlobe.setYear(e.target.value);updateGlobeCtl();}});
+  $('#navFilter')?.addEventListener('input',()=>navRender());
   $('#language').addEventListener('click', () => { state.lang = state.lang === 'el' ? 'en' : 'el'; persist(); killMap(); killGlobe(); render(); localizePlaces(); });
   $('#theme').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; persist(); killMap(); killGlobe(); render(); });
   $('#refreshBtn').addEventListener('click', () => { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); });
@@ -2578,7 +2609,7 @@ function init() {
   loadNews();
   setInterval(() => { if (document.visibilityState === 'visible') loadNews(); }, NEWS_TTL);
   setInterval(() => { if (document.visibilityState === 'visible') loadAll(false); }, REFRESH_LIVE);
-  setInterval(() => { if (state.page === 'globe') globeTick(); if (document.visibilityState === 'visible' && state.view && state.page !== 'radar' && state.page !== 'globe') { recompute(); render(); } }, 60e3);
+  setInterval(() => { if (state.page === 'globe' || state.page === 'earth') globeTick(); if (document.visibilityState === 'visible' && state.view && state.page !== 'radar' && state.page !== 'globe') { recompute(); render(); } }, 60e3);
 }
 init();
 if (!cacheAllowed()) {
