@@ -2441,6 +2441,8 @@ const NAV_GROUPS = [
 const NAV_OPEN_KEY='mono-nav-groups-v1';
 let navOpen=read(NAV_OPEN_KEY,{weather:true,earth:true,data:false,space:false});
 if(!navOpen || typeof navOpen!=='object') navOpen={weather:true,earth:true,data:false,space:false};
+const activeNavGroup=NAV_GROUPS.find(g=>g.pages.includes(state.page));
+if(activeNavGroup)navOpen[activeNavGroup.id]=true;
 const NAV = [['now', '◐'], ['guide', '☷'], ['maps','▱'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['earth', '◈'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
 const TABS = ['now', 'guide', 'rain', 'radar', 'globe'];
 function navRender() {
@@ -2451,7 +2453,7 @@ function navRender() {
     const pages=group.pages.map(p=>({p,i:NAV.find(n=>n[0]===p)?.[1]||'•',text:T(p)}))
       .filter(x=>!navQuery || x.text.toLocaleLowerCase(state.lang==='el'?'el-GR':'en-US').includes(navQuery));
     if(!pages.length)return '';
-    const expanded=!!navQuery || !!navOpen[group.id] || group.pages.includes(state.page);
+    const expanded=!!navQuery || !!navOpen[group.id];
     return `<section class="nav-group"><button type="button" class="nav-group-toggle" data-action="navGroup" data-v="${group.id}" aria-expanded="${expanded}"><span>${group.symbol}</span><strong>${esc(state.lang==='el'?group.el:group.en)}</strong><small>${pages.length}</small><i>${expanded?'⌄':'›'}</i></button><div class="nav-group-items ${expanded?'':'nav-collapsed'}">${pages.map(({p,i,text})=>`<button class="navbtn ${state.page===p?'active':''}" data-action="goto" data-page="${p}"><span class="navico">${i}</span>${text}</button>`).join('')}</div></section>`;
   }).join('');
   $('#sideCities').innerHTML = state.favorites.map(c => { const v = state.cityLive[ckey(c)]; return `<button data-action="city" data-id="${ckey(c)}" class="citylink ${ckey(c) === ckey(state.city) ? 'active' : ''}"><b>${esc(cityName(c))}</b><small>${v?.current ? deg(v.current.temperature_2m) : ''}</small></button>`; }).join('');
@@ -2572,7 +2574,7 @@ function onClick(e) {
   else if (a === 'radarStyle') { state.radarBasemap=state.radarBasemap==='street'?'satellite':'street';persistUI();setRadarBasemap(); }
   else if (a === 'radarReload') { killMap(); mountRadar(); }
   else if (a === 'eLayer' && window.MONOEarthGlobe) {window.MONOEarthGlobe.toggle(b.dataset.v);updateGlobeCtl();}
-  else if (a === 'eOpenImpact' && window.MONOEarthGlobe) {const id=b.dataset.v;goto('earth');window.MONOEarthGlobe.openImpact(id);}
+  else if (a === 'eOpenImpact' && window.MONOEarthGlobe) {const val=b.dataset.v||'',sep=val.indexOf(':'),factor=sep>=0?val.slice(0,sep):'enso',id=sep>=0?val.slice(sep+1):val;goto('earth');window.MONOEarthGlobe.openImpact(factor,id);}
   else if (a === 'gBase') { state.gBase = b.dataset.v; persistUI(); paintGlobe(); render(); }
   else if (a === 'gLayer') { const k = b.dataset.v; state.gLayers[k] = !state.gLayers[k]; persistUI(); if (k === 'radar' || k === 'rain') paintGlobe(); if (k === 'grid' && state.gLayers.grid) fetchGrid().then(() => updateGlobeCtl()); render(); }
   else if (a === 'gSpin') { state.gSpin = !state.gSpin; if (globe) globe.controls().autoRotate = state.gSpin; render(); }
