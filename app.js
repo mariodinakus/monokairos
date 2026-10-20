@@ -2444,7 +2444,43 @@ if(!navOpen || typeof navOpen!=='object') navOpen={weather:true,earth:true,data:
 const activeNavGroup=NAV_GROUPS.find(g=>g.pages.includes(state.page));
 if(activeNavGroup)navOpen[activeNavGroup.id]=true;
 const NAV = [['now', '◐'], ['guide', '☷'], ['maps','▱'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['earth', '◈'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
-const TABS = ['now', 'guide', 'rain', 'radar', 'globe'];
+/* Mobile navigation shows sections, never a crowded row of individual pages. */
+const MOBILE_NAV_LABELS={
+  el:{weather:'Καιρός',earth:'Γη',data:'Εργαλεία',space:'Διάστημα',choose:'Επίλεξε ενότητα',current:'Τώρα εδώ',close:'Κλείσιμο',open:'Άνοιγμα'},
+  en:{weather:'Weather',earth:'Earth',data:'Tools',space:'Space',choose:'Choose a section',current:'Current page',close:'Close',open:'Open'}
+};
+let mobileCategoryOpen=null;
+function mobileNavRender(){
+  const language=state.lang==='en'?'en':'el', t=MOBILE_NAV_LABELS[language];
+  const selected=NAV_GROUPS.find(group=>group.pages.includes(state.page));
+  const bar=$('#tabbar'); if(!bar)return;
+  bar.innerHTML=NAV_GROUPS.map(group=>{
+    const label=t[group.id],open=mobileCategoryOpen===group.id;
+    return `<button type="button" class="mobile-group-tab ${selected?.id===group.id?'active':''} ${open?'sheet-active':''}" data-action="mobileGroup" data-v="${group.id}" aria-expanded="${open}" aria-controls="mobileNavSheet" aria-label="${t[open?'close':'open']} ${esc(label)}"><span class="mobile-tab-icon" aria-hidden="true">${group.symbol}</span><span class="mobile-tab-label">${esc(label)}</span></button>`;
+  }).join('');
+  const scrim=$('#mobileNavScrim'), sheet=$('#mobileNavSheet');
+  if(!scrim||!sheet)return;
+  const group=NAV_GROUPS.find(g=>g.id===mobileCategoryOpen);
+  const visible=!!group && window.innerWidth<=930;
+  scrim.classList.toggle('hidden',!visible);
+  sheet.classList.toggle('hidden',!visible);
+  sheet.setAttribute('aria-hidden',String(!visible));
+  document.body.classList.toggle('mobile-sheet-open',visible);
+  if(!visible){sheet.innerHTML='';return;}
+  sheet.setAttribute('aria-label',t[group.id]+' – '+t.choose);
+  sheet.innerHTML=`<div class="mobile-nav-sheet-head"><div class="mobile-nav-sheet-heading"><span class="mobile-nav-sheet-symbol" aria-hidden="true">${group.symbol}</span><div><h2 class="mobile-nav-sheet-title">${esc(t[group.id])}</h2><p class="mobile-nav-sheet-description">${esc(t.choose)}</p></div></div><button type="button" class="mobile-nav-dismiss" data-action="mobileNavClose" aria-label="${esc(t.close)}">×</button></div><div class="mobile-nav-links">${group.pages.map(p=>{
+    const ico=NAV.find(n=>n[0]===p)?.[1]||'•',active=state.page===p;
+    return `<button type="button" class="mobile-nav-link ${active?'active':''}" data-action="goto" data-page="${p}" ${active?'aria-current="page"':''}><span class="mobile-nav-link-icon" aria-hidden="true">${ico}</span><span class="mobile-nav-link-text">${esc(T(p))}${active?`<small class="mobile-nav-link-current">${t.current}</small>`:''}</span></button>`;
+  }).join('')}</div>`;
+}
+function closeMobileNavigation(returnFocus=false){
+  const previous=mobileCategoryOpen;
+  mobileCategoryOpen=null;
+  mobileNavRender();
+  if(returnFocus && previous && window.innerWidth<=930){
+    $('#tabbar [data-v="'+previous+'"]')?.focus();
+  }
+}
 function navRender() {
   document.documentElement.lang = state.lang; document.documentElement.dataset.theme = state.theme;
   $('#search').placeholder = T('search'); $('#theme').textContent = state.theme === 'dark' ? '☀' : '☾'; $('#language').textContent = state.lang === 'el' ? 'ΕΛ / EN' : 'EN / ΕΛ';
@@ -2460,7 +2496,7 @@ function navRender() {
   document.querySelectorAll('[data-i18n]').forEach(n => (n.textContent = T(n.dataset.i18n)));
   const V = state.view;
   $('#status').textContent = state.snapshot ? T('cached') : V ? `${T('live')} · ${T('updated')} ${hhmm(state.fetchedAt || V.at)}` : T('loading');
-  $('#tabbar').innerHTML = TABS.map(p => `<button class="${state.page === p ? 'active' : ''}" data-action="goto" data-page="${p}"><span>${NAV.find(n => n[0] === p)[1]}</span>${T(p)}</button>`).join('') + `<button class="${TABS.includes(state.page) ? '' : 'active'}" data-action="menu"><span>☰</span>${T('more')}</button>`;
+  mobileNavRender();
 }
 function render() {
   navRender();
@@ -2488,6 +2524,7 @@ function goto(p) {
   if (p !== 'radar') killMap();
   if (p !== state.page || (p !== 'globe' && p !== 'earth')) killGlobe();
   const grp=NAV_GROUPS.find(g=>g.pages.includes(p)); if(grp)navOpen[grp.id]=true;
+  mobileCategoryOpen=null;
   state.page = p; $('.sidebar').classList.remove('open');
   try { history.replaceState(null, '', '#' + p); } catch {}
   render(); window.scrollTo(0, 0);
@@ -2549,8 +2586,17 @@ function onClick(e) {
   const b = e.target.closest('[data-action]'); if (!b) return;
   const a = b.dataset.action;
   if (a === 'goto') goto(b.dataset.page);
+  else if (a === 'mobileGroup') {
+    const key=b.dataset.v;
+    if(!NAV_GROUPS.some(g=>g.id===key))return;
+    mobileCategoryOpen=mobileCategoryOpen===key?null:key;
+    $('.sidebar').classList.remove('open');
+    mobileNavRender();
+    if(mobileCategoryOpen) $('#mobileNavSheet .mobile-nav-link')?.focus();
+  }
+  else if (a === 'mobileNavClose') closeMobileNavigation(true);
   else if (a === 'envJump') document.getElementById(b.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  else if (a === 'menu') $('.sidebar').classList.toggle('open');
+  else if (a === 'menu') { closeMobileNavigation(); $('.sidebar').classList.toggle('open'); }
   else if (a === 'navGroup') { const key=b.dataset.v; if(NAV_GROUPS.some(g=>g.id===key)){navOpen[key]=!navOpen[key];write(NAV_OPEN_KEY,navOpen);navRender();} }
   else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); }
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
@@ -2592,7 +2638,7 @@ function init() {
   $('#language').addEventListener('click', () => { state.lang = state.lang === 'el' ? 'en' : 'el'; persist(); killMap(); killGlobe(); render(); localizePlaces(); });
   $('#theme').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; persist(); killMap(); killGlobe(); render(); });
   $('#refreshBtn').addEventListener('click', () => { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); });
-  $('#mobileMenu').addEventListener('click', e => { e.stopPropagation(); $('.sidebar').classList.toggle('open'); });
+  $('#mobileMenu').addEventListener('click', e => { e.stopPropagation(); closeMobileNavigation(); $('.sidebar').classList.toggle('open'); });
   $('#geoBtn').addEventListener('click', () => locate(false));
   $('#search').addEventListener('input', e => { clearTimeout(searchT); searchT = setTimeout(() => geocode(e.target.value), 300); });
   $('#search').addEventListener('keydown', e => { if (e.key === 'Escape') $('#results').classList.add('hidden'); if (e.key === 'Enter') { e.preventDefault(); $('#results [data-action=city]')?.click(); } });
@@ -2600,7 +2646,8 @@ function init() {
     if (!e.target.closest('.search-area')) $('#results').classList.add('hidden');
     if (!e.target.closest('.sidebar') && !e.target.closest('[data-action=menu]') && !e.target.closest('#mobileMenu')) $('.sidebar').classList.remove('open');
   });
-  document.addEventListener('keydown', e => { if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { e.preventDefault(); $('#search').focus(); } });
+  document.addEventListener('keydown', e => { if(e.key==='Escape' && mobileCategoryOpen){ e.preventDefault(); closeMobileNavigation(true); return; } if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { e.preventDefault(); $('#search').focus(); } });
+  window.addEventListener('resize',()=>{if(window.innerWidth>930 && mobileCategoryOpen)closeMobileNavigation();});
   let rz, lastW = window.innerWidth;
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if ((window.innerWidth < 640) !== (lastW < 640) && state.page !== 'radar' && state.page !== 'globe') render(); lastW = window.innerWidth; }, 200); });
   if (!NAV.some(n => n[0] === state.page)) state.page = 'now';
