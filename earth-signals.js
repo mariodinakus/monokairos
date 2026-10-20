@@ -189,7 +189,7 @@
   }
   function openRegion(f,id) {
     if (!regionData(f,id,'el'))return;
-    factor=f;area=id;polarity=(reading?.roni?.at(-1)?.value ?? 0)<-.5?'la':'el';
+    factor=f;area=id;polarity=f==='enso' && (reading?.roni?.at(-1)?.value ?? 0)<-.5?'la':'el';
     renderExplorer();
     $('earth-explorer')?.scrollIntoView({behavior:'smooth',block:'nearest'});
   }
