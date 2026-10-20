@@ -62,6 +62,16 @@
       a.push({startLat:0,startLng:65,endLat:2,endLng:115,color:'#a48afb',name:'MJO eastward propagation (schematic)'});
       a.push({startLat:2,startLng:115,endLat:0,endLng:162,color:'#a48afb',name:'MJO continuation (schematic)'});
     }
+
+    var live=root.MONOEarth&&root.MONOEarth.latest();
+    if(enabled.storms && live && Array.isArray(live.storms))live.storms.forEach(function(q){
+      if(!Number.isFinite(q.movementDir) || !Number.isFinite(q.lat) || !Number.isFinite(q.lon))return;
+      var bearing=q.movementDir*Math.PI/180, radians=q.lat*Math.PI/180, delta=2*Math.PI/180;
+      var endLat=Math.asin(Math.sin(radians)*Math.cos(delta)+Math.cos(radians)*Math.sin(delta)*Math.cos(bearing));
+      var endLon=q.lon*Math.PI/180+Math.atan2(Math.sin(bearing)*Math.sin(delta)*Math.cos(radians),Math.cos(delta)-Math.sin(radians)*Math.sin(endLat));
+      var d=180/Math.PI;
+      a.push({startLat:q.lat,startLng:q.lon,endLat:endLat*d,endLng:((endLon*d+540)%360)-180,color:'#e0b65c',name:'NHC reported movement direction — visual arrow only, NOT a forecast track'});
+    });
     return a;
   }
   function marks(){
@@ -94,7 +104,7 @@
       var q=m.record;return '<div class="earth-drawer-kicker">'+t.observed+' · USGS</div><h3>M '+Number(q.mag).toFixed(1)+'</h3><p>'+esc(q.place)+'</p><div class="earth-inline-meta">'+new Date(q.time).toLocaleString(l==='en'?'en-GB':'el-GR')+' · '+(Number.isFinite(q.depth)?q.depth.toFixed(0)+' km':'')+'</div><a href="'+esc(q.url||'https://earthquake.usgs.gov/')+'" target="_blank" rel="noopener noreferrer">USGS ↗</a>';
     }
     if(m.kind==='storm'){
-      var x=m.record;return '<div class="earth-drawer-kicker">'+t.observed+' · NOAA NHC</div><h3>'+esc(x.name)+'</h3><p>'+esc(x.classification)+' · '+(Number.isFinite(x.windKt)?x.windKt+' kt':'—')+'</p><div class="earth-inline-meta">'+(x.time?new Date(x.time).toLocaleString(l==='en'?'en-GB':'el-GR'):'—')+'</div><a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener noreferrer">'+t.forecast+' ↗</a>';
+      var x=m.record;return '<div class="earth-drawer-kicker">'+t.observed+' · NOAA NHC</div><h3>'+esc(x.name)+'</h3><p>'+esc(x.classification)+' · '+(Number.isFinite(x.windKt)?x.windKt+' kt':'—')+'</p><p>'+(Number.isFinite(x.movementDir)?((l==='el'?'Δηλωμένη διεύθυνση κίνησης: ':'Reported motion direction: ')+x.movementDir+'° · '+(Number.isFinite(x.movementMph)?x.movementMph+' mph · ':'')+(l==='el'?'όχι πρόγνωση τροχιάς':'not a forecast track')):'')+'</p><div class="earth-inline-meta">'+(x.time?new Date(x.time).toLocaleString(l==='en'?'en-GB':'el-GR'):'—')+'</div><a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener noreferrer">'+t.forecast+' ↗</a>';
     }
     if(m.kind==='region'){
       var z=root.MONOEarth&&root.MONOEarth.regionData(m.factor,m.id,l),en=m.factor==='enso'&&r&&r.value<-.5?'la':'el';
