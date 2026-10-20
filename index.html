@@ -30,6 +30,7 @@
 <link rel="stylesheet" href="clarity.css?v=4.13">
 <link rel="stylesheet" href="earth-signals.css?v=1.0">
 <link rel="stylesheet" href="earth-globe.css?v=1.0">
+<link rel="stylesheet" href="mobile-nav.css?v=1.0">
 </head>
 <body>
 <div class="shell">
@@ -56,7 +57,9 @@
     <footer class="footer"><div>MONO / WEATHER · v4.0 · MONO-ML</div><div><span data-i18n="attribution"></span> · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · <a href="https://aviationweather.gov/data/api/" target="_blank" rel="noopener">AWC</a> · <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a> · <a href="https://meteostat.net/" target="_blank" rel="noopener">Meteostat</a> · <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> · <a href="https://meteoalarm.org/" target="_blank" rel="noopener">Meteoalarm</a></div><div><a href="privacy.html">Απόρρητο / Privacy</a> · <a href="terms.html">Πηγές & όροι / Sources & terms</a></div></footer>
   </div>
 </div>
-<nav id="tabbar" class="tabbar" aria-label="Πλοήγηση"></nav>
+<div id="mobileNavScrim" class="mobile-nav-scrim hidden" data-action="mobileNavClose" aria-hidden="true"></div>
+<section id="mobileNavSheet" class="mobile-nav-sheet hidden" aria-label="Ενότητες κατηγορίας" aria-hidden="true" tabindex="-1"></section>
+<nav id="tabbar" class="tabbar" aria-label="Κατηγορίες / Categories"></nav>
 <div id="toast" class="toast" role="status"></div>
 <script src="model.js"></script>
 <script src="climate.js"></script>
@@ -72,7 +75,7 @@
 <script src="forecast-motion.js?v=4.3"></script>
 <script src="forecast.js?v=4.10"></script>
 <script src="geo.js?v=4.12"></script>
-<script src="app.js?v=4.16"></script>
+<script src="app.js?v=4.17"></script>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
 </script>
