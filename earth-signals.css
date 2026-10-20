@@ -62,3 +62,5 @@
 @media(max-width:1050px){.earth-factor-chooser{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:700px){.earth-head{flex-direction:column}.earth-top{grid-template-columns:1fr}.earth-factor-chooser{grid-template-columns:repeat(2,minmax(0,1fr))}.earth-pane,.earth-explain,.earth-bottom{padding:19px}.earth-feature{align-items:start;flex-direction:column}.earth-data-note{max-width:none;text-align:left}.earth-facts{grid-template-columns:1fr}.earth-bigline strong{font-size:50px}}
 @media(max-width:380px){.earth-factor-chooser{grid-template-columns:1fr}.earth-bigline{gap:8px}.earth-phase-tabs{display:flex}.earth-phase-tabs button{flex:1;padding:10px 6px}}
+
+.earth-globe-cta{margin:0 0 12px}.earth-globe-cta .outline-btn{font-size:11px;letter-spacing:.01em;padding:12px 15px}
