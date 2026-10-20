@@ -14,6 +14,16 @@
     {id:'cyclones',lat:17,lon:-57},
     {id:'greece',lat:38,lon:24}
   ];
+  var additionalRegions=[
+    {factor:'nao',id:'north-europe',lat:57,lon:12},
+    {factor:'nao',id:'med',lat:39,lon:19},
+    {factor:'iod',id:'iod-west',lat:1,lon:43},
+    {factor:'iod',id:'iod-east',lat:-18,lon:132},
+    {factor:'mjo',id:'tropics',lat:-10,lon:100},
+    {factor:'mjo',id:'midlat',lat:39,lon:63},
+    {factor:'polar',id:'arctic',lat:76,lon:-70},
+    {factor:'polar',id:'europe',lat:45,lon:26}
+  ];
   var nodes=[
     {factor:'nao',id:'nao-azores',lat:38,lon:-29,symbol:'H/L',name:'Azores',nameEl:'Αζόρες'},
     {factor:'nao',id:'nao-iceland',lat:64,lon:-21,symbol:'H/L',name:'Iceland',nameEl:'Ισλανδία'},
@@ -60,6 +70,10 @@
       var region=root.MONOEarth&&root.MONOEarth.regionData('enso',p.id,'el');
       if(region)out.push({kind:'region',factor:'enso',id:p.id,lat:p.lat,lon:p.lon,symbol:'◈',text:region.name});
     });
+    additionalRegions.filter(function(p){return enabled[p.factor];}).forEach(function(p){
+      var region=root.MONOEarth&&root.MONOEarth.regionData(p.factor,p.id,'el');
+      if(region)out.push({kind:'region',factor:p.factor,id:p.id,lat:p.lat,lon:p.lon,symbol:'◈',text:region.name});
+    });
     if(enabled.nao||enabled.iod||enabled.mjo||enabled.polar)nodes.filter(function(p){return enabled[p.factor];}).forEach(function(p){
       out.push({kind:'node',factor:p.factor,id:p.id,lat:p.lat,lon:p.lon,symbol:p.symbol,text:p.name});
     });
@@ -83,9 +97,9 @@
       var x=m.record;return '<div class="earth-drawer-kicker">'+t.observed+' · NOAA NHC</div><h3>'+esc(x.name)+'</h3><p>'+esc(x.classification)+' · '+(Number.isFinite(x.windKt)?x.windKt+' kt':'—')+'</p><div class="earth-inline-meta">'+(x.time?new Date(x.time).toLocaleString(l==='en'?'en-GB':'el-GR'):'—')+'</div><a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener noreferrer">'+t.forecast+' ↗</a>';
     }
     if(m.kind==='region'){
-      var z=root.MONOEarth&&root.MONOEarth.regionData('enso',m.id,l),en=r&&r.value<-.5?'la':'el';
+      var z=root.MONOEarth&&root.MONOEarth.regionData(m.factor,m.id,l),en=m.factor==='enso'&&r&&r.value<-.5?'la':'el';
       if(!z)return '<p>'+t.unavailable+'</p>';
-      return '<div class="earth-drawer-kicker">'+t.region+' · '+esc(t.schematic)+'</div><h3>'+esc(z.name)+'</h3><p>'+esc(z[en])+'</p><div class="earth-inline-meta">'+esc(z.season)+' · '+esc(z.conf)+'</div><button type="button" class="earth-button" data-action="eOpenImpact" data-v="'+esc(m.id)+'">'+t.see+' ↗</button>';
+      return '<div class="earth-drawer-kicker">'+t.region+' · '+esc(t.schematic)+'</div><h3>'+esc(z.name)+'</h3><p>'+esc(z[en])+'</p><div class="earth-inline-meta">'+esc(z.season)+' · '+esc(z.conf)+'</div><button type="button" class="earth-button" data-action="eOpenImpact" data-v="'+esc(m.factor+':'+m.id)+'">'+t.see+' ↗</button>';
     }
     if(m.factor==='enso'){
       return '<div class="earth-drawer-kicker">NOAA CPC / '+t.observed+'</div><h3>Niño 3.4</h3><p>'+ (r?((r.value>=0?'+':'')+r.value.toFixed(2)+' °C · RONI '+r.season+' '+r.year):t.unavailable)+'</p><p>'+t.note+'</p><a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/" target="_blank" rel="noopener noreferrer">NOAA RONI ↗</a>';
@@ -129,7 +143,7 @@
   function embellish(l,html){
     return html.concat(marks().map(function(p){return {earth:true,c:{lat:p.lat,lon:p.lon},marker:p};}));
   }
-  function openImpact(id){if(root.MONOEarth&&root.MONOEarth.openRegion)root.MONOEarth.openRegion('enso',id); }
+  function openImpact(factor,id){if(root.MONOEarth&&root.MONOEarth.openRegion)root.MONOEarth.openRegion(factor,id); }
   function focus(lat,lon){if(globeApi&&globeApi.pointOfView)globeApi.pointOfView({lat:lat,lng:lon,altitude:2.1},950);}
   root.MONOEarthGlobe={enabled:enabled,toggle:toggle,isActive:isActive,select:select,selected:selected,setYear:setYear,getRONI:getRONI,polygons:polygons,arcs:arcs,marks:marks,toolbar:toolbar,timeline:timeline,detail:detail,info:info,sync:sync,embellish:embellish,makeMarker:makeMarker,openImpact:openImpact,focus:focus,onRefresh:null};
 })(window);
