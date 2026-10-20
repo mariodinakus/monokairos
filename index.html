@@ -29,15 +29,16 @@
 <link rel="stylesheet" href="forecast.css?v=4.3">
 <link rel="stylesheet" href="clarity.css?v=4.13">
 <link rel="stylesheet" href="earth-signals.css?v=1.0">
+<link rel="stylesheet" href="earth-globe.css?v=1.0">
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar">
     <div class="brand"><span class="mark">M<span class="mark-point">.</span></span><span class="brandcopy">MONO<span class="brand-detail">WEATHER · v4.0</span></span></div>
     <div class="sidecap" data-i18n="workspace">ΕΦΑΡΜΟΓΗ</div>
+    <div class="side-filter"><span aria-hidden="true">⌕</span><input id="navFilter" type="search" aria-label="Αναζήτηση ενοτήτων" placeholder="Εύρεση ενότητας / Search"></div>
     <nav id="nav" class="nav" aria-label="Κύρια πλοήγηση"></nav>
-    <div class="sidecap" data-i18n="saved">ΑΓΑΠΗΜΕΝΑ</div>
-    <div id="sideCities" class="sidecities"></div>
+    <details class="side-favorites"><summary><span data-i18n="saved">ΑΓΑΠΗΜΕΝΑ</span> <span aria-hidden="true">⌄</span></summary><div id="sideCities" class="sidecities"></div></details>
     <div class="sidebar-foot"><span class="livepin"></span><span id="status">…</span><span class="sidefootnote">Open-Meteo · NOAA · NASA · IEM</span></div>
   </aside>
   <div class="main">
@@ -59,7 +60,8 @@
 <div id="toast" class="toast" role="status"></div>
 <script src="model.js"></script>
 <script src="climate.js"></script>
-<script src="earth-signals.js?v=1.0"></script>
+<script src="earth-signals.js?v=1.1"></script>
+<script src="earth-globe.js?v=1.0"></script>
 <script src="environment.js?v=4.6"></script>
 <script src="atmosphere.js?v=4.7"></script>
 <script src="vendor/astronomy.min.js?v=2.1.19"></script>
@@ -70,7 +72,7 @@
 <script src="forecast-motion.js?v=4.3"></script>
 <script src="forecast.js?v=4.10"></script>
 <script src="geo.js?v=4.12"></script>
-<script src="app.js?v=4.14"></script>
+<script src="app.js?v=4.15"></script>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
 </script>
