@@ -1,0 +1,64 @@
+/* Earth system: isolated design, inherits MONO theme tokens. */
+.earth-system{--earth-accent:#d26a3e}
+.earth-head{display:flex;justify-content:space-between;align-items:start;gap:20px;margin-bottom:22px}
+.earth-head h1{font-weight:730;letter-spacing:-.065em;font-size:clamp(31px,4vw,52px);line-height:1.06;margin:10px 0 12px}
+.earth-head p{max-width:800px;color:var(--sub);font-size:12px;line-height:1.8;margin:0}
+.earth-eyebrow,.earth-kicker{font-size:10px;letter-spacing:.14em;font-weight:780;color:var(--sub);text-transform:uppercase}
+.earth-button{flex-shrink:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:13px 18px;font-size:11px;font-weight:780}
+.earth-button:hover{background:var(--soft)}
+.earth-top{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(270px,1fr);gap:14px}
+.earth-pane,.earth-explain,.earth-bottom{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px}
+.earth-main{background:linear-gradient(140deg,var(--panel),var(--soft))}
+.earth-bigline{display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;margin:34px 0 10px}
+.earth-bigline strong{font-size:clamp(49px,6vw,80px);letter-spacing:-.08em;line-height:1;font-variant-numeric:tabular-nums;font-weight:650}
+.earth-bigline span{font-size:13px;font-weight:730;color:var(--sub)}
+.earth-small{font-size:11px;color:var(--sub);line-height:1.6}
+.earth-spark{margin-top:30px}
+.earth-chart{width:100%;height:auto;min-height:100px;display:block;color:var(--earth-accent)}
+.earth-axis{stroke:var(--sub);stroke-width:1;opacity:.5}.earth-threshold{stroke:var(--sub);stroke-dasharray:5 6;stroke-width:1;opacity:.3}
+.earth-chart-label{font-size:10px;color:var(--sub);padding-top:9px}
+.earth-credit{font-size:10px;color:var(--sub);margin-top:20px;border-top:1px solid var(--line);padding-top:13px}
+.earth-credit a,.earth-links a,.earth-bottom a{font-weight:760;text-decoration:underline;text-underline-offset:4px}
+.earth-side-title{font-size:23px;letter-spacing:-.05em;margin:14px 0 3px}
+.earth-muted{color:var(--sub);font-size:11px;line-height:1.6}
+.earth-quakes{margin-top:20px}
+.earth-quake{display:flex;align-items:start;gap:13px;padding:11px 0;border-bottom:1px solid var(--line);font-size:11px}
+.earth-quake strong{white-space:nowrap;background:var(--soft);padding:8px 9px;border-radius:9px;font-size:12px}
+.earth-quake>div{flex:1;min-width:0;line-height:1.55}
+.earth-quake small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+.earth-source-meta{color:var(--sub);font-size:10px;padding:12px 4px 25px;line-height:1.7}
+.earth-explain>h2{font-size:clamp(24px,3vw,34px);letter-spacing:-.06em;margin:12px 0 9px}
+.earth-explain>p{color:var(--sub);font-size:12px;margin:0 0 24px;line-height:1.7}
+.earth-factor-chooser{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:18px}
+.earth-factor{background:var(--soft);border:1px solid transparent;color:var(--ink);padding:14px 12px;min-width:0;text-align:left;border-radius:12px}
+.earth-factor b{font-size:15px;display:block;font-weight:780}
+.earth-factor small{color:var(--sub);font-size:9px;line-height:1.5;display:block;margin-top:5px}
+.earth-factor.active{background:var(--ink);color:var(--inv)}
+.earth-factor.active small{color:var(--inv);opacity:.65}
+.earth-feature{display:flex;justify-content:space-between;gap:14px;align-items:center;border-top:1px solid var(--line);padding-top:21px}
+.earth-feature h3{font-size:19px;font-weight:730;letter-spacing:-.035em;margin:0}
+.earth-feature h3 span{font-size:12px;color:var(--sub);font-weight:450;margin-left:8px}
+.earth-feature p{font-size:11px;color:var(--sub);line-height:1.6}
+.earth-data-note{font-size:9px;color:var(--muted);text-align:right;max-width:240px;line-height:1.6}
+.earth-phase-tabs{display:inline-flex;gap:4px;padding:4px;background:var(--soft);border-radius:11px;margin:15px 0}
+.earth-phase-tabs button{border:0;border-radius:8px;background:transparent;color:var(--sub);padding:11px 14px;font-weight:750;font-size:11px}
+.earth-phase-tabs button.active{background:var(--panel);color:var(--ink);box-shadow:0 1px 6px #0001}
+.earth-map-keys{display:flex;flex-wrap:wrap;gap:7px;margin:5px 0 18px}
+.earth-map-keys button{border:1px solid var(--line);padding:10px 12px;border-radius:22px;background:var(--panel);font-weight:620;font-size:11px;color:var(--sub)}
+.earth-map-keys button.active{border-color:var(--ink);color:var(--ink);background:var(--soft)}
+.earth-region-detail{border:1px solid var(--line);border-radius:16px;padding:23px;background:var(--soft)}
+.earth-region-heading{display:flex;align-items:start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.earth-region-heading small{font-size:9px;letter-spacing:.1em;color:var(--sub);text-transform:uppercase;font-weight:750}
+.earth-region-heading h3{margin:8px 0;font-size:clamp(20px,2.5vw,29px);font-weight:710;letter-spacing:-.05em}
+.earth-evidence{font-size:10px;color:var(--sub);font-weight:750;border:1px solid var(--line);border-radius:22px;padding:9px 11px;background:var(--panel)}
+.earth-evidence.high{border-color:#73a888}.earth-evidence.low{border-color:#caa274}
+.earth-region-impact{font-size:14px;line-height:1.85;max-width:930px;margin:18px 0 23px}
+.earth-facts{border-top:1px solid var(--line);padding-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.earth-facts small{font-size:9px;letter-spacing:.1em;text-transform:uppercase;display:block;color:var(--sub);margin-bottom:8px}
+.earth-facts strong{font-size:11px;font-weight:720;line-height:1.6}
+.earth-links{font-size:11px;margin-top:17px}
+.earth-bottom{margin-top:16px;font-size:11px;color:var(--sub);line-height:1.8}
+.earth-bottom strong{color:var(--ink);font-size:12px}
+@media(max-width:1050px){.earth-factor-chooser{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.earth-head{flex-direction:column}.earth-top{grid-template-columns:1fr}.earth-factor-chooser{grid-template-columns:repeat(2,minmax(0,1fr))}.earth-pane,.earth-explain,.earth-bottom{padding:19px}.earth-feature{align-items:start;flex-direction:column}.earth-data-note{max-width:none;text-align:left}.earth-facts{grid-template-columns:1fr}.earth-bigline strong{font-size:50px}}
+@media(max-width:380px){.earth-factor-chooser{grid-template-columns:1fr}.earth-bigline{gap:8px}.earth-phase-tabs{display:flex}.earth-phase-tabs button{flex:1;padding:10px 6px}}
