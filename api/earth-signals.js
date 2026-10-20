@@ -46,6 +46,8 @@ function parseStorms(data) {
       lat:+s.latitude_numeric, lon:+s.longitude_numeric,
       windKt: Number.isFinite(+s.intensity) ? +s.intensity : null,
       pressureMb: Number.isFinite(+s.pressure) ? +s.pressure : null,
+      movementDir: Number.isFinite(+s.movementDir) && +s.movementDir>=0 && +s.movementDir<=360 ? +s.movementDir : null,
+      movementMph: Number.isFinite(+s.movementSpeed) && +s.movementSpeed>=0 ? +s.movementSpeed : null,
       time: Date.parse(s.lastUpdate || '') || null,
       url:'https://www.nhc.noaa.gov/' }))
     .filter(s => s.time && Math.abs(Date.now()-s.time) < 72*3600*1000).slice(0,24);
