@@ -1,0 +1,78 @@
+
+/* MONO / Earth Globe 2.0 — readable navigation and overlay-led exploration. */
+.sidebar{padding:24px 13px 19px}
+.brand{padding:5px 13px 29px}
+.nav{gap:12px;margin-bottom:19px}
+.side-filter{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--soft);margin:0 8px 19px;padding:0 12px;border-radius:11px;height:39px}
+.side-filter>span{font-size:21px;color:var(--sub)}
+.side-filter input{background:transparent;border:0;color:var(--ink);font-size:11px;min-width:0;width:100%;outline:0}
+.side-filter input::placeholder{color:var(--sub)}
+.nav-group{display:block;min-width:0}
+.nav-group-toggle{width:100%;display:flex;align-items:center;gap:9px;background:transparent;color:var(--sub);border:0;text-align:left;padding:10px 12px;border-radius:10px}
+.nav-group-toggle:hover{background:var(--soft);color:var(--ink)}
+.nav-group-toggle>span{font-size:15px;min-width:18px;color:var(--ink)}
+.nav-group-toggle strong{flex:1;font-size:10px;letter-spacing:.07em;font-weight:830;line-height:1.35}
+.nav-group-toggle small{font-size:10px;background:var(--soft);border:1px solid var(--line);padding:3px 5px;border-radius:7px}
+.nav-group-toggle>i{font-size:16px;font-style:normal;font-weight:700}
+.nav-group-items{display:flex;flex-direction:column;gap:3px;margin:4px 0 0 9px;padding-left:8px;border-left:1px solid var(--line)}
+.nav-group-items.nav-collapsed{display:none}
+.nav-group-items .navbtn{font-size:12px;padding:10px 10px;min-height:38px;line-height:1.3}
+.nav-group-items .navico{min-width:18px;font-size:15px}
+.side-favorites{margin:0 7px 18px;border-top:1px solid var(--line);padding-top:14px}
+.side-favorites>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--muted);padding:7px 9px}
+.side-favorites>summary::-webkit-details-marker{display:none}
+.side-favorites[open]>summary span:last-child{transform:rotate(180deg)}
+.side-favorites .sidecities{margin-top:8px;max-height:180px}
+.sidebar-foot{padding:18px 10px 0}
+.earth-globe-cta{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.earth-globe-workspace{margin:4px 0 22px}
+.earth-globe-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin:0 0 18px}
+.earth-globe-heading h2{font-size:clamp(22px,2.9vw,32px);letter-spacing:-.065em;margin:8px 0}
+.earth-globe-heading p{font-size:12px;color:var(--sub);line-height:1.7;margin:0;max-width:730px}
+.earth-layer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;margin:12px 2px}
+.earth-layer-head b{font-size:12px}
+.earth-layer-head span{font-size:10px;color:var(--sub)}
+.earth-layer-wrap{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 15px}
+.earth-layer-chip{display:flex;align-items:center;gap:8px;min-height:40px;padding:9px 11px;background:var(--panel);color:var(--sub);border:1px solid var(--line);border-radius:11px;font-size:11px;font-weight:730}
+.earth-layer-chip i{width:9px;height:9px;border-radius:50%;display:inline-block;opacity:.5}
+.earth-layer-chip small{font-size:9px;opacity:.65}
+.earth-layer-chip.active{background:var(--soft);color:var(--ink);border-color:var(--sub)}
+.earth-layer-chip.active i{opacity:1}
+.earth-globe-split{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(250px,.8fr);gap:13px;align-items:stretch}
+.earth-globecard{min-width:0;position:relative;overflow:hidden;padding:0!important}
+.earth-globecard .globe{height:clamp(420px,57vw,650px)}
+.earth-globe-side{border:1px solid var(--line);border-radius:19px;background:var(--panel);padding:20px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.earth-drawer-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.earth-drawer-top small{font-size:9px;color:var(--sub)}
+.earth-drawer-content{flex:1;min-width:0;padding-top:26px}
+.earth-drawer-content h3{font-size:clamp(23px,2.6vw,33px);font-weight:720;letter-spacing:-.055em;line-height:1.1;margin:9px 0 14px}
+.earth-drawer-content p{font-size:13px;color:var(--sub);line-height:1.8}
+.earth-drawer-content .earth-button{margin-top:15px}
+.earth-drawer-content a,.earth-drawer-foot a{font-size:11px;text-decoration:underline;text-underline-offset:4px}
+.earth-drawer-kicker{font-size:10px;letter-spacing:.11em;color:var(--sub);text-transform:uppercase}
+.earth-inline-meta{font-size:11px;color:var(--sub);padding:10px 0 14px}
+.earth-drawer-foot{border-top:1px solid var(--line);padding-top:11px;font-size:10px;color:var(--sub);line-height:1.7}
+.earth-drawer-foot p{font-size:10px;margin:0 0 15px}
+.earth-planet-pin{position:relative;border:1px solid var(--pin,#e6b17b);border-radius:99px;background:color-mix(in srgb,var(--pin) 80%,#12161e);color:white;box-shadow:0 0 0 3px #12161e55,0 5px 22px #0005;font-size:11px;font-weight:860;padding:7px 9px;min-width:30px;min-height:30px;white-space:nowrap;line-height:1;pointer-events:auto;cursor:pointer}
+.earth-pin-quake{background:#b63c34}
+.earth-pin-storm{background:#b07918;font-size:20px;padding:5px 8px}
+.earth-pin-region{background:#995535;font-size:18px;padding:5px 9px;opacity:.88}
+.earth-pin-node{background:#363b59;font-size:11px}
+.earth-pin-quake:before,.earth-pin-storm:before{content:"";position:absolute;inset:-6px;border:1px solid var(--pin,#ff8674);border-radius:50%;animation:earth-pin-pulse 2.6s ease-out infinite;pointer-events:none}
+@keyframes earth-pin-pulse{0%{transform:scale(.78);opacity:.8}100%{transform:scale(1.55);opacity:0}}
+.earth-timeline{margin:12px 0 18px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:17px 20px}
+.earth-timeline-head{display:flex;justify-content:space-between;gap:12px;font-size:11px;align-items:center}
+.earth-timeline-head span{color:var(--sub)}
+.earth-timeline input{width:100%;margin:18px 0 7px;accent-color:var(--ink);cursor:pointer}
+.earth-timeline-ticks{display:flex;justify-content:space-between;color:var(--sub);font-size:10px}
+.earth-globe-details{border-radius:12px;background:var(--panel);border:1px solid var(--line);margin:12px 0}
+.earth-globe-details>summary{padding:14px 17px;font-size:12px;cursor:pointer;color:var(--sub);font-weight:750}
+.earth-globe-details>.card,.earth-globe-details>#globeCtl{border:0;padding:14px;margin:0;background:transparent}
+.earth-explain{margin-top:19px}
+.earth-map-keys{max-width:100%}
+.earth-system .earth-region-detail{min-height:190px}
+.earth-system .earth-globe-split{margin-bottom:0}
+@media (max-width:1100px){.earth-globe-split{grid-template-columns:minmax(0,1.3fr) minmax(220px,.8fr)}.earth-globecard .globe{height:490px}}
+@media (max-width:780px){.earth-globe-split{grid-template-columns:1fr}.earth-globe-side{min-height:220px}.earth-drawer-content{padding-top:8px}.earth-globecard .globe{height:min(68vh,490px)}.earth-globe-heading{flex-direction:column}.earth-layer-chip{min-height:36px;padding:8px}}
+@media (max-width:500px){.earth-timeline{padding:13px}.earth-timeline-head{align-items:start;flex-direction:column}.earth-layer-wrap{gap:6px}.earth-layer-chip{font-size:10px}.earth-globecard .globe{height:390px}.earth-globe-side{padding:17px}.earth-timeline-ticks{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.earth-pin-quake:before,.earth-pin-storm:before{animation:none}}
