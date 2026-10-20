@@ -18,7 +18,7 @@ function rowsRONI(text) {
     const m = line.trim().match(/^([A-Z]{3})\s+(\d{4})\s+(-?\d+(?:\.\d+)?)$/);
     if (!m || !['DJF','JFM','FMA','MAM','AMJ','MJJ','JJA','JAS','ASO','SON','OND','NDJ'].includes(m[1])) return null;
     return { season: m[1], year: Number(m[2]), value: Number(m[3]) };
-  }).filter(Boolean).slice(-100);
+  }).filter(Boolean);
 }
 function rowsNino(text) {
   return text.split(/\r?\n/).map(line => {
