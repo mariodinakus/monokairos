@@ -99,7 +99,7 @@ const MONTHS = { el: ['Ιαν','Φεβ','Μαρ','Απρ','Μάι','Ιουν','�
 const MONTHS_LONG = { el: ['Ιανουάριος','Φεβρουάριος','Μάρτιος','Απρίλιος','Μάιος','Ιούνιος','Ιούλιος','Αύγουστος','Σεπτέμβριος','Οκτώβριος','Νοέμβριος','Δεκέμβριος'], en: ['January','February','March','April','May','June','July','August','September','October','November','December'] };
 const L = {
 el: {
-  now:'Τώρα', hourly:'Ωριαία', phen:'Φαινόμενα', radar:'Ραντάρ', models:'Μοντέλα', lab:'Μοντέλο MONO', labShort:'MONO', stations:'Σταθμοί', climate:'Κλίμα', cities:'Πόλεις', more:'Περισσότερα',
+  now:'Τώρα', hourly:'Ωριαία', phen:'Φαινόμενα', radar:'Ραντάρ', models:'Μοντέλα', lab:'Μοντέλο MONO', labShort:'MONO', stations:'Σταθμοί', climate:'Κλίμα', earth:'Παλμός Γης', cities:'Πόλεις', more:'Περισσότερα',
   workspace:'ΕΦΑΡΜΟΓΗ', saved:'ΑΓΑΠΗΜΕΝΑ', search:'Αναζήτηση πόλης, περιοχής ή Τ.Κ.…',
   observed:'ΜΕΤΡΗΣΗ ΣΤΑΘΜΟΥ', modelNow:'ΕΚΤΙΜΗΣΗ ΜΟΝΤΕΛΟΥ', feels:'Αίσθηση', high:'Μέγ.', low:'Ελάχ.', rainChance:'Πιθανότητα βροχής', next6:'επόμενες 6 ώρες',
   wind:'Άνεμος', gust:'ριπές', humidity:'Υγρασία', dew:'σημείο δρόσου', pressure:'Πίεση', visibility:'ορατότητα', clouds:'Νέφωση',
@@ -218,7 +218,7 @@ el: {
   ]
 },
 en: {
-  now:'Now', hourly:'Hourly', phen:'Weather events', radar:'Radar', models:'Models', lab:'MONO model', labShort:'MONO', stations:'Stations', climate:'Climate', cities:'Cities', more:'More',
+  now:'Now', hourly:'Hourly', phen:'Weather events', radar:'Radar', models:'Models', lab:'MONO model', labShort:'MONO', stations:'Stations', climate:'Climate', earth:'Earth System', cities:'Cities', more:'More',
   workspace:'WORKSPACE', saved:'FAVOURITES', search:'Search a city, region or postcode…',
   observed:'STATION MEASUREMENT', modelNow:'MODEL ESTIMATE', feels:'Feels like', high:'High', low:'Low', rainChance:'Chance of rain', next6:'next 6 hours',
   wind:'Wind', gust:'gusts', humidity:'Humidity', dew:'dew point', pressure:'Pressure', visibility:'visibility', clouds:'Cloud',
@@ -2088,7 +2088,7 @@ function updateGlobeCtl() {
   applyGlobeData();
 }
 function globePage() {
-  return header(T('globeTitle'), T('globeSub')) + `<div id="globeCtl">${globeCtl()}</div>
+  return header(T('globeTitle'), T('globeSub')) + `<div class="earth-globe-cta"><button class="outline-btn" data-action="goto" data-page="earth">◈ ${T('earth')} · ENSO / NAO / MJO ↗</button></div><div id="globeCtl">${globeCtl()}</div>
     <div class="card globecard"><div id="globe" class="globe"></div><div id="globeProbe" class="gprobe-wrap">${probeCard()}</div><div id="globeLegend">${globeLegend()}</div></div>
     <section class="section card" id="globeFresh">${globeFresh()}</section>`;
 }
@@ -2424,7 +2424,7 @@ async function loadCityLive() {
 }
 
 /* ------------------------------------------------------------------ shell */
-const NAV = [['now', '◐'], ['guide', '☷'], ['maps','▱'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
+const NAV = [['now', '◐'], ['guide', '☷'], ['maps','▱'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['earth', '◈'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
 const TABS = ['now', 'guide', 'rain', 'radar', 'globe'];
 function navRender() {
   document.documentElement.lang = state.lang; document.documentElement.dataset.theme = state.theme;
@@ -2441,7 +2441,7 @@ function render() {
   if (state.page === 'maps' && MonoForecast.isMounted(forecastOptions())) { MonoForecast.update(forecastOptions()); return; }
   if (state.page === 'radar' && map && $('#map')) return;   // keep the live map running
   if (state.page === 'globe' && globe && $('#globe')) { updateGlobeCtl(); return; }
-  const pages = { maps: forecastPage, guide: guidePage, now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, environment: environmentPage, space: spacePage, radar: radarPage, globe: globePage, models: modelsPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
+  const pages = { maps: forecastPage, guide: guidePage, now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, environment: environmentPage, space: spacePage, radar: radarPage, globe: globePage, earth: () => window.MONOEarth.page(state.lang), models: modelsPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
   const y = window.scrollY;
   const openEnvDetails = [...document.querySelectorAll('.environment-section details[open]')].map(el => el.id);
   const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap')].map(el => [el.id, el.scrollLeft]);
@@ -2453,6 +2453,7 @@ function render() {
   if (state.page === 'maps') MonoForecast.mount(forecastOptions(),loadLeaflet);
   if (state.page === 'radar') mountRadar();
   if (state.page === 'globe') mountGlobe();
+  if (state.page === 'earth') window.MONOEarth.mount(state.lang);
 }
 let toastT;
 function toast(m) { const n = $('#toast'); n.textContent = m; n.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => n.classList.remove('show'), 3200); }
