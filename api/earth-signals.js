@@ -52,24 +52,69 @@ function parseStorms(data) {
       url:'https://www.nhc.noaa.gov/' }))
     .filter(s => s.time && Math.abs(Date.now()-s.time) < 72*3600*1000).slice(0,24);
 }
+
+const FORECAST_URL='https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer/5/query';
+const FORECAST_HOURS=new Set([0,12,24,36,48,60,72,96,120]);
+function parseForecastPoints(data) {
+  if(data?.type!=='FeatureCollection'||!Array.isArray(data.features)||data.features.length>600)throw Error('Invalid NOAA GIS GeoJSON');
+  const now=Date.now(),groups=new Map();
+  for(const feature of data.features){
+    const p=feature?.properties||{},pos=feature?.geometry?.coordinates;
+    const lat=Number(pos?.[1]),lon=Number(pos?.[0]),hour=Number(p.fcstprd??p.tau);
+    const issue=Number(p.idp_filedate??p.idp_ingestdate);
+    const name=String(p.stormname||'').trim().slice(0,65),basin=String(p.basin||'').trim().toUpperCase().slice(0,20);
+    const stormnum=Number(p.stormnum),advisory=String(p.advisnum||'').slice(0,20);
+    if(feature?.geometry?.type!=='Point'||!Number.isFinite(lat)||!Number.isFinite(lon)||
+      Math.abs(lat)>90||Math.abs(lon)>180||!FORECAST_HOURS.has(hour)||!Number.isFinite(issue)||
+      issue>now+3600e3||now-issue>30*3600e3||!name||!basin||
+      !Number.isInteger(stormnum)||stormnum<1||stormnum>99)continue;
+    const key=basin+':'+stormnum+':'+name.toLowerCase()+':'+advisory+':'+issue;
+    if(!groups.has(key))groups.set(key,{name,basin,stormnum,advisory,issuedAt:issue,points:[]});
+    const wind=Number(p.maxwind),pressure=Number(p.mslp);
+    groups.get(key).points.push({lat,lon,hour,
+      windKt:Number.isFinite(wind)&&wind>=0&&wind<=250?wind:null,
+      pressureMb:Number.isFinite(pressure)&&pressure>=850&&pressure<=1100?pressure:null});
+  }
+  const latest=new Map();
+  for(const g of groups.values()){
+    const key=g.basin+':'+g.stormnum+':'+g.name.toLowerCase(),prior=latest.get(key);
+    if(!prior||g.issuedAt>prior.issuedAt||(g.issuedAt===prior.issuedAt&&g.points.length>prior.points.length))latest.set(key,g);
+  }
+  return [...latest.values()].map(g=>{
+    const uniq=new Map();for(const p of g.points)if(!uniq.has(p.hour))uniq.set(p.hour,p);
+    g.points=[...uniq.values()].sort((a,b)=>a.hour-b.hour);return g;
+  }).filter(g=>g.points.length>=2&&g.points.some(p=>p.hour>=24)).slice(0,15);
+}
+async function readForecastPoints(){
+  const u=new URL(FORECAST_URL);
+  Object.entries({where:'1=1',outFields:'stormname,basin,stormnum,advisnum,fcstprd,tau,maxwind,mslp,idp_filedate,idp_ingestdate',
+    returnGeometry:'true',outSR:'4326',resultRecordCount:'500',f:'geojson'}).forEach(([k,v])=>u.searchParams.set(k,v));
+  const r=await fetch(u.toString(),{signal:AbortSignal.timeout(10500),headers:{Accept:'application/geo+json, application/json'}});
+  if(!r.ok)throw Error('NOAA NHC GIS HTTP '+r.status);
+  const body=await r.text();
+  if(body.length>950000)throw Error('Excessive NOAA GIS response');
+  return parseForecastPoints(JSON.parse(body));
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); return res.status(405).json({ error: 'Method not allowed' }); }
   res.setHeader('Cache-Control','public, s-maxage=600, stale-while-revalidate=1800');
   res.setHeader('Content-Type','application/json; charset=utf-8');
   const out = { checkedAt: new Date().toISOString(), source: {
-    roni: RONI_URL, nino34: NINO_URL, earthquakes: QUAKE_URL, storms: STORM_URL },
-    roni: null, nino34: null, earthquakes: null, storms: null, unavailable: [] };
+    roni: RONI_URL, nino34: NINO_URL, earthquakes: QUAKE_URL, storms: STORM_URL, forecasts: FORECAST_URL },
+    roni: null, nino34: null, earthquakes: null, storms: null, forecasts: null, unavailable: [] };
   const values = await Promise.allSettled([
     readText(RONI_URL).then(rowsRONI),
     readText(NINO_URL).then(rowsNino),
     fetch(QUAKE_URL, { signal: AbortSignal.timeout(10500) }).then(r => { if (!r.ok) throw new Error('USGS HTTP '+r.status); return r.json(); }).then(parseQuakes),
-    fetch(STORM_URL, { signal: AbortSignal.timeout(10500),headers:{Accept:'application/json'} }).then(r => { if(!r.ok) throw new Error('NHC HTTP '+r.status);return r.json(); }).then(parseStorms)
+    fetch(STORM_URL, { signal: AbortSignal.timeout(10500),headers:{Accept:'application/json'} }).then(r => { if(!r.ok) throw new Error('NHC HTTP '+r.status);return r.json(); }).then(parseStorms),
+    readForecastPoints()
   ]);
-  ['roni','nino34','earthquakes','storms'].forEach((key,i) => {
+  ['roni','nino34','earthquakes','storms','forecasts'].forEach((key,i) => {
     const v = values[i];
-    if (v.status === 'fulfilled' && Array.isArray(v.value) && (v.value.length || key === 'storms' || key === 'earthquakes')) out[key] = v.value;
+    if (v.status === 'fulfilled' && Array.isArray(v.value) && (v.value.length || key === 'storms' || key === 'earthquakes' || key === 'forecasts')) out[key] = v.value;
     else out.unavailable.push(key);
   });
-  if (out.unavailable.length === 4) return res.status(503).json({ ...out, error: 'All upstream sources unavailable' });
+  if (out.unavailable.length === 5) return res.status(503).json({ ...out, error: 'All upstream sources unavailable' });
   return res.status(200).json(out);
 };
