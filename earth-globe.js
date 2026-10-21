@@ -1,10 +1,10 @@
 (function earthGlobeModule(root) {
   'use strict';
-  var enabled = {enso:true, quakes:true, storms:true, nao:false, iod:false, mjo:false, polar:false};
+  var enabled = {enso:true, quakes:true, storms:true, tracks:true, nao:false, iod:false, mjo:false, polar:false};
   try { var prior=JSON.parse(localStorage.getItem('mono_earth_layers')||'{}'); for(var k in enabled)if(typeof prior[k]==='boolean') enabled[k]=prior[k]; } catch(e){}
   var year = null, choice = {kind:'enso',id:'greece',factor:'enso'}, globeApi=null;
-  var palette={enso:'#e06a40',nao:'#d4a547',iod:'#26a7a3',mjo:'#a387f7',polar:'#61b5df',quakes:'#ff725e',storms:'#e7bf64'};
-  var names={el:{enso:'El Niño / La Niña',nao:'NAO',iod:'IOD',mjo:'MJO',polar:'Πολικός στρόβιλος',quakes:'Σεισμοί 24ώρου',storms:'Τροπικοί κυκλώνες',observed:'Μετρήσεις',schematic:'Σχηματική απεικόνιση',layers:'Επίπεδα φαινομένων',data:'Δεδομένα και πηγές',current:'Τώρα',region:'Κλιματικές επιδράσεις',history:'Ιστορική σύγκριση',unavailable:'Χωρίς επαληθευμένη τρέχουσα μέτρηση',forecast:'Επίσημη πρόγνωση',season:'Περίοδος',source:'Πηγή',see:'Ανάλυση περιοχής',note:'Οι ζώνες NAO/IOD/MJO/στρόβιλου είναι εκπαιδευτικά σχήματα, όχι δορυφορική παρατήρηση.'},en:{enso:'El Niño / La Niña',nao:'NAO',iod:'IOD',mjo:'MJO',polar:'Polar vortex',quakes:'Earthquakes (24h)',storms:'Tropical cyclones',observed:'Observed',schematic:'Schematic',layers:'Phenomenon layers',data:'Data and sources',current:'Now',region:'Climate impacts',history:'Historical comparison',unavailable:'No verified current measurement',forecast:'Official forecast',season:'Period',source:'Source',see:'Regional analysis',note:'NAO/IOD/MJO/vortex zones are educational schematics, not live satellite observations.'}};
+  var palette={enso:'#e06a40',nao:'#d4a547',iod:'#26a7a3',mjo:'#a387f7',polar:'#61b5df',quakes:'#ff725e',storms:'#e7bf64',tracks:'#51bdd7'};
+  var names={el:{enso:'El Niño / La Niña',nao:'NAO',iod:'IOD',mjo:'MJO',polar:'Πολικός στρόβιλος',quakes:'Σεισμοί 24ώρου',storms:'Τροπικοί κυκλώνες',tracks:'Επίσημες τροχιές 120ω',observed:'Μετρήσεις',schematic:'Σχηματική απεικόνιση',layers:'Επίπεδα φαινομένων',data:'Δεδομένα και πηγές',current:'Τώρα',region:'Κλιματικές επιδράσεις',history:'Ιστορική σύγκριση',unavailable:'Χωρίς επαληθευμένη τρέχουσα μέτρηση',forecast:'Επίσημη πρόγνωση',season:'Περίοδος',source:'Πηγή',see:'Ανάλυση περιοχής',note:'Οι ζώνες NAO/IOD/MJO/στρόβιλου είναι εκπαιδευτικά σχήματα, όχι δορυφορική παρατήρηση.'},en:{enso:'El Niño / La Niña',nao:'NAO',iod:'IOD',mjo:'MJO',polar:'Polar vortex',quakes:'Earthquakes (24h)',storms:'Tropical cyclones',tracks:'Official tracks 120h',observed:'Observed',schematic:'Schematic',layers:'Phenomenon layers',data:'Data and sources',current:'Now',region:'Climate impacts',history:'Historical comparison',unavailable:'No verified current measurement',forecast:'Official forecast',season:'Period',source:'Source',see:'Regional analysis',note:'NAO/IOD/MJO/vortex zones are educational schematics, not live satellite observations.'}};
   var centers=[
     {id:'pacific-east',lat:-6,lon:-82},
     {id:'indonesia',lat:-6,lon:122},
@@ -69,8 +69,50 @@
                            Math.cos(delta)-Math.sin(phi)*Math.sin(phi2));
     return {lat:phi2*180/Math.PI,lon:((lam2*180/Math.PI+540)%360)-180,km:km};
   }
+
+  // Only join a track to the same active storm (basin, number AND name). No inferred forecasts.
+  function officialTrack(q){
+    var d=root.MONOEarth&&root.MONOEarth.latest();
+    if(!q||!d||!Array.isArray(d.forecasts)||!Number.isFinite(q.time)||Date.now()-q.time>36*3600e3)return null;
+    var id=String(q.id||'').toLowerCase(),name=String(q.name||'').trim().toLowerCase();
+    var hits=d.forecasts.filter(function(f){
+      if(!f||!Array.isArray(f.points)||!Number.isFinite(f.issuedAt)||
+        Date.now()-f.issuedAt>30*3600e3||f.issuedAt-Date.now()>3600e3)return false;
+      var basin=String(f.basin||'').toUpperCase();
+      var aliases=(basin==='AL'||basin==='AT'||basin==='ATLANTIC')?['al','at']:
+        (basin==='EP'||basin==='EAST PACIFIC')?['ep']:
+        (basin==='CP'||basin==='CENTRAL PACIFIC')?['cp']:[basin.toLowerCase().slice(0,2)];
+      return String(f.name||'').trim().toLowerCase()===name&&aliases.some(function(x){return id.indexOf(x+String(f.stormnum).padStart(2,'0'))===0;});
+    });
+    return hits.sort(function(a,b){return b.issuedAt-a.issuedAt;})[0]||null;
+  }
+  function activeForecasts(data){
+    if(!enabled.storms||!enabled.tracks||!data||!Array.isArray(data.storms))return [];
+    return data.storms.map(function(s){return {storm:s,track:officialTrack(s)};}).filter(function(x){return x.track;});
+  }
+  function forecastArcs(track){
+    var pts=track.points.filter(function(p){return Number.isFinite(p.lat)&&Number.isFinite(p.lon)&&p.hour>=0&&p.hour<=120;})
+      .sort(function(a,b){return a.hour-b.hour;}),lines=[];
+    for(var i=1;i<pts.length;i++){
+      var a=pts[i-1],b=pts[i];if(b.hour<=a.hour||Math.abs(b.lon-a.lon)>180)continue;
+      lines.push({kind:'official-track',startLat:a.lat,startLng:a.lon,endLat:b.lat,endLng:b.lon,
+        color:'#51bdd7',name:'NOAA/NHC OFFICIAL FORECAST · '+track.name+' · +'+b.hour+'h · '+new Date(track.issuedAt).toISOString()});
+    }
+    return lines;
+  }
+
   function inspectorHtml(marker,l) {
     var en=l==='en',kind=marker.kind,q=marker.record,part='';
+    if(kind==='forecast'&&q&&q.point&&q.track){
+      var pt=q.point,tr=q.track,kmh=Number.isFinite(pt.windKt)?Math.round(pt.windKt*1.852):null;
+      return '<span class="earth-h-eyebrow">NOAA/NHC · '+(en?'OFFICIAL FORECAST':'ΕΠΙΣΗΜΗ ΠΡΟΓΝΩΣΗ')+'</span>'+
+        '<h4>'+esc(tr.name)+' · +'+pt.hour+'h</h4>'+
+        '<div class="earth-h-number">'+(kmh==null?'—':kmh)+' <em>km/h</em></div>'+
+        '<div class="earth-h-grade">'+esc(stormLevel(pt.windKt,l))+'</div>'+
+        '<div class="earth-h-line">'+(en?'Issued UTC':'Έκδοση UTC')+': <b>'+new Date(tr.issuedAt).toISOString().slice(0,16).replace('T',' ')+'</b></div>'+
+        (Number.isFinite(pt.pressureMb)?'<div class="earth-h-line">'+(en?'Pressure':'Πίεση')+': <b>'+pt.pressureMb+' hPa</b></div>':'')+
+        '<small>'+(en?'Official forecast point, not a guarantee. Track uncertainty grows with time.':'Επίσημο προγνωστικό σημείο, όχι βεβαιότητα. Η αβεβαιότητα αυξάνεται με τον χρόνο.')+'</small>';
+    }
     if(kind==='quake'&&q&&Number.isFinite(q.mag)){
       part='<span class="earth-h-eyebrow">USGS · '+(en?'Observed earthquake':'Καταγεγραμμένος σεισμός')+'</span>'+
         '<h4>'+esc(q.place||'—')+'</h4><div class="earth-h-number">M '+q.mag.toFixed(1)+'</div>'+
@@ -79,7 +121,7 @@
         '<small>'+(en?'Magnitude is logarithmic, not a damage prediction.':'Το μέγεθος είναι λογαριθμικό, όχι εκτίμηση ζημιών.')+'</small>';
     } else if(kind==='storm'&&q){
       var wind=Number.isFinite(q.windKt)?Math.round(q.windKt*1.852):null,
-          projected=projectStorm(q,6),
+          track=officialTrack(q),projected=enabled.tracks&&track?null:projectStorm(q,6),
           speed=Number.isFinite(q.movementMph)?Math.round(q.movementMph*1.609344):null;
       part='<span class="earth-h-eyebrow">NOAA NHC · '+(en?'Reported observation':'Δηλωμένη παρατήρηση')+'</span>'+
         '<h4>'+esc(q.name||'—')+' <span>'+esc(q.classification||'')+'</span></h4>'+
@@ -89,6 +131,7 @@
           (Number.isFinite(q.movementDir)?compass(q.movementDir,l)+' ('+Math.round(q.movementDir)+'°)':'—')+
           (speed===null?'':' · '+speed+' km/h')+'</b></div>'+
         (Number.isFinite(q.pressureMb)?'<div class="earth-h-line">'+(en?'Pressure':'Πίεση')+': <b>'+Math.round(q.pressureMb)+' hPa</b></div>':'')+
+        (enabled.tracks&&track?'<div class="earth-h-projection"><strong>'+(en?'Cyan: official NHC forecast, up to 120 hours.':'Γαλάζιο: επίσημη τροχιά NHC έως 120 ώρες.')+'</strong></div>':'')+
         (projected?'<div class="earth-h-projection">'+(en?'Dotted line: illustrative 6h after last advisory, ~':'Διακεκομμένη γραμμή: 6 ώρες από την τελευταία αναφορά, ~')+
           Math.round(projected.km)+' km. <strong>'+(en?'NOT an official forecast.':'ΟΧΙ επίσημη πρόγνωση.')+'</strong></div>':
          '<small>'+(en?'Official future track: consult NHC.':'Επίσημη μελλοντική τροχιά: ανατρέξτε στο NHC.')+'</small>');
@@ -181,7 +224,9 @@
     }
 
     var live=root.MONOEarth&&root.MONOEarth.latest();
+    activeForecasts(live).forEach(function(x){a.push.apply(a,forecastArcs(x.track));});
     if(enabled.storms && live && Array.isArray(live.storms))live.storms.forEach(function(q){
+      if(enabled.tracks&&officialTrack(q))return;
       if(!Number.isFinite(q.movementDir) || !Number.isFinite(q.lat) || !Number.isFinite(q.lon))return;
       var projected=projectStorm(q,6);
       if(projected){
@@ -218,6 +263,13 @@
     if(enabled.storms && data && Array.isArray(data.storms))data.storms.forEach(function(q){
       out.push({kind:'storm',id:q.id,lat:q.lat,lon:q.lon,symbol:'◉',text:q.name,record:q});
     });
+    activeForecasts(data).forEach(function(x){
+      x.track.points.forEach(function(p){
+        if([24,48,72,96,120].indexOf(p.hour)<0||!Number.isFinite(p.lat)||!Number.isFinite(p.lon))return;
+        out.push({kind:'forecast',id:x.storm.id+'-'+p.hour,lat:p.lat,lon:p.lon,
+          symbol:p.hour+'h',text:x.track.name+' · +'+p.hour+'h · NOAA NHC',record:{point:p,track:x.track}});
+      });
+    });
     return out;
   }
   function select(m){choice=m?{kind:m.kind||'node',factor:m.factor||'enso',id:m.id||'',record:m.record||null}:null;return choice;}
@@ -225,6 +277,15 @@
   function detail(l){
     var t=lang(l),m=choice,r=getRONI();
     if(!m)return '<p>'+esc(t.note)+'</p>';
+    if(m.kind==='forecast'){
+      var z=m.record,p=z.point,g=z.track;
+      return '<div class="earth-drawer-kicker">NOAA NHC · '+t.forecast+'</div><h3>'+esc(g.name)+' · +'+p.hour+'h</h3>'+
+        '<p>'+(l==='en'?'Official forecast position.':'Επίσημη προγνωστική θέση.')+'</p>'+
+        '<div class="earth-inline-meta">'+(l==='en'?'Wind':'Άνεμος')+': '+(Number.isFinite(p.windKt)?p.windKt+' kt / '+Math.round(p.windKt*1.852)+' km/h':'—')+
+        ' · UTC '+new Date(g.issuedAt).toISOString().slice(0,16).replace('T',' ')+'</div>'+
+        '<p>'+(l==='en'?'Increasing uncertainty at longer lead times.':'Μεγαλύτερη αβεβαιότητα στις μακρινές χρονικά προβλέψεις.')+'</p>'+
+        '<a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener noreferrer">NHC ↗</a>';
+    }
     if(m.kind==='quake'){
       var q=m.record;return '<div class="earth-drawer-kicker">'+t.observed+' · USGS</div><h3>M '+Number(q.mag).toFixed(1)+'</h3><p>'+esc(q.place)+'</p><div class="earth-inline-meta">'+new Date(q.time).toLocaleString(l==='en'?'en-GB':'el-GR')+' · '+(Number.isFinite(q.depth)?q.depth.toFixed(0)+' km':'')+'</div><a href="'+esc(q.url||'https://earthquake.usgs.gov/')+'" target="_blank" rel="noopener noreferrer">USGS ↗</a>';
     }
@@ -250,7 +311,7 @@
       '<div class="earth-timeline-ticks"><span>1950</span><span>1982</span><span>1997</span><span>2015</span><span>'+t.current+'</span></div>';
   }
   function toolbar(l){
-    var t=lang(l), keys=['enso','quakes','storms','nao','iod','mjo','polar'];
+    var t=lang(l), keys=['enso','quakes','storms','tracks','nao','iod','mjo','polar'];
     var badges=keys.map(function(k){
       var special=(k==='nao'||k==='iod'||k==='mjo'||k==='polar'),state=enabled[k]?'active':'';
       return '<button type="button" data-action="eLayer" data-v="'+k+'" aria-pressed="'+enabled[k]+'" class="earth-layer-chip '+state+'"><i style="background:'+palette[k]+'"></i><span>'+esc(t[k])+'</span><small>'+(special?'◇':'●')+'</small></button>';
@@ -267,12 +328,12 @@
     if(!g)return;
     globeApi=g;
     if(typeof g.polygonsData==='function')g.polygonGeoJsonGeometry('geometry').polygonAltitude(.009).polygonCapColor(function(p){return p.color;}).polygonSideColor(function(){return 'rgba(0,0,0,.025)';}).polygonStrokeColor(function(p){return p.outline;}).polygonLabel(function(p){return esc(p.label);}).onPolygonClick(function(p){select({kind:'zone',id:p.id,factor:p.factor});refresh();}).polygonsData(polygons());
-    if(typeof g.arcsData==='function')g.arcStartLat('startLat').arcStartLng('startLng').arcEndLat('endLat').arcEndLng('endLng').arcColor('color').arcAltitude(.09).arcDashLength(.28).arcDashGap(.17).arcDashAnimateTime(4000).arcStroke(.55).arcLabel(function(p){return esc(p.name);}).arcsData(arcs());
+    if(typeof g.arcsData==='function')g.arcStartLat('startLat').arcStartLng('startLng').arcEndLat('endLat').arcEndLng('endLng').arcColor('color').arcAltitude(function(a){return a.kind==='official-track'?.045:.09;}).arcDashLength(function(a){return a.kind==='official-track'?1:.28;}).arcDashGap(function(a){return a.kind==='official-track'?0:.17;}).arcDashAnimateTime(function(a){return a.kind==='official-track'?0:4000;}).arcStroke(function(a){return a.kind==='official-track'?1.1:.55;}).arcLabel(function(p){return esc(p.name);}).arcsData(arcs());
   }
   function refresh(){if(typeof root.MONOEarthGlobe.onRefresh==='function')root.MONOEarthGlobe.onRefresh();}
   function makeMarker(marker,l){
     var elt=document.createElement('button');elt.type='button';elt.className='earth-planet-pin earth-pin-'+marker.kind+' earth-pin-'+marker.factor;elt.textContent=marker.symbol;elt.title=marker.text+(marker.kind==='node'?' · '+lang(l).schematic:'');
-    elt.setAttribute('aria-label',elt.title);elt.style.setProperty('--pin',palette[marker.kind==='quake'?'quakes':marker.kind==='storm'?'storms':marker.factor]||'#8ba1cf');
+    elt.setAttribute('aria-label',elt.title);elt.style.setProperty('--pin',palette[marker.kind==='quake'?'quakes':marker.kind==='storm'?'storms':marker.kind==='forecast'?'tracks':marker.factor]||'#8ba1cf');
     elt.addEventListener('pointerenter',function(ev){if(ev.pointerType!=='touch')showHover(marker,l,ev,elt);});
     elt.addEventListener('pointermove',function(ev){if(ev.pointerType!=='touch'&&hoverTip&&hoverTip.classList.contains('visible'))positionHover(ev,elt);});
     elt.addEventListener('pointerleave',hideHover);
