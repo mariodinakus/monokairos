@@ -68,3 +68,16 @@ test('server consolidates official observations and isolates unavailable upstrea
    assert.ok(res.body.unavailable.includes('storms'));
  } finally {globalThis.fetch=original;}
 });
+
+test('storm projection follows observed speed and is never advertised as official forecast',()=>{
+ const globe=boot(),s=latest.storms[0],oldSpeed=s.movementMph;
+ try{
+   s.movementMph=12;
+   const line=globe.arcs().find(a=>/illustrative \+6h/.test(a.name));
+   assert.ok(line);
+   assert.match(line.name,/NOT a forecast track/);
+   assert.ok(Math.abs(line.endLng-s.lon)>0.1);
+   s.movementMph=null;
+   assert.match(globe.arcs().find(a=>/NHC reported/.test(a.name)).name,/no speed\/distance scale/);
+ } finally {s.movementMph=oldSpeed;}
+});
