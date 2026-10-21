@@ -73,7 +73,7 @@ test('storm projection follows observed speed and is never advertised as officia
  const globe=boot(),s=latest.storms[0],oldSpeed=s.movementMph;
  try{
    s.movementMph=12;
-   const line=globe.arcs().find(a=>/illustrative \+6h/.test(a.name));
+   const line=globe.arcs().find(a=>/illustrative straight-line position 6h/.test(a.name));
    assert.ok(line);
    assert.match(line.name,/NOT a forecast track/);
    assert.ok(Math.abs(line.endLng-s.lon)>0.1);
