@@ -61,7 +61,7 @@
        !Number.isFinite(q.movementDir)||!Number.isFinite(q.movementMph)||
        q.movementMph<2||q.movementMph>80||!Number.isFinite(q.time))return null;
     var age=Date.now()-q.time;
-    if(age< -15*60*1000||age>18*60*60*1000)return null;
+    if(age< -15*60*1000||age>5*60*60*1000)return null;
     var km=q.movementMph*1.609344*hours, delta=km/6371,
         bearing=q.movementDir*Math.PI/180, phi=q.lat*Math.PI/180, lam=q.lon*Math.PI/180;
     var phi2=Math.asin(Math.sin(phi)*Math.cos(delta)+Math.cos(phi)*Math.sin(delta)*Math.cos(bearing));
@@ -89,7 +89,7 @@
           (Number.isFinite(q.movementDir)?compass(q.movementDir,l)+' ('+Math.round(q.movementDir)+'°)':'—')+
           (speed===null?'':' · '+speed+' km/h')+'</b></div>'+
         (Number.isFinite(q.pressureMb)?'<div class="earth-h-line">'+(en?'Pressure':'Πίεση')+': <b>'+Math.round(q.pressureMb)+' hPa</b></div>':'')+
-        (projected?'<div class="earth-h-projection">'+(en?'Dotted line: illustrative +6h, ~':'Διακεκομμένη γραμμή: ενδεικτικά +6 ώρες, ~')+
+        (projected?'<div class="earth-h-projection">'+(en?'Dotted line: illustrative 6h after last advisory, ~':'Διακεκομμένη γραμμή: 6 ώρες από την τελευταία αναφορά, ~')+
           Math.round(projected.km)+' km. <strong>'+(en?'NOT an official forecast.':'ΟΧΙ επίσημη πρόγνωση.')+'</strong></div>':
          '<small>'+(en?'Official future track: consult NHC.':'Επίσημη μελλοντική τροχιά: ανατρέξτε στο NHC.')+'</small>');
     } else {
@@ -186,7 +186,7 @@
       var projected=projectStorm(q,6);
       if(projected){
         a.push({startLat:q.lat,startLng:q.lon,endLat:projected.lat,endLng:projected.lon,
-          color:'#e0b65c',name:'NHC reported direction and speed: illustrative +6h straight-line extension (~'+Math.round(projected.km)+' km). NOT a forecast track'});
+          color:'#e0b65c',name:'NHC reported direction and speed: illustrative straight-line position 6h after latest advisory (~'+Math.round(projected.km)+' km). NOT a forecast track'});
         return;
       }
       // Direction-only arrow when speed/freshness is insufficient: constant 2° is NOT a distance scale.
