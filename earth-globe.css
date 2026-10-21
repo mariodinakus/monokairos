@@ -95,3 +95,6 @@
 .earth-h-projection strong{color:var(--ink)}
 @media(pointer:coarse){.earth-hover-hint{display:none}.earth-hover-card{display:none}}
 @media(prefers-reduced-motion:reduce){.earth-hover-card{transition:none}}
+
+/* NHC official forecast locations: compact, static and visually distinct from observations. */
+.earth-pin-forecast{font-size:9px;padding:5px 7px;min-width:28px;min-height:26px;background:#247c9a;border-color:#75e6ff;box-shadow:0 0 0 2px #06192666,0 3px 12px #0007}

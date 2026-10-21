@@ -81,3 +81,58 @@ test('storm projection follows observed speed and is never advertised as officia
    assert.match(globe.arcs().find(a=>/NHC reported/.test(a.name)).name,/no speed\/distance scale/);
  } finally {s.movementMph=oldSpeed;}
 });
+
+
+test('official NHC forecast points supersede estimated movement and can be hidden',()=>{
+ const globe=boot(),q=latest.storms[0],prior=latest.forecasts,oldSpeed=q.movementMph;
+ try{
+  q.movementMph=12;
+  latest.forecasts=[{name:q.name,basin:'AL',stormnum:1,issuedAt:Date.now(),points:[
+    {hour:0,lat:20,lon:-50},{hour:24,lat:21,lon:-53,windKt:70},
+    {hour:48,lat:23,lon:-57},{hour:72,lat:25,lon:-60},
+    {hour:96,lat:27,lon:-63},{hour:120,lat:30,lon:-66}]}];
+  assert.equal(globe.arcs().filter(a=>a.kind==='official-track').length,5);
+  assert.equal(globe.marks().filter(m=>m.kind==='forecast').length,5);
+  assert.ok(!globe.arcs().some(a=>/illustrative straight-line/.test(a.name)));
+  assert.match(globe.toolbar('en'),/Official tracks 120h/);
+  globe.toggle('tracks');
+  assert.equal(globe.arcs().filter(a=>a.kind==='official-track').length,0);
+  assert.ok(globe.arcs().some(a=>/NOT a forecast track/.test(a.name)));
+ } finally {latest.forecasts=prior;q.movementMph=oldSpeed;}
+});
+test('stale NHC forecast points never appear as current tracks',()=>{
+ const globe=boot(),q=latest.storms[0],prior=latest.forecasts;
+ try{
+  latest.forecasts=[{name:q.name,basin:'AL',stormnum:1,issuedAt:Date.now()-40*3600e3,
+    points:[{hour:0,lat:20,lon:-50},{hour:24,lat:22,lon:-52}]}];
+  assert.equal(globe.marks().filter(m=>m.kind==='forecast').length,0);
+  assert.equal(globe.arcs().filter(a=>a.kind==='official-track').length,0);
+ } finally {latest.forecasts=prior;}
+});
+test('NOAA GIS backend accepts only fresh, hourly horizons of one forecast advisory',async()=>{
+ const original=globalThis.fetch,now=Date.now();
+ const point=(hour,lon,adv='12',when=now)=>({type:'Feature',geometry:{type:'Point',coordinates:[lon,20]},
+   properties:{stormname:'Example storm',basin:'AL',stormnum:1,advisnum:adv,fcstprd:hour,
+     maxwind:75,mslp:975,idp_filedate:when}});
+ const features=[point(24,-58,'11',now-6*3600e3),point(48,-60,'11',now-6*3600e3),
+   point(24,-54),point(48,-57),point(72,-60),point(96,-62),point(120,-66),
+   point(168,-70),point(24,-55,'9',now-40*3600e3)];
+ globalThis.fetch=async url=>{
+  const u=String(url);
+  if(u.includes('/MapServer/5/query'))return {ok:true,text:async()=>JSON.stringify({type:'FeatureCollection',features})};
+  if(u.includes('CurrentStorms.json'))return {ok:true,json:async()=>({activeStorms:[]})};
+  if(u.includes('RONI.ascii'))return {ok:true,text:async()=> 'JAS 2026 1.5'};
+  if(u.includes('Rnino34'))return {ok:true,text:async()=> '2026 9 1.3'};
+  return {ok:true,json:async()=>({features:[]})};
+ };
+ try{
+  const handler=require('../api/earth-signals.js');
+  const res={status(n){this.code=n;return this;},setHeader(){},json(obj){this.body=obj;return obj;}};
+  await handler({method:'GET'},res);
+  assert.equal(res.code,200);
+  assert.equal(res.body.forecasts.length,1);
+  assert.equal(res.body.forecasts[0].advisory,'12');
+  assert.deepEqual(res.body.forecasts[0].points.map(p=>p.hour),[24,48,72,96,120]);
+  assert.equal(res.body.forecasts[0].points[0].lon,-54);
+ } finally {globalThis.fetch=original;}
+});
