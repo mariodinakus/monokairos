@@ -2111,7 +2111,7 @@ async function mountGlobe() {
       .pointLat('lat').pointLng('lon').pointRadius(2.3).pointResolution(8).pointsMerge(false).pointsTransitionDuration(400).pointLabel(gridTip)
       .onPointClick(p => probeAt(p.lat, p.lon))
       .ringLat('lat').ringLng('lon').ringColor(() => t => `rgba(110,170,255,${(0.9 * (1 - t)).toFixed(2)})`).ringMaxRadius(3.2).ringPropagationSpeed(1.4).ringRepeatPeriod(1700)
-      .onGlobeClick(({ lat, lng }) => probeAt(lat, lng))
+      .onGlobeClick(({ lat, lng }) => { if(window.MONOStormLens?.state.armed) window.MONOStormLens.pick(lat,lng); else probeAt(lat,lng); })
       .htmlLat(p => p.c.lat).htmlLng(p => p.c.lon).htmlAltitude(p => (p.probe ? 0.02 : 0.01))
       .htmlElement(p => {
         if(p.earth && window.MONOEarthGlobe)return window.MONOEarthGlobe.makeMarker(p.marker,state.lang);
@@ -2619,6 +2619,12 @@ function onClick(e) {
   else if (a === 'radarHome' && map) { map.setView([state.city.lat,state.city.lon],8); map.invalidateSize(); }
   else if (a === 'radarStyle') { state.radarBasemap=state.radarBasemap==='street'?'satellite':'street';persistUI();setRadarBasemap(); }
   else if (a === 'radarReload') { killMap(); mountRadar(); }
+  else if (a === 'lensPick' && window.MONOStormLens) window.MONOStormLens.togglePick();
+  else if (a === 'lensMode' && window.MONOStormLens) window.MONOStormLens.setMode(b.dataset.v);
+  else if (a === 'lensHours' && window.MONOStormLens) window.MONOStormLens.setHours(b.dataset.v);
+  else if (a === 'lensThreshold' && window.MONOStormLens) window.MONOStormLens.setThreshold(b.dataset.v);
+  else if (a === 'lensSampling' && window.MONOStormLens) window.MONOStormLens.setRadius(b.dataset.v);
+  else if (a === 'lensReload' && window.MONOStormLens) window.MONOStormLens.load(true);
   else if (a === 'eLayer' && window.MONOEarthGlobe) {window.MONOEarthGlobe.toggle(b.dataset.v);updateGlobeCtl();}
   else if (a === 'eOpenImpact' && window.MONOEarthGlobe) {const val=b.dataset.v||'',sep=val.indexOf(':'),factor=sep>=0?val.slice(0,sep):'enso',id=sep>=0?val.slice(sep+1):val;goto('earth');window.MONOEarthGlobe.openImpact(factor,id);}
   else if (a === 'gBase') { state.gBase = b.dataset.v; persistUI(); paintGlobe(); render(); }
@@ -2633,6 +2639,13 @@ function onClick(e) {
 function init() {
   document.addEventListener('click', onClick);
   window.MONOEarthGlobe.onRefresh=()=>{if((state.page==='earth'||state.page==='globe') && globe && $('#globe'))updateGlobeCtl();};
+  if(window.MONOStormLens){
+    window.MONOStormLens.onRefresh=()=>{if((state.page==='earth'||state.page==='globe') && $('#globe'))updateGlobeCtl();};
+    window.MONOStormLens.onPick=(lat,lon)=>{if(globe)globe.pointOfView({lat,lng:lon,altitude:2.15},850);};
+  }
+  document.addEventListener('input',e=>{
+    if(e.target.id==='lensRadius'&&window.MONOStormLens)window.MONOStormLens.setManualRadius(Number(e.target.value));
+  });
   document.addEventListener('change',e=>{if(e.target.id==='eYearRange'){window.MONOEarthGlobe.setYear(e.target.value);updateGlobeCtl();}});
   $('#navFilter')?.addEventListener('input',()=>navRender());
   $('#language').addEventListener('click', () => { state.lang = state.lang === 'el' ? 'en' : 'el'; persist(); killMap(); killGlobe(); render(); localizePlaces(); });
