@@ -101,6 +101,7 @@
       '<section class="earth-pane earth-main"><div class="earth-kicker">'+t.observations+' / NOAA CPC</div><div class="earth-bigline"><strong id="earth-roni">—</strong><span id="earth-phase">'+t.noData+'</span></div><div class="earth-small" id="earth-season">RONI · '+t.dataState+'</div><div id="earth-spark" class="earth-spark"></div><div class="earth-credit" id="earth-noaa-credit">'+link('https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt','NOAA RONI')+'</div></section>' +
       '<section class="earth-pane"><div class="earth-kicker">'+t.quake+'</div><h2 class="earth-side-title">USGS / M≥4.5</h2><p class="earth-muted">'+t.quakeSub+'</p><div id="earth-quakes" class="earth-quakes">'+t.noData+'</div><div class="earth-credit">'+link('https://earthquake.usgs.gov/earthquakes/map/','USGS')+'</div></section></div>' +
       '<div class="earth-source-meta" id="earth-meta">'+t.late+'</div>' +
+      '<section class="earth-health" id="earth-health" aria-label="Earth data source status"></section>' +
       '<section class="earth-globe-workspace"><div class="earth-globe-heading"><div><span class="earth-kicker">EARTH / 3D VISUALIZATION</span><h2>'+(locale==='el'?'Η Γη και οι παγκόσμιες συνδέσεις':'Earth and global connections')+'</h2><p>'+(locale==='el'?'Επίλεξε επίπεδα, γύρισε την υδρόγειο και πάτησε ζώνες ή σημεία για ανάλυση.':'Select layers, rotate the globe and select zones or markers for detail.')+'</p></div><button data-action="goto" data-page="globe" class="earth-button">'+(locale==='el'?'Πλήρης υδρόγειος ↗':'Full globe ↗')+'</button></div><div id="earthGlobeCtl"></div><div class="earth-globe-split"><div class="card globecard earth-globecard"><div id="globe" class="globe"></div><div id="globeProbe" class="gprobe-wrap"></div><div id="globeLegend"></div></div><aside class="earth-globe-side" id="earthGlobeSide"></aside></div><div class="earth-timeline" id="earthGlobeTime"></div><details class="earth-globe-details"><summary>'+(locale==='el'?'Αναλυτικά στοιχεία δορυφόρου & ενημερώσεων':'Satellite source and update details')+'</summary><div class="card" id="globeFresh"></div></details></section>' +
       '<div class="earth-explain"><div class="earth-kicker">TELECONNECTIONS / CLIMATE DRIVERS</div><h2>'+t.mapping+'</h2><p>'+t.choose+'</p><div class="earth-factor-chooser" id="earth-factors"></div><div id="earth-explorer"></div></div>' +
       '<div class="earth-bottom"><strong>'+t.phase+'</strong><p>'+t.indicator+'</p><p>'+t.labels+'</p><p>'+t.note+'</p><div>'+link(t===LABELS.el ? 'https://www.noaa.gov/understanding-el-nino' : 'https://www.noaa.gov/understanding-el-nino','NOAA · ENSO')+' · '+link('https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/probabilities/',t.forecast)+'</div></div>' +
@@ -151,6 +152,23 @@
     }).join('') : t.none) : t.noData;
     const checked=d?.checkedAt ? new Date(d.checkedAt).toLocaleString(locale==='en'?'en-GB':'el-GR',{dateStyle:'medium',timeStyle:'short'}):null;
     $('earth-meta').textContent=(checked ? t.checked+': '+checked+'. ' : '')+t.late+(d?.unavailable?.length ? ' · '+t.noData+' ('+d.unavailable.join(', ')+')':'');
+    const metrics=d?.health?.sources||null, status=$('earth-health');
+    if(status){
+      if(!metrics){
+        status.innerHTML='<p class="earth-health-empty">'+(locale==='el'?'Πηγές: αναμονή ελέγχου.':'Sources: awaiting verification.')+'</p>';
+      }else{
+        const names={roni:'NOAA RONI',nino34:'NOAA Niño 3.4',earthquakes:'USGS',storms:'NHC · '+(locale==='el'?'Κυκλώνες':'Cyclones'),forecasts:'NHC · '+(locale==='el'?'Τροχιές':'Forecast tracks')};
+        const friendly={upstream_403:locale==='el'?'Ο πάροχος αρνήθηκε τη λήψη':'Provider denied request',upstream_rate_limit:locale==='el'?'Όριο παρόχου':'Provider rate limit',
+          upstream_timeout:locale==='el'?'Λήξη χρόνου απόκρισης':'Provider timeout',upstream_error:locale==='el'?'Σφάλμα παρόχου':'Provider error',
+          invalid_or_empty_data:locale==='el'?'Μη διαθέσιμο δείγμα':'No usable samples'};
+        status.innerHTML='<div class="earth-health-heading">'+(locale==='el'?'Κατάσταση δεδομένων':'Data source status')+' <span>'+safe(d.health.status.toUpperCase())+'</span></div>'+
+          Object.entries(names).map(([key,name])=>{
+            const h=metrics[key]||{},good=h.status==='ok',amount=good?(h.items===0?(locale==='el'?'Καμία τρέχουσα καταγραφή':'No current observations'):
+              (h.items+' '+(locale==='el'?'εγγραφές':'records'))):(friendly[h.reason]||t.noData);
+            return '<div class="earth-health-row"><i class="'+(good?'ok':'warn')+'" aria-hidden="true"></i><b>'+name+'</b><span>'+safe(amount)+'</span>'+(h.asOf?'<small>'+safe(h.asOf)+'</small>':'')+'</div>';
+          }).join('');
+      }
+    }
   }
   async function load(force) {
     if (!force && reading && Date.now()-readAt < 600000) { renderLive(); return; }
@@ -159,8 +177,9 @@
       try {
         const controller = new AbortController(), timer=setTimeout(()=>controller.abort(),16000);
         let r; try { r=await fetch('/api/earth-signals',{signal:controller.signal,cache:force?'reload':'default'}); } finally { clearTimeout(timer); }
-        if (!r.ok) throw new Error('Signals API HTTP '+r.status);
-        reading=await r.json(); readAt=Date.now(); error=false;
+        const body=await r.json();
+        if(!body || typeof body!=='object' || !body.health?.sources)throw new Error('Signals API invalid response');
+        reading=body;readAt=Date.now();error=!r.ok;
       } catch(e){ error=true; if(!reading)reading=null; } finally {pending=null;}
       renderLive();
       if (root.MONOEarthGlobe && typeof root.MONOEarthGlobe.onRefresh === 'function') root.MONOEarthGlobe.onRefresh();
