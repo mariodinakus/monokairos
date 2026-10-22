@@ -3,7 +3,8 @@
 /* Storm Lens: sampled Open-Meteo precipitation band, NOT a cyclone boundary. */
 const R=6371.0088;
 const S={center:null,name:'',radius:600,manualRadius:300,threshold:5,hours:12,mode:'forecast',
-  armed:false,loading:false,error:'',data:null,token:0};
+  armed:false,loading:false,playing:false,error:'',data:null,token:0};
+let playTimer=null;
 const horizons=[0,6,12,24,36,48];
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function wrap(v){return ((v+180)%360+360)%360-180;}
@@ -129,7 +130,20 @@ async function fetchForecast(force=false){
   }catch(e){if(token===S.token){S.data=null;S.error=String(e.message||e).slice(0,140);}}
   finally{if(token===S.token){S.loading=false;update();}}
 }
+function pause(){if(playTimer){clearInterval(playTimer);playTimer=null;}S.playing=false;update();}
+function play(){
+  if(S.playing){pause();return;}
+  if(!S.center||!S.data||S.mode!=='forecast')return;
+  S.playing=true;
+  playTimer=setInterval(()=>{
+    if(document.visibilityState==='hidden'){pause();return;}
+    const index=horizons.indexOf(S.hours);
+    S.hours=horizons[(index+1)%horizons.length];update();
+  },1300);
+  update();
+}
 function pick(lat,lon,name=''){
+  if(S.playing)pause();
   if(!valid(lat,lon)){S.error='Coverage requires |latitude| ≤ 76°';update();return false;}
   S.center={lat:+lat.toFixed(3),lon:+lon.toFixed(3)};S.name=String(name||'').slice(0,85);S.mode='forecast';S.armed=false;S.data=null;
   if(typeof root.MONOStormLens.onPick==='function')root.MONOStormLens.onPick(lat,lon);
@@ -137,8 +151,8 @@ function pick(lat,lon,name=''){
   return true;
 }
 function togglePick(){S.armed=!S.armed;update();}
-function setMode(m){if(m==='forecast'||m==='radius'){S.mode=m;update();}}
-function setHours(h){const n=Number(h);if(horizons.includes(n)){S.hours=n;update();}}
+function setMode(m){if(m==='forecast'||m==='radius'){if(S.playing)pause();S.mode=m;update();}}
+function setHours(h){const n=Number(h);if(horizons.includes(n)){if(S.playing)pause();S.hours=n;update();}}
 function setThreshold(v){const n=Number(v);if([1,3,5,10,20].includes(n)){S.threshold=n;update();}}
 function setManualRadius(v){const n=Number(v);if(Number.isFinite(n)&&n>=100&&n<=1200){S.manualRadius=n;update();}}
 function setRadius(v){const n=Number(v);if([300,450,600,800,1000].includes(n)){S.radius=n;S.data=null;if(S.center)fetchForecast(true);else update();}}
@@ -155,6 +169,7 @@ function panel(l){
     '<div class="lens-place">'+centre+'</div>'+
     '<div class="lens-switches">'+mode('forecast','Μοντέλο υετού · 48 ώρες','Rain model · 48h')+mode('radius','Ακτίνα / εμβαδόν','Radius / area')+'</div>'+
     (S.mode==='forecast'?
+      '<div class="lens-play-row"><button type="button" data-action="lensPlay" class="lens-play" '+(!S.data||S.loading?'disabled':'')+'>'+(S.playing?(en?'Ⅱ Pause':'Ⅱ Παύση'):(en?'▶ Animate the next 48h':'▶ Κίνηση πρόγνωσης 48ώρου'))+'</button></div>'+ 
       '<div class="lens-label">'+(en?'Forecast hour':'Προγνωστική ώρα')+'</div><div class="lens-options">'+option(horizons.map(x=>[x,'+'+x+'ω','+'+x+'h']),'lensHours',S.hours)+'</div>'+
       '<div class="lens-label">'+(en?'Rain threshold (mm / 6h)':'Όριο βροχής (mm / 6ωρο)')+'</div><div class="lens-options">'+option([1,3,5,10,20].map(x=>[x,x+' mm',x+' mm']),'lensThreshold',S.threshold)+'</div>'+
       '<div class="lens-label">'+(en?'Sampled radius':'Ακτίνα δειγματοληψίας')+'</div><div class="lens-options">'+option([300,450,600,800,1000].map(x=>[x,x+' km',x+' km']),'lensSampling',S.radius)+'</div>'
@@ -169,5 +184,5 @@ function panel(l){
     '<button type="button" data-action="lensReload" '+(!q||S.loading?'disabled':'')+'>'+(en?'Refresh ↻':'Ανανέωση ↻')+'</button></div></section>';
 }
 root.MONOStormLens={state:S,pick,togglePick,setMode,setHours,setThreshold,setRadius,setManualRadius,
-  polygons,arcs,marks,panel,current,forecastTrack,radiusArea,clusters,distance,onPick:null,onRefresh:null,load:fetchForecast};
+  polygons,arcs,marks,panel,current,forecastTrack,radiusArea,clusters,distance,play,pause,onPick:null,onRefresh:null,load:fetchForecast};
 })(window);
