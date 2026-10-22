@@ -2520,6 +2520,7 @@ function render() {
 let toastT;
 function toast(m) { const n = $('#toast'); n.textContent = m; n.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => n.classList.remove('show'), 3200); }
 function goto(p) {
+  if(p!=='earth'&&p!=='globe'&&window.MONOStormLens)window.MONOStormLens.pause();
   if (p !== 'maps') MonoForecast.destroy();
   if (p !== 'radar') killMap();
   if (p !== state.page || (p !== 'globe' && p !== 'earth')) killGlobe();
@@ -2620,6 +2621,7 @@ function onClick(e) {
   else if (a === 'radarStyle') { state.radarBasemap=state.radarBasemap==='street'?'satellite':'street';persistUI();setRadarBasemap(); }
   else if (a === 'radarReload') { killMap(); mountRadar(); }
   else if (a === 'lensPick' && window.MONOStormLens) window.MONOStormLens.togglePick();
+  else if (a === 'lensPlay' && window.MONOStormLens) window.MONOStormLens.play();
   else if (a === 'lensMode' && window.MONOStormLens) window.MONOStormLens.setMode(b.dataset.v);
   else if (a === 'lensHours' && window.MONOStormLens) window.MONOStormLens.setHours(b.dataset.v);
   else if (a === 'lensThreshold' && window.MONOStormLens) window.MONOStormLens.setThreshold(b.dataset.v);
