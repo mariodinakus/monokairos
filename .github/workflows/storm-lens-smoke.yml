@@ -1,0 +1,42 @@
+name: Storm Lens live smoke test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'api/storm-lens.js'
+      - 'storm-lens.js'
+      - 'storm-lens.css'
+      - '.github/workflows/storm-lens-smoke.yml'
+permissions:
+  contents: read
+concurrency:
+  group: storm-lens-live-smoke
+  cancel-in-progress: true
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify server-side sampled forecast at 49 cells
+        run: |
+          node <<'NODE'
+          const u='https://monokairos.vercel.app/api/storm-lens?lat=38.1&lon=23.7&radius=450';
+          let last='';
+          for(let i=0;i<5;i++){
+            try{
+              const r=await fetch(u+'&check='+Date.now(),{signal:AbortSignal.timeout(35000)});
+              const raw=await r.text();
+              console.log('HTTP '+r.status+' content-type='+r.headers.get('content-type')+' bytes='+raw.length);
+              const d=JSON.parse(raw);
+              if(!r.ok)throw Error(d.error||'HTTP '+r.status);
+              if(d.points?.length!==49||d.horizons?.length!==6)throw Error('Missing 7x7 forecast grid');
+              const ok=d.horizons.filter(h=>h.precip?.filter(Number.isFinite).length>=35);
+              if(ok.length<5)throw Error('Missing usable forecast slices');
+              if(d.metric!=='precipitation_mm_per_6h')throw Error('Unexpected metric');
+              console.log('SUCCESS: 49 cells, '+ok.length+' usable time steps, model '+d.source.model+'; timestamps='+d.horizons.map(h=>h.hours).join(','));
+              process.exit(0);
+            }catch(e){last=String(e.message||e);console.error('Attempt '+(i+1)+': '+last);if(i<4)await new Promise(r=>setTimeout(r,9000));}
+          }
+          process.exitCode=1;
+          NODE
