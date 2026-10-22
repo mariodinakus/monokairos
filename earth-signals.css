@@ -64,3 +64,18 @@
 @media(max-width:380px){.earth-factor-chooser{grid-template-columns:1fr}.earth-bigline{gap:8px}.earth-phase-tabs{display:flex}.earth-phase-tabs button{flex:1;padding:10px 6px}}
 
 .earth-globe-cta{margin:0 0 12px}.earth-globe-cta .outline-btn{font-size:11px;letter-spacing:.01em;padding:12px 15px}
+
+
+/* Source diagnostics are built into Earth, so upstream outages never look like missing data. */
+.earth-health{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:7px;margin:12px 0 22px}
+.earth-health-heading{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px;font-weight:780;letter-spacing:.055em;color:var(--sub)}
+.earth-health-heading span{font-size:10px;letter-spacing:.05em;color:var(--sub);font-weight:700}
+.earth-health-row{min-width:0;padding:11px 12px;display:grid;grid-template-columns:8px minmax(0,1fr);column-gap:9px;row-gap:4px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:11px}
+.earth-health-row i{width:8px;height:8px;display:inline-block;border-radius:50%;grid-row:1/3}
+.earth-health-row i.ok{background:#2f9a71}
+.earth-health-row i.warn{background:#d79a3f}
+.earth-health-row b{font-size:10px;font-weight:730;color:var(--ink)}
+.earth-health-row span{font-size:10px;color:var(--sub);grid-column:2}
+.earth-health-row small{grid-column:2;color:var(--muted);font-size:9px;overflow-wrap:anywhere}
+.earth-health-empty{grid-column:1/-1;font-size:11px;color:var(--sub);padding:10px 0}
+@media(max-width:540px){.earth-health{grid-template-columns:1fr 1fr;gap:5px}.earth-health-row{padding:10px 8px}.earth-health-row b{font-size:9px}.earth-health-row span{font-size:9px}}
