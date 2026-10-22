@@ -2643,7 +2643,7 @@ function init() {
     window.MONOStormLens.onRefresh=()=>{if((state.page==='earth'||state.page==='globe') && $('#globe'))updateGlobeCtl();};
     window.MONOStormLens.onPick=(lat,lon)=>{if(globe)globe.pointOfView({lat,lng:lon,altitude:2.15},850);};
   }
-  document.addEventListener('input',e=>{
+  document.addEventListener('change',e=>{
     if(e.target.id==='lensRadius'&&window.MONOStormLens)window.MONOStormLens.setManualRadius(Number(e.target.value));
   });
   document.addEventListener('change',e=>{if(e.target.id==='eYearRange'){window.MONOEarthGlobe.setYear(e.target.value);updateGlobeCtl();}});
