@@ -212,6 +212,7 @@
       out.push({id:'iod-east',factor:'iod',geometry:rect(-10,0,90,110),color:'rgba(238,143,53,.18)',label:'IOD · Eastern Indian Ocean (schematic)',outline:'#f6ae60'});
     }
     if(enabled.polar)out.push({id:'polar',factor:'polar',geometry:rect(70,89,-180,180),color:'rgba(106,176,243,.15)',label:'Polar vortex · schematic location, NOT live strength',outline:'#89bded'});
+    if(root.MONOStormLens)out.push.apply(out,root.MONOStormLens.polygons());
     return out;
   }
   function arcs(){
@@ -242,6 +243,7 @@
       a.push({startLat:q.lat,startLng:q.lon,endLat:endLat*d,endLng:((endLon*d+540)%360)-180,
         color:'#e0b65c',name:'NHC reported movement direction — visual arrow only, no speed/distance scale, NOT a forecast track'});
     });
+    if(root.MONOStormLens)a.push.apply(a,root.MONOStormLens.arcs());
     return a;
   }
   function marks(){
@@ -270,6 +272,7 @@
           symbol:p.hour+'h',text:x.track.name+' · +'+p.hour+'h · NOAA NHC',record:{point:p,track:x.track}});
       });
     });
+    if(root.MONOStormLens)out.push.apply(out,root.MONOStormLens.marks());
     return out;
   }
   function select(m){choice=m?{kind:m.kind||'node',factor:m.factor||'enso',id:m.id||'',record:m.record||null}:null;return choice;}
@@ -316,7 +319,7 @@
       var special=(k==='nao'||k==='iod'||k==='mjo'||k==='polar'),state=enabled[k]?'active':'';
       return '<button type="button" data-action="eLayer" data-v="'+k+'" aria-pressed="'+enabled[k]+'" class="earth-layer-chip '+state+'"><i style="background:'+palette[k]+'"></i><span>'+esc(t[k])+'</span><small>'+(special?'◇':'●')+'</small></button>';
     }).join('');
-    return '<div class="earth-layer-head"><b>'+t.layers+'</b><span>● '+t.observed+' · ◇ '+t.schematic+'</span></div><div class="earth-layer-wrap">'+badges+'</div><div class="earth-hover-hint">'+(l==='en'?'Hover over a marker for scale and motion · tap to open details':'Πέρασε το ποντίκι πάνω από ένα σύμβολο για ένταση και πορεία · πάτησε για λεπτομέρειες')+'</div>';
+    return (root.MONOStormLens?root.MONOStormLens.panel(l):'')+'<div class="earth-layer-head"><b>'+t.layers+'</b><span>● '+t.observed+' · ◇ '+t.schematic+'</span></div><div class="earth-layer-wrap">'+badges+'</div><div class="earth-hover-hint">'+(l==='en'?'Hover over a marker for scale and motion · tap to open details':'Πέρασε το ποντίκι πάνω από ένα σύμβολο για ένταση και πορεία · πάτησε για λεπτομέρειες')+'</div>';
   }
   function info(l){
     var t=lang(l),d=root.MONOEarth&&root.MONOEarth.latest(),r=getRONI(), ts=d&&d.checkedAt ? new Date(d.checkedAt).toLocaleString(l==='en'?'en-GB':'el-GR',{dateStyle:'short',timeStyle:'short'}) :'—';
@@ -339,7 +342,15 @@
     elt.addEventListener('pointerleave',hideHover);
     elt.addEventListener('focus',function(){showHover(marker,l,null,elt);});
     elt.addEventListener('blur',hideHover);
-    elt.onclick=function(ev){ev.stopPropagation();hideHover();select(marker);if(globeApi&&globeApi.pointOfView)globeApi.pointOfView({lat:marker.lat,lng:marker.lon,altitude:2.1},700);refresh();};return elt;
+    elt.onclick=function(ev){ev.stopPropagation();hideHover();
+      if(marker.kind==='lens-center'||marker.kind==='lens-forecast'){
+        if(root.MONOStormLens)root.MONOStormLens.pick(marker.lat,marker.lon,marker.text);
+      }else{
+        select(marker);
+        if(marker.kind==='storm'&&root.MONOStormLens)root.MONOStormLens.pick(marker.lat,marker.lon,marker.text);
+      }
+      if(globeApi&&globeApi.pointOfView)globeApi.pointOfView({lat:marker.lat,lng:marker.lon,altitude:2.1},700);
+      refresh();};return elt;
   }
   function embellish(l,html){
     return html.concat(marks().map(function(p){return {earth:true,c:{lat:p.lat,lon:p.lon},marker:p};}));
