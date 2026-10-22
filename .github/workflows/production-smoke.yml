@@ -1,0 +1,60 @@
+name: Production Earth API smoke test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'api/earth-signals.js'
+      - 'earth-signals.js'
+      - 'earth-signals.css'
+      - 'index.html'
+      - '.github/workflows/production-smoke.yml'
+permissions:
+  contents: read
+concurrency:
+  group: mono-production-earth-smoke
+  cancel-in-progress: true
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm public HTML and live Earth API return valid content
+        env:
+          BASE_URL: https://monokairos.vercel.app
+        run: |
+          node <<'NODE'
+          const base=process.env.BASE_URL;
+          const pause=ms=>new Promise(r=>setTimeout(r,ms));
+          let failed='';
+          for(let attempt=1;attempt<=12;attempt++){
+            try{
+              const stamp=Date.now();
+              const [page,api]=await Promise.all([
+                fetch(base+'/?smoke='+stamp,{signal:AbortSignal.timeout(15000)}),
+                fetch(base+'/api/earth-signals?smoke='+stamp,{signal:AbortSignal.timeout(16000)})
+              ]);
+              const body=await api.text();
+              console.log('Attempt '+attempt+': homepage='+page.status+', api='+api.status+', type='+api.headers.get('content-type'));
+              if(page.status!==200)throw Error('Homepage HTTP '+page.status);
+              if(!api.headers.get('content-type')?.includes('application/json'))throw Error('API not JSON: '+body.slice(0,120));
+              const data=JSON.parse(body);
+              if(!data.health?.sources||!Array.isArray(data.unavailable))throw Error('Missing Earth health diagnostics (old deployment?)');
+              const state=data.health.status;
+              for(const [source,report] of Object.entries(data.health.sources)){
+                console.log(source+': '+report.status+', records='+report.items+(report.reason?', reason='+report.reason:''));
+              }
+              if(api.status===503||state==='unavailable')throw Error('All five upstream Earth sources unavailable');
+              if(!api.ok)throw Error('API HTTP '+api.status);
+              if(!Array.isArray(data.roni)||!data.roni.length)console.warn('WARNING: NOAA RONI is unavailable');
+              console.log('SUCCESS: Earth API healthy/degraded in production: '+state);
+              process.exit(0);
+            }catch(e){
+              failed=String(e?.message||e);
+              console.log('Attempt '+attempt+' failed: '+failed);
+              if(attempt<12)await pause(10000);
+            }
+          }
+          console.error('Production smoke test failed: '+failed);
+          process.exit(1);
+          NODE
