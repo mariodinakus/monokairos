@@ -26,3 +26,7 @@
 .earth-pin-lens-center{background:#145c83;border-color:#6ddcfa;font-size:17px}
 .earth-pin-lens-forecast{background:#ba8743;border-color:#fae1a5;font-size:9px;padding:6px}
 @media(max-width:540px){.lens-wrap{padding:14px}.lens-title h3{font-size:18px}.lens-pick{width:100%}.lens-options{gap:4px}.lens-option{padding:6px 8px;font-size:10px}.lens-stats>div{padding:11px}.lens-stats strong{font-size:19px}}
+
+.lens-play-row{margin:9px 0 15px;display:flex;align-items:center;gap:9px}
+.lens-play{font-size:11px;font-weight:800;color:#fff;background:#236681;border:1px solid #489ab3;border-radius:9px;padding:10px 15px;min-height:39px;cursor:pointer}
+.lens-play:disabled{opacity:.48;cursor:default}
