@@ -136,3 +136,53 @@ test('NOAA GIS backend accepts only fresh, hourly horizons of one forecast advis
   assert.equal(res.body.forecasts[0].points[0].lon,-54);
  } finally {globalThis.fetch=original;}
 });
+
+
+test('NHC current storms accepts both official coordinate spellings and reports source health',async()=>{
+  const saved=globalThis.fetch;
+  const originalDate=new Date();
+  const current=originalDate.toISOString();
+  const fixtures=[
+    {id:'al012026',name:'A',latitudeNumeric:20.1,longitudeNumeric:-65.2,lastUpdate:current,intensity:'70',pressure:'991',movementSpeed:12,movementDir:270},
+    {id:'ep012026',name:'B',latitude_numeric:13.2,longitude_numeric:-108.3,lastUpdate:current,intensity:35,pressure:1005},
+    {id:'bad',name:'Bad',latitude_numeric:null,longitude_numeric:null,lastUpdate:current},
+    {id:'old',name:'Old',latitudeNumeric:11,longitudeNumeric:-81,lastUpdate:'2023-01-01T00:00:00.000Z'}
+  ];
+  globalThis.fetch=async url=>{
+    const u=String(url);
+    if(u.includes('CurrentStorms'))return{ok:true,json:async()=>({activeStorms:fixtures})};
+    if(u.includes('RONI.ascii'))return{ok:true,text:async()=> 'SEAS YR ANOM\nJAS 2026 1.2\n'};
+    if(u.includes('Rnino34'))return{ok:true,text:async()=> 'YR MTH ANOM\n2026 9 1.5\n'};
+    if(u.includes('MapServer'))return{ok:true,text:async()=>JSON.stringify({type:'FeatureCollection',features:[]})};
+    return{ok:true,json:async()=>({features:[]})};
+  };
+  try{
+    const handler=require('../api/earth-signals.js');
+    const res={status(code){this.code=code;return this;},setHeader(){},json(body){this.body=body;return body;}};
+    await handler({method:'GET'},res);
+    assert.equal(res.code,200);
+    assert.equal(res.body.storms.length,2);
+    assert.equal(res.body.storms[0].lon,-65.2);
+    assert.equal(res.body.storms[1].lon,-108.3);
+    assert.equal(res.body.storms[0].movementDir,270);
+    assert.equal(res.body.storms[1].movementDir,null);
+    assert.equal(res.body.health.status,'ok');
+    assert.equal(res.body.health.sources.storms.items,2);
+    assert.equal(res.body.health.sources.forecasts.items,0);
+    assert.equal(res.body.health.sources.forecasts.status,'ok');
+  } finally{globalThis.fetch=saved;}
+});
+test('Earth API returns safe diagnostics even on complete upstream outage',async()=>{
+  const saved=globalThis.fetch;
+  globalThis.fetch=async()=>{throw new Error('test upstream failure');};
+  try{
+    const handler=require('../api/earth-signals.js');
+    const res={status(code){this.code=code;return this;},setHeader(){},json(body){this.body=body;return body;}};
+    await handler({method:'GET'},res);
+    assert.equal(res.code,503);
+    assert.equal(res.body.health.status,'unavailable');
+    assert.equal(Object.keys(res.body.health.sources).length,5);
+    assert.equal(res.body.health.sources.roni.reason,'upstream_error');
+    assert.deepEqual(res.body.unavailable.sort(),['roni','nino34','earthquakes','storms','forecasts'].sort());
+  } finally{globalThis.fetch=saved;}
+});
