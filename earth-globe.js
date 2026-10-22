@@ -343,8 +343,10 @@
     elt.addEventListener('focus',function(){showHover(marker,l,null,elt);});
     elt.addEventListener('blur',hideHover);
     elt.onclick=function(ev){ev.stopPropagation();hideHover();
-      if(marker.kind==='lens-center'||marker.kind==='lens-forecast'){
-        if(root.MONOStormLens)root.MONOStormLens.pick(marker.lat,marker.lon,marker.text);
+      if(marker.kind==='lens-forecast'){
+        if(root.MONOStormLens)root.MONOStormLens.setHours(Number(marker.id.split('-').pop()));
+      }else if(marker.kind==='lens-center'){
+        // Keep selected center without re-fetching the regional forecast.
       }else{
         select(marker);
         if(marker.kind==='storm'&&root.MONOStormLens)root.MONOStormLens.pick(marker.lat,marker.lon,marker.text);
