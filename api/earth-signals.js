@@ -37,20 +37,35 @@ function parseQuakes(data) {
       lon: Number(q.geometry.coordinates[0]), lat: Number(q.geometry.coordinates[1]),
       url: /^https:\/\/earthquake\.usgs\.gov\//.test(q.properties.url || '') ? q.properties.url : null }));
 }
+/* The NHC publishes both latitude_numeric and latitudeNumeric spellings in
+ * official documentation / archived feeds. Accept either, not fictitious zeroes. */
 function parseStorms(data) {
   if (!data || !Array.isArray(data.activeStorms)) throw new Error('Unexpected NHC data');
-  return data.activeStorms.filter(s => Number.isFinite(+s.latitude_numeric) && Number.isFinite(+s.longitude_numeric))
-    .filter(s => Math.abs(+s.latitude_numeric) <= 90 && Math.abs(+s.longitude_numeric) <= 180)
-    .map(s => ({ id: String(s.id || '').slice(0,20), name: String(s.name || 'Unnamed').slice(0,65),
-      classification: String(s.classification || '').slice(0,10),
-      lat:+s.latitude_numeric, lon:+s.longitude_numeric,
-      windKt: Number.isFinite(+s.intensity) ? +s.intensity : null,
-      pressureMb: Number.isFinite(+s.pressure) ? +s.pressure : null,
-      movementDir: Number.isFinite(+s.movementDir) && +s.movementDir>=0 && +s.movementDir<=360 ? +s.movementDir : null,
-      movementMph: Number.isFinite(+s.movementSpeed) && +s.movementSpeed>=0 ? +s.movementSpeed : null,
-      time: Date.parse(s.lastUpdate || '') || null,
-      url:'https://www.nhc.noaa.gov/' }))
-    .filter(s => s.time && Math.abs(Date.now()-s.time) < 72*3600*1000).slice(0,24);
+  return data.activeStorms.map(storm => {
+    const latRaw=storm.latitude_numeric ?? storm.latitudeNumeric;
+    const lonRaw=storm.longitude_numeric ?? storm.longitudeNumeric;
+    if (latRaw == null || lonRaw == null || latRaw === '' || lonRaw === '') return null;
+    const lat=Number(latRaw),lon=Number(lonRaw);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat)>90 || Math.abs(lon)>180) return null;
+    const timestamp=Date.parse(storm.lastUpdate || '');
+    if (!Number.isFinite(timestamp) || Math.abs(Date.now()-timestamp)>72*3600*1000) return null;
+    const numeric=(v,min,max)=>{
+      if(v==null || v==='')return null;
+      const n=Number(v);return Number.isFinite(n)&&n>=min&&n<=max?n:null;
+    };
+    return {
+      id:String(storm.id||'').slice(0,20),
+      name:String(storm.name||'Unnamed').slice(0,65),
+      classification:String(storm.classification||'').slice(0,10),
+      lat,lon,
+      windKt:numeric(storm.intensity,0,250),
+      pressureMb:numeric(storm.pressure,850,1100),
+      movementDir:numeric(storm.movementDir,0,360),
+      movementMph:numeric(storm.movementSpeed,0,180),
+      time:timestamp,
+      url:'https://www.nhc.noaa.gov/'
+    };
+  }).filter(Boolean).slice(0,24);
 }
 
 const FORECAST_URL='https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer/5/query';
@@ -103,6 +118,7 @@ module.exports = async function handler(req, res) {
   const out = { checkedAt: new Date().toISOString(), source: {
     roni: RONI_URL, nino34: NINO_URL, earthquakes: QUAKE_URL, storms: STORM_URL, forecasts: FORECAST_URL },
     roni: null, nino34: null, earthquakes: null, storms: null, forecasts: null, unavailable: [] };
+  const sourcesStarted=Date.now();
   const values = await Promise.allSettled([
     readText(RONI_URL).then(rowsRONI),
     readText(NINO_URL).then(rowsNino),
@@ -110,11 +126,30 @@ module.exports = async function handler(req, res) {
     fetch(STORM_URL, { signal: AbortSignal.timeout(10500),headers:{Accept:'application/json'} }).then(r => { if(!r.ok) throw new Error('NHC HTTP '+r.status);return r.json(); }).then(parseStorms),
     readForecastPoints()
   ]);
-  ['roni','nino34','earthquakes','storms','forecasts'].forEach((key,i) => {
-    const v = values[i];
-    if (v.status === 'fulfilled' && Array.isArray(v.value) && (v.value.length || key === 'storms' || key === 'earthquakes' || key === 'forecasts')) out[key] = v.value;
+  const names=['roni','nino34','earthquakes','storms','forecasts'];
+  const sourceHealth={};
+  names.forEach((key,i) => {
+    const v=values[i];
+    const valid=v.status==='fulfilled' && Array.isArray(v.value) &&
+      (v.value.length>0 || key==='storms' || key==='earthquakes' || key==='forecasts');
+    if(valid)out[key]=v.value;
     else out.unavailable.push(key);
+    const latest=valid && v.value.length ? v.value[v.value.length-1]:null;
+    let dataAsOf=null;
+    if(key==='roni' && latest)dataAsOf=latest.season+' '+latest.year;
+    if(key==='nino34' && latest)dataAsOf=latest.year+'-'+String(latest.month).padStart(2,'0');
+    if(key==='earthquakes' && latest?.time)dataAsOf=new Date(latest.time).toISOString();
+    if(key==='storms' && latest?.time)dataAsOf=new Date(latest.time).toISOString();
+    if(key==='forecasts' && latest?.issuedAt)dataAsOf=new Date(latest.issuedAt).toISOString();
+    const err=String(v.status==='rejected' ? v.reason?.message||'' : '');
+    const reason=valid ? null : /HTTP 403/.test(err)?'upstream_403':
+      /HTTP 429/.test(err)?'upstream_rate_limit':
+      /timeout|aborted|AbortError/i.test(err)?'upstream_timeout':
+      v.status==='fulfilled'?'invalid_or_empty_data':'upstream_error';
+    sourceHealth[key]={status:valid?'ok':'unavailable',items:valid?v.value.length:0,asOf:dataAsOf,reason};
   });
-  if (out.unavailable.length === 5) return res.status(503).json({ ...out, error: 'All upstream sources unavailable' });
+  out.health={status:out.unavailable.length===0?'ok':out.unavailable.length===names.length?'unavailable':'degraded',
+    sources:sourceHealth,checkedAt:out.checkedAt,elapsedMs:Date.now()-sourcesStarted};
+  if (out.unavailable.length === names.length) return res.status(503).json({ ...out, error: 'All upstream sources unavailable' });
   return res.status(200).json(out);
 };
