@@ -172,7 +172,22 @@ function render(data, options = {}) {
       <div class="env-pressure-stats"><div><span>${C.auroraNeed}</span><b>${fmt(need, 1)}</b></div><div><span>${C.auroraNow}</span><b>${fmt(kp, 2)}</b></div><div><span>${C.mlat}</span><b>${fmt(ml, 1)}°</b></div></div>
       <p class="env-meta">${C.auroraNote}</p><a class="env-source" href="https://www.swpc.noaa.gov/products/aurora-30-minute-forecast" target="_blank" rel="noopener">${C.auroraLink} ↗</a></article>`;
   }
-  const wind = S.wind.value, bz = S.bz.value;
+  const impact = (() => {
+  const active = S.scales.G.fresh ? S.scales.G.value : null;
+  const radio = S.scales.R.fresh ? S.scales.R.value : null;
+  const solar = S.scales.S.fresh ? S.scales.S.value : null;
+  const items = lang === 'el'
+    ? [['GPS / GNSS', active === null ? 'Άγνωστη κατάσταση' : active >= 3 ? 'Αυξημένη πιθανότητα υποβάθμισης ακρίβειας' : active >= 1 ? 'Πιθανές περιορισμένες διαταραχές' : 'Δεν υπάρχει ενεργή γεωμαγνητική προειδοποίηση', 'Η πραγματική επίπτωση εξαρτάται από θέση, δέκτη και ιονόσφαιρα.'],
+       ['HF επικοινωνίες', radio === null ? 'Άγνωστη κατάσταση' : radio >= 3 ? 'Ισχυρές πιθανές διαταραχές στην ηλιόλουστη πλευρά' : radio >= 1 ? 'Πιθανές διαταραχές στην ηλιόλουστη πλευρά' : 'Δεν υπάρχει ενεργή προειδοποίηση R', 'Δεν αφορά απευθείας κινητή τηλεφωνία ή Wi-Fi.'],
+       ['Ηλεκτρικά δίκτυα', active === null ? 'Άγνωστη κατάσταση' : active >= 4 ? 'Αυξημένη ανάγκη παρακολούθησης' : active >= 2 ? 'Παρακολούθηση γεωμαγνητικής δραστηριότητας' : 'Δεν υπάρχει ένδειξη σημαντικού γενικού κινδύνου', 'Δεν αποτελεί πρόβλεψη διακοπής ρεύματος στην Ελλάδα.'],
+       ['Δορυφόροι', active === null && solar === null ? 'Άγνωστη κατάσταση' : Math.max(active ?? 0, solar ?? 0) >= 3 ? 'Αυξημένη διαστημική δραστηριότητα' : 'Παρακολούθηση παγκόσμιων δεικτών', 'Οι δείκτες δεν προβλέπουν βλάβη συγκεκριμένου δορυφόρου.']]
+    : [['GPS / GNSS', active === null ? 'Status unavailable' : active >= 3 ? 'Elevated accuracy degradation potential' : active >= 1 ? 'Limited disturbances possible' : 'No active geomagnetic warning', 'Actual effects depend on location, receiver and ionosphere.'],
+       ['HF radio', radio === null ? 'Status unavailable' : radio >= 3 ? 'Strong disruption possible on sunlit Earth' : radio >= 1 ? 'Disruption possible on sunlit Earth' : 'No active R warning', 'Not a direct warning for cellular or Wi-Fi.'],
+       ['Power grids', active === null ? 'Status unavailable' : active >= 4 ? 'Heightened monitoring warranted' : active >= 2 ? 'Monitor geomagnetic conditions' : 'No indication of substantial general risk', 'Not a prediction of a power outage in Greece.'],
+       ['Satellites', active === null && solar === null ? 'Status unavailable' : Math.max(active ?? 0, solar ?? 0) >= 3 ? 'Elevated space weather activity' : 'Monitor global indices', 'Not a prediction of a specific satellite failure.']];
+  return '<article class="card mx-block"><div class="panelhead"><h3>'+(lang === 'el' ? 'Πώς μπορεί να επηρεαστεί η Ελλάδα;' : 'How could Greece be affected?')+'</h3><span class="env-meta">NOAA G / R / S</span></div><p class="env-copy">'+(lang === 'el' ? 'Ενδεικτική ερμηνεία παγκόσμιων προειδοποιήσεων, όχι τοπική μέτρηση ή ποσοτική πρόβλεψη ζημιάς.' : 'Interpretation of global alerts, not a local measurement or quantitative damage forecast.')+'</p><div class="env-grid">'+items.map(([name,status,note])=>'<div class="card env"><h3 class="label">'+name+'</h3><b class="env-status">'+status+'</b><p class="env-meta">'+note+'</p></div>').join('')+'</div></article>';
+})();
+const wind = S.wind.value, bz = S.bz.value;
   const windW = wind === null ? null : wind < 350 ? 0 : wind < 500 ? 1 : wind < 700 ? 2 : 3, bzW = bz === null ? null : bz < -3 ? 0 : bz <= 3 ? 1 : 2;
   const meter = (v, a, b, cls) => `<div class="mx-meter ${cls}"><span style="left:${v === null ? 0 : Math.max(0, Math.min(100, (v - a) / (b - a) * 100)).toFixed(1)}%"></span></div>`;
   return `<section class="section space-section" id="space-weather"><p class="env-copy">${C.intro}</p>${empty ? `<p class="notice" role="status">${empty}</p>` : ''}
@@ -185,7 +200,7 @@ function render(data, options = {}) {
     ${[['r12', C.oR12, '%'], ['r35', C.oR35, '%'], ['s1', C.oS1, '%'], ['g', C.oG, 'G']].map(([k, lab, u]) => `<tr><th>${lab}</th>${S.outlook.map(o => { const v = o[k]; const hot = u === '%' ? (v ?? 0) >= 30 : (v ?? 0) >= 1; return `<td class="${hot ? 'hot' : ''}">${v === null ? '—' : u === 'G' ? (v ? 'G' + v : '—') : v + '%'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>` : `<p class="env-meta">${C.unavailable}</p>`}</article>
 </div>
 <article class="card env-forecast mx-block"><div class="panelhead"><h3>${C.kpChart}</h3><span class="env-meta">${C.kpNote}</span></div>${kpChart}</article>
-<div class="space-metrics">
+${impact}<div class="space-metrics">
   <article class="card env"><h3 class="label">${C.wind}</h3><div class="minivalue">${fmt(wind)} <small>km/s</small></div>${meter(wind, 250, 900, 'mx-mwind')}<b class="env-status">${windW === null ? '—' : C.windWords[windW]}</b><p class="env-copy">${C.windNote}</p>${time(S.wind)}</article>
   <article class="card env"><h3 class="label">${C.bz}</h3><div class="minivalue">${fmt(bz, 1)} <small>nT</small></div>${meter(bz, -20, 20, 'mx-mbz')}<b class="env-status">${bzW === null ? '—' : C.bzWords[bzW]}</b><p class="env-copy">${C.bzNote}${S.bt.value !== null ? ` Bt ${fmt(S.bt.value, 1)} nT.` : ''}</p>${time(S.bz)}</article>
   <article class="card env"><h3 class="label">${C.flux}</h3><div class="minivalue">${fmt(S.flux.value)} <small>sfu</small></div>${meter(S.flux.value, 60, 250, 'mx-mflux')}<p class="env-copy">${C.fluxNote}</p>${time(S.flux)}</article>
