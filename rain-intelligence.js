@@ -66,15 +66,29 @@ function metrics(train,shared){
 function render({lang='el',view,train,stations,pws,trainingStatus,shared}={}){
  const el=lang!=='en',X=(a,b)=>el?a:b;
  if(!view?.rows?.length)return '';
- const now=Date.now(), obs=observed(stations,pws,now),next=view.rows.filter(r=>r.t>now).slice(0,24);
+ const now=Date.now(), obs=observed(stations,pws,now),live=present(stations,pws,now),next=view.rows.filter(r=>r.t>now).slice(0,24);
  const mm=next.length===24?sum(next.map(r=>r.amount)):null;
  const avgCloud=next.length>=6?sum(next.slice(0,6).map(r=>r.cloud)):null;
  const cloud=fin(avgCloud)?avgCloud/6:null;
+
+ const clock=t=>fin(t)?new Date(t).toLocaleTimeString(el?'el-GR':'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:view.zone||'Europe/Athens'}):'—';
+ const ref=live.name?escape(live.name):'—',distance=fin(live.dist)?num(live.dist,1)+' km':'—';
+ const liveTitle=live.kind==='rain'?X('Βρέχει στον κοντινό σταθμό','Rain at the nearby station')
+  :live.kind==='snow'?X('Χιονίζει στον κοντινό σταθμό','Snow at the nearby station')
+  :live.kind==='not_reported'?X('Δεν αναφέρεται βροχή','No rain reported')
+  :live.kind==='recent_gauge'?(live.wet?X('Έβρεξε την τελευταία ώρα','Rain in the last hour'):X('Δεν μετρήθηκε βροχή την τελευταία ώρα','No rain measured in the last hour'))
+  :live.kind==='distant'?X('Μόνο μακρινός σταθμός','Only a distant station')
+  :X('Χωρίς επιβεβαίωση σταθμού','No station confirmation');
+ const liveIcon=live.kind==='rain'?'🌧️':live.kind==='snow'?'🌨️':live.kind==='not_reported'?'☁️':live.kind==='recent_gauge'?'🌦️':'📍';
+ const liveMeta=live.kind==='unverified'?X('Δεν υπάρχουν πρόσφατες κοντινές παρατηρήσεις. Η πρόγνωση δεν είναι μέτρηση.','No fresh nearby report. A forecast is not a measurement.')
+  :X('Σταθμός','Station')+' '+ref+' · '+distance+' · '+clock(live.t)+' · '+escape(live.src||'');
+ const liveNote=live.kind==='rain'||live.kind==='snow'?X('Ένδειξη στη θέση του σταθμού, όχι επιβεβαίωση στον δρόμο σου.','Observed at the station, not verified on your exact street.'):live.kind==='recent_gauge'?X('Η ποσότητα της τελευταίας ώρας δεν αποδεικνύει βροχή αυτή τη στιγμή.','Past-hour accumulation does not prove rain right now.'):X('Δείχνουμε τι αναφέρθηκε — όχι μια υποτιθέμενη μέτρηση.','This shows reported observations, not an invented measurement.');
+ const liveCard='<div class="ri-live '+(live.kind==='rain'?'ri-wet':'')+'" role="status"><div class="ri-live-icon" aria-hidden="true">'+liveIcon+'</div><div class="ri-live-copy"><strong>'+liveTitle+'</strong><span>'+liveMeta+'</span><small>'+liveNote+'</small></div><button type="button" class="ri-live-action" data-action="goto" data-page="stations">'+X('Σταθμοί','Stations')+' ↗</button></div>';
  const M=metrics(train,shared),co=fin(cloud)?(cloud<20?X('Λίγα σύννεφα','Mostly clear'):cloud<50?X('Λίγη συννεφιά','Partly cloudy'):cloud<80?X('Αρκετή συννεφιά','Mostly cloudy'):X('Συννεφιασμένος','Overcast')):X('Χωρίς στοιχεία','No data');
  const rainText=obs?(obs.type==='PWS-area'?X('Δείγμα από ιδιωτικούς αισθητήρες ευρύτερης περιοχής','Sample of private sensors across the broader area'):
     X(`Σταθμός ${escape(obs.name)} · ${num(obs.dist,0)} km`,`Station ${escape(obs.name)} · ${num(obs.dist,0)} km`)):
     X('Δεν βρέθηκε διαθέσιμο βροχόμετρο','No usable rain gauge');
- const rainNote=obs?X(`Καταγεγραμμένα ${num(obs.covered,0)} από τα τελευταία 24 ωρ. · όχι εκτίμηση για τα κενά`,`Reported ${num(obs.covered,0)} of the past 24 h · gaps are not estimated`):X('Δεν βαφτίζουμε μια πρόγνωση «μέτρηση».','A model estimate is not a measurement.');
+ const rainNote=obs?X((obs.type==='Netatmo'?'Κυλιόμενο 24ωρο':'Κάλυψη '+num(obs.covered,0)+'/24 ωρών')+' · '+clock(obs.t)+' · χωρίς συμπλήρωση κενών',(obs.type==='Netatmo'?'Rolling 24 hours':'Coverage '+num(obs.covered,0)+'/24 h')+' · '+clock(obs.t)+' · no gaps filled'):X('Δεν βαφτίζουμε μια πρόγνωση «μέτρηση».','A model estimate is not a measurement.');
  const accTxt=fin(M.amountMae)?X(`Μέσο απόλυτο σφάλμα ${num(M.amountMae,2)} mm/ώρα`,`Mean absolute error ${num(M.amountMae,2)} mm/hour`):X('Ανεπαρκές δείγμα ελέγχου','Not enough verified history');
  const card=(ico,name,big,body,note,cl='')=>`<article class="card ri-card ${cl}"><div class="ri-top"><span class="ri-icon" aria-hidden="true">${ico}</span><span class="ri-kicker">${name}</span></div><strong class="ri-number">${big}</strong><div class="ri-main">${body}</div><small class="ri-note">${note}</small></article>`;
  const cards=[
@@ -83,7 +97,7 @@ function render({lang='el',view,train,stations,pws,trainingStatus,shared}={}){
  card('🎯',X('ΠΟΣΟ ΜΕΣΑ ΠΕΣΑΜΕ','FORECAST SKILL'),fin(M.amountMae)?`${num(M.amountMae,2)} <i>mm</i>`:'—',accTxt,fin(M.amountMae)?X(`Έλεγχος σε ιστορικό ανεξάρτητο δείγμα (${M.rain?.n?.test??M.shared?.rain?.n??0} ώρες), με επανάλυση ERA5, όχι επιτόπιο βροχόμετρο`,`Historical held-out check (${M.rain?.n?.test??M.shared?.rain?.n??0} hours), against ERA5 reanalysis, not a local gauge`):X(trainingStatus==='loading'?'Υπολογίζουμε την ιστορική ακρίβεια…':'Δεν έχει ολοκληρωθεί έλεγχος',trainingStatus==='loading'?'Calculating historical skill…':'Historical evaluation unavailable')),
  card('☁',X('ΠΩΣ ΘΑ ΕΙΝΑΙ Ο ΟΥΡΑΝΟΣ','SKY COVER'),fin(cloud)?`${num(cloud,0)}<i>%</i>`:'—',co,X('Μέση προβλεπόμενη νέφωση επόμενων 6 ωρών','Average forecast cloud cover, next 6 hours'))];
  const cloudFoot=fin(M.cloudMae)?X(`Εκπαίδευση νεφών: ιστορικό μέσο σφάλμα ${num(M.cloudMae,1)} ποσοστιαίες μονάδες (ERA5).`,`Cloud model: historical error ${num(M.cloudMae,1)} percentage points (ERA5).`):X('Η νέφωση εμφανίζεται από τα διαθέσιμα μοντέλα· η εκπαίδευσή της απαιτεί ιστορικά δεδομένα.','Cloud cover comes from available models; training requires historical samples.');
- return `<section class="section ri-section" aria-label="${X('Η βροχή με μια ματιά','Rain at a glance')}"><div class="sectionhead"><div><span class="label">MONO / RAIN INTELLIGENCE</span><h2 class="h2">${X('Ο καιρός σε 4 εικόνες','Weather in four icons')}</h2><p class="section-sub">${X('Μέτρηση, πρόγνωση και έλεγχος: τρία διαφορετικά πράγματα.','Observation, forecast, and verification are different.')}</p></div></div><div class="ri-grid">${cards.join('')}</div><p class="ri-foot">☁ ${cloudFoot}</p><p class="ri-foot">${shared?.shared?X('🌐 Κοινό ιστορικό μοντέλο διαθέσιμο σε κινητό και υπολογιστή. Τοπική εκπαίδευση ανά συσκευή.','🌐 Shared historical learning across devices. Local training stays per device.'):X('Τοπική εκπαίδευση ανά συσκευή · κοινά στοιχεία για υποστηριζόμενες πόλεις.','Local training per device · shared results for supported cities.')}</p></section>`;
+ return `<section class="section ri-section" aria-label="${X('Η βροχή με μια ματιά','Rain at a glance')}"><div class="sectionhead"><div><span class="label">MONO / RAIN INTELLIGENCE</span><h2 class="h2">${X('Ο καιρός σε 4 εικόνες','Weather in four icons')}</h2><p class="section-sub">${X('Μέτρηση, πρόγνωση και έλεγχος: τρία διαφορετικά πράγματα.','Observation, forecast, and verification are different.')}</p></div></div>${liveCard}<div class="ri-grid">${cards.join('')}</div><p class="ri-foot">☁ ${cloudFoot}</p><p class="ri-foot">${shared?.shared?X('🌐 Κοινό ιστορικό μοντέλο διαθέσιμο σε κινητό και υπολογιστή. Τοπική εκπαίδευση ανά συσκευή.','🌐 Shared historical learning across devices. Local training stays per device.'):X('Τοπική εκπαίδευση ανά συσκευή · κοινά στοιχεία για υποστηριζόμενες πόλεις.','Local training per device · shared results for supported cities.')}</p></section>`;
 }
 root.MONORainIntelligence={render,observed,present,metrics};
 if(typeof module!=='undefined'&&module.exports)module.exports={render,observed,present,metrics};
