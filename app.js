@@ -426,7 +426,7 @@ const state = {
   page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
-  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street',
+  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarForecastBase==='street'?'street':'satellite',
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
@@ -1438,7 +1438,7 @@ function phenPage() {
 }
 
 /* ------------------------------------------------------------------ page: radar */
-let map = null, radar = { frames: [], layers: [], i: 0, timer: 0, host: '', mode: UI.radarMode==='radar'?'radar':'future', futureData:null, futureTimes:[], futureIndex:3, futureTimer:0, futureBusy:false, futureAt:0, futureKey:'' };
+let map = null, radar = { frames: [], layers: [], i: 0, timer: 0, host: '', mode: UI.radarMode==='radar'?'radar':'future', futureData:null, futureTimes:[], futureIndex:3, futureTimer:0, futureBusy:false, futureAt:0, futureKey:'', fieldBusy:false, fieldKey:'', fieldData:null, fieldGrid:null };
 function radarPage(){
  const el=state.lang==='el',X=(a,b)=>el?a:b;
  const rb=(mode,sym,text)=>'<button type="button" class="'+(radar.mode===mode?'active':'')+'" data-action="radarMode" data-v="'+mode+'" aria-pressed="'+(radar.mode===mode)+'"><span aria-hidden="true">'+sym+'</span>'+text+'</button>';
@@ -1472,7 +1472,7 @@ function loadLeaflet() {
     const s = document.createElement('script'); s.src = 'vendor/leaflet.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s);
   });
 }
-function killMap() { if(radar.timer)clearInterval(radar.timer);radar.timer=0;if(radar.futureTimer)clearInterval(radar.futureTimer);radar.futureTimer=0;radar.futureBusy=false;radar.futureKey='';if(map){map.remove();map=null;}radar.layers=[];radar.frames=[];radar.sat=null;radar.rainLayer=null;radar.baseLayers=[];radar.futureLayer=null;radar.stationLayer=null; }
+function killMap() { radar.fieldJob=(radar.fieldJob||0)+1;if(radar.timer)clearInterval(radar.timer);radar.timer=0;if(radar.futureTimer)clearInterval(radar.futureTimer);radar.futureTimer=0;radar.futureBusy=false;radar.futureKey='';if(map){map.remove();map=null;}radar.layers=[];radar.frames=[];radar.sat=null;radar.rainLayer=null;radar.baseLayers=[];radar.futureLayer=null;radar.stationLayer=null;radar.fieldLayer=null;radar.fieldData=null;radar.fieldBusy=false;radar.fieldKey=''; }
 async function mountRadar(){
  if(!$('#map')||map)return;
  try{
@@ -1487,9 +1487,11 @@ async function mountRadar(){
   for(const st of (state.view?.stations||[]).filter(st=>st.last).slice(0,18))
    Lf.marker([st.lat,st.lon],{icon:Lf.divIcon({className:'stmark',html:`<span>${deg(st.last.temp)}</span>`,iconSize:[38,20]})}).addTo(radar.stationLayer).bindTooltip(`${esc(st.id)} · ${esc(st.name||'')}`);
   radar.futureLayer=Lf.layerGroup();
+  radar.fieldLayer=window.MONOWeatherField?new (window.MONOWeatherField.createLayer(Lf))():null;
   instance.on('zoomend moveend',()=>{if(map===instance&&radar.mode==='future')drawPhenomena();});
   syncRadarMode();
   loadPhenomena(instance);
+  loadWeatherField(instance);
   setTimeout(()=>{if(map===instance)instance.invalidateSize();},150);
   const d=await getJSON('https://api.rainviewer.com/public/weather-maps.json',12000);
   if(map!==instance||!$('#map'))return;
@@ -1520,6 +1522,10 @@ function syncRadarMode(){
   });
   if(radar.rainLayer)radar.rainLayer.setOpacity(future?0:.88);
   if(radar.sat)radar.sat.setOpacity(!future&&state.radarSat?0.45:0);
+  if(radar.fieldLayer){
+    if(future&&!map.hasLayer(radar.fieldLayer))radar.fieldLayer.addTo(map);
+    if(!future&&map.hasLayer(radar.fieldLayer))map.removeLayer(radar.fieldLayer);
+  }
   if(radar.futureLayer){
     if(future&&!map.hasLayer(radar.futureLayer))radar.futureLayer.addTo(map);
     if(!future&&map.hasLayer(radar.futureLayer))map.removeLayer(radar.futureLayer);
@@ -1541,8 +1547,10 @@ function radarSelectMode(mode){
   if(map&&greece)map.setView(mode==='future'?[38.4,23.85]:[c.lat,c.lon],mode==='future'?6:8);
   const r=$('#radarPlay'),p=$('#pmPlay');if(r)r.textContent='▶ '+T('play');if(p)p.textContent='▶ '+T('play');
   if(mode==='future'&&!radar.futureData)loadPhenomena(map);
+  if(mode==='future'&&!radar.fieldData)loadWeatherField(map);
+  setRadarBasemap();
 }
-function drawPhenomena(){
+function drawPhenomena(animate=false){
   const P=window.MONOPhenomenaMap;
   if(!P||!map||!radar.futureLayer||radar.mode!=='future')return;
   const points=radar.futureData||[],times=radar.futureTimes||[];
@@ -1550,6 +1558,7 @@ function drawPhenomena(){
   const t=times[idx];
   const layer=radar.futureLayer;
   layer.clearLayers();
+  if(radar.fieldData&&radar.fieldLayer){radar.fieldLayer.setHour(idx,animate?800:0);}
   const stat=$('#radarStatus'),out=$('#pmTime'),slider=$('#pmSlider');
   if(!times.length){
     if(stat)stat.textContent=radar.futureBusy?(state.lang==='el'?'Φόρτωση πρόγνωσης πόλεων…':'Loading city forecasts…'):(state.lang==='el'?'Δεν υπάρχουν διαθέσιμες ωριαίες προγνώσεις':'Hourly forecasts unavailable');
@@ -1565,7 +1574,8 @@ function drawPhenomena(){
     const xy=map.latLngToContainerPoint([point.lat,point.lon]);
     if(!point.selected&&occupied.some(p=>Math.abs(xy.x-p.x)<(zoom>=9?69:93)&&Math.abs(xy.y-p.y)<(zoom>=9?28:36)))continue;
     occupied.push(xy);
-    const row=P.at(point,t),iconHtml=P.pin(point,row,state.lang);
+    const row=P.at(point,t);
+    const iconHtml=P.pin(point,{weatherCode:null,precip:0,snow:0,prob:0},state.lang).replace('pm-pin ','pm-pin pm-overhead ');
     const marker=window.L.marker([point.lat,point.lon],{icon:window.L.divIcon({
       className:'phen-map-marker',html:iconHtml,iconSize:[120,42],iconAnchor:[53,21]
     }),riseOnHover:true,keyboard:true});
@@ -1577,11 +1587,11 @@ function drawPhenomena(){
   if(stat)stat.textContent=(state.lang==='el'?'ΠΡΟΓΝΩΣΗ · ':'FORECAST · ')+phenomenaClock(t)+' · '+shown+(state.lang==='el'?' πόλεις':' cities');
   for(const h of [3,6,12,24,48]){const b=$('#pmJump'+h);if(b)b.classList.toggle('active',Math.abs(t-(Date.now()+h*3600e3))<35*60e3);}
 }
-function selectPhenomenaHour(idx){
+function selectPhenomenaHour(idx,animate=false){
   const times=radar.futureTimes||[];
   if(!times.length)return;
   radar.futureIndex=Math.max(0,Math.min(times.length-1,Math.round(idx)));
-  drawPhenomena();
+  drawPhenomena(animate);
 }
 function jumpPhenomenaHour(h){
   const ts=radar.futureTimes||[];if(!ts.length)return;
@@ -1596,7 +1606,7 @@ function togglePhenomenaPlay(){
   if(radar.futureTimer){clearInterval(radar.futureTimer);radar.futureTimer=0;if(btn)btn.textContent='▶ '+T('play');return;}
   radar.futureTimer=setInterval(()=>{
     if(!map||!$('#map')||radar.mode!=='future'){clearInterval(radar.futureTimer);radar.futureTimer=0;return;}
-    selectPhenomenaHour((radar.futureIndex+1)%radar.futureTimes.length);
+    selectPhenomenaHour((radar.futureIndex+1)%radar.futureTimes.length,true);
   },950);
   if(btn)btn.textContent='❚❚ '+T('pause');
 }
@@ -1633,6 +1643,7 @@ async function loadPhenomena(instance,force=false){
     radar.futureData=all;radar.futureTimes=P.timeline(all);
     radar.forecastCache={key,at:Date.now(),points:all};
     radar.futureBusy=false;radar.futureKey='';
+    if(!radar.futureTimes.length&&radar.fieldData)radar.futureTimes=P.timeline(radar.fieldData);
     if(radar.futureTimes.length){
       const target=Date.now()+3*3600e3;let best=0;
       for(let i=1;i<radar.futureTimes.length;i++)
@@ -1640,7 +1651,7 @@ async function loadPhenomena(instance,force=false){
       radar.futureIndex=best;
     }
     const slider=$('#pmSlider');if(slider)slider.oninput=e=>selectPhenomenaHour(+e.target.value);
-    drawPhenomena();
+    attachWeatherField();drawPhenomena();
   }catch{
     if(map!==instance||radar.futureJob!==job)return;
     radar.futureBusy=false;radar.futureKey='';drawPhenomena();
@@ -1648,7 +1659,7 @@ async function loadPhenomena(instance,force=false){
 }
 /* Keyless Esri basemap. Never request blocked OSMF or key-required CARTO tiles. */
 function baseLayers(Lf) {
-  const satellite = state.radarBasemap === 'satellite';
+  const satellite = (radar.mode==='future'?state.radarForecastBase:state.radarBasemap)==='satellite';
   const services = satellite
     ? ['World_Imagery', 'World_Topo_Map', 'World_Street_Map']
     : ['World_Street_Map', 'World_Topo_Map', 'World_Imagery'];
@@ -1699,7 +1710,9 @@ function setRadarBasemap(){
  for(const layer of (radar.baseLayers||[]))if(map.hasLayer(layer))map.removeLayer(layer);
  radar.baseLayers=baseLayers(window.L);
  radar.baseLayers.forEach(layer=>layer.addTo(map).bringToBack());
- const btn=$('#radarStyle');if(btn)btn.textContent=state.lang==='el'?(state.radarBasemap==='satellite'?'▧ Δρόμοι':'▧ Δορυφόρος'):(state.radarBasemap==='satellite'?'▧ Streets':'▧ Satellite');
+ const base=radar.mode==='future'?state.radarForecastBase:state.radarBasemap;
+ const btn=$('#radarStyle');if(btn)btn.textContent=state.lang==='el'?(base==='satellite'?'▧ Δρόμοι':'▧ Δορυφόρος'):(base==='satellite'?'▧ Streets':'▧ Satellite');
+ const futureBtn=$('#pmStyle');if(futureBtn)futureBtn.textContent=state.lang==='el'?(base==='satellite'?'▧ Δρόμοι':'▧ Δορυφόρος'):(base==='satellite'?'▧ Streets':'▧ Satellite');
 }
 function toggleSat() {
   state.radarSat = !state.radarSat; persistUI();
@@ -2076,7 +2089,7 @@ const lhm = t => dt(t, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
 const ldate = t => dt(t, { day: 'numeric', month: 'short' }, LZ);
 const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 const isoMin = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
-function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode }); }
+function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode,radarForecastBase:state.radarForecastBase }); }
 function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
 
 // Latest IMERG half-hour that already has data (latency is a few hours): probe tiny images backwards in time.
@@ -2804,7 +2817,7 @@ function onClick(e) {
   else if (a === 'radarPlay') toggleRadar();
   else if (a === 'radarSat') toggleSat();
   else if (a === 'radarHome' && map) { map.setView([state.city.lat,state.city.lon],8); map.invalidateSize(); }
-  else if (a === 'radarStyle') { state.radarBasemap=state.radarBasemap==='street'?'satellite':'street';persistUI();setRadarBasemap(); }
+  else if (a === 'radarStyle'||a==='pmStyle') { const name=radar.mode==='future'?'radarForecastBase':'radarBasemap';state[name]=state[name]==='street'?'satellite':'street';persistUI();setRadarBasemap(); }
   else if (a === 'radarReload') { killMap(); mountRadar(); }
   else if (a === 'lensPick' && window.MONOStormLens) window.MONOStormLens.togglePick();
   else if (a === 'lensPlay' && window.MONOStormLens) window.MONOStormLens.play();
