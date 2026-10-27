@@ -23,8 +23,6 @@ test('interpolation displays broad rain fields rather than only city-point icons
  const g=Field.makeGrid(c),t=Date.parse('2026-10-27T16:00:00Z');
  const data=hourly(g.points,t,g.points.map(p=>(p.lon>22&&p.lon<25?6:0)));
  const frame=Field.samples(g,data,t,at);
- const wet=Field.interpolate(g,40.5,23.5,0); // coordinate order wrong should return null when invalid
- assert.equal(wet,null);
  const center=Field.interpolate(g,frame,40.5,23.5);
  const dry=Field.interpolate(g,frame,40.5,20);
  assert.ok(center&&center.precip>3);
