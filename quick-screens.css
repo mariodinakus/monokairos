@@ -48,3 +48,11 @@
 .qs,.ri-section{--card:var(--panel);--border:var(--line);--text:var(--ink)}
 html[data-theme=dark] .qs-pict img{filter:var(--iconfilter,none)}
 .hero-station-report{font-size:11px;font-weight:700;line-height:1.5;color:var(--sub);margin:5px 0}
+
+.ri-near-title{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:14px 2px 9px;color:var(--muted)}
+.ri-stations{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 16px}
+.ri-station{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);display:flex;align-items:center;gap:8px;text-align:left;padding:12px 10px;min-width:0;cursor:pointer;font:inherit}
+.ri-station-icon{font-size:19px;flex:0 0 auto}.ri-station-name{font-size:11px;font-weight:720;overflow-wrap:anywhere;min-width:0;flex:1}
+.ri-station-name small{display:block;color:var(--sub);font-size:9px;line-height:1.5;margin-top:4px}.ri-station strong{font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ri-blank{font-size:11px;color:var(--sub);line-height:1.6}
+@media(max-width:850px){.ri-stations{grid-template-columns:1fr}.ri-station{padding:11px}.ri-station-name{font-size:12px}}
