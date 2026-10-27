@@ -1495,7 +1495,7 @@ async function mountRadar(){
   if(map!==instance||!$('#map'))return;
   radar.host=d.host;radar.frames=d.radar?.past||[];radar.layers=radar.frames.map(()=>null);
   const ir=d.satellite?.infrared?.at(-1);
-  if(ir)radar.sat=Lf.tileLayer(`${d.host}${ir.path}/256/{z}/{x}/{y}/0/0_0.png`,{opacity:state.radarSat?0.45:0,maxNativeZoom:7,maxZoom:12,zIndex:4,attribution:'RainViewer'}).addTo(instance);
+  if(ir)radar.sat=Lf.tileLayer(`${d.host}${ir.path}/256/{z}/{x}/{y}/0/0_0.png`,{opacity:state.radarSat&&radar.mode==='radar'?0.45:0,maxNativeZoom:7,maxZoom:12,zIndex:4,attribution:'RainViewer'}).addTo(instance);
   if(!radar.frames.length){if(radar.mode==='radar')throw new Error('No radar frames');return;}
   const slider=$('#radarSlider');if(slider){slider.disabled=false;slider.max=String(radar.frames.length-1);slider.oninput=e=>showFrame(+e.target.value);}
   const play=$('#radarPlay');if(play)play.disabled=radar.frames.length<2;
