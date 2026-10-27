@@ -6,7 +6,7 @@
 'use strict';
 const finite=Number.isFinite;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-const HOUR=3600000;
+
 function makeGrid(city){
  const greek=city?.cc==='GR'||(city?.lat>=34.4&&city?.lat<=41.8&&city?.lon>=19&&city?.lon<=29.7);
  const step=.85,latMin=greek?34.0:clamp(+city.lat-4.6,-79,79),
@@ -50,27 +50,75 @@ function interpolate(grid,frame,lat,lon){
  if(seen<3||w<.01)return null;
  return {precip:p/w,snow:s/w,storm:th/w};
 }
+/* Meteorological visual language: blue light, green moderate, yellow/orange strong,
+ * red extreme, violet lightning, icy blue snow. Strong enough to read on light maps. */
 const ramps=[
- [0.10,[35,150,238,24]],[.28,[39,173,246,105]],
- [.75,[34,202,223,150]],[1.7,[56,230,166,175]],
- [3.0,[175,233,78,186]],[5.0,[255,218,76,199]],
- [8.0,[255,140,52,211]],[13.0,[235,69,75,218]],
- [21.0,[172,73,199,225]]
+ [0.12,[30,137,247,0]],[.24,[27,134,252,118]],
+ [.65,[17,142,247,176]],[1.5,[18,176,164,188]],
+ [3.0,[68,196,78,204]],[5.0,[238,199,27,214]],
+ [8.0,[250,134,28,225]],[13.0,[238,67,62,237]],
+ [21.0,[175,47,144,245]]
 ];
 function rgba(sample){
  if(!sample)return [0,0,0,0];
  const rain=sample.precip,snow=sample.snow,storm=sample.storm;
  if(snow>=.15&&snow*2>=rain){
-  const a=clamp(Math.round(95+72*Math.log2(1+snow)),0,231);
-  return snow>=1.4?[207,239,255,a]:[91,176,255,a];
+  const a=clamp(Math.round(155+55*Math.log2(1+snow)),0,241);
+  return snow>=1.4?[194,230,250,a]:[73,159,245,a];
  }
  if(rain<.1)return [0,0,0,0];
  let k=0;while(k+1<ramps.length&&ramps[k+1][0]<=rain)k++;
  let a=ramps[k],b=ramps[Math.min(k+1,ramps.length-1)];
  let q=b[0]===a[0]?0:clamp((rain-a[0])/(b[0]-a[0]),0,1);
  const col=a[1].map((v,i)=>Math.round(v+(b[1][i]-v)*q));
- if(storm>=.48&&rain>=.5)return [176,74,238,clamp(Math.round(col[3]+20),0,240)];
+ if(storm>=.48&&rain>=.5)return [154,55,215,clamp(Math.round(col[3]+13),0,246)];
  return col;
+}
+function typeAt(s){
+ if(!s)return 'unknown';
+ if(s.storm>=.48&&s.precip>=.4)return 'storm';
+ if(s.snow>=.3&&s.snow*2>=s.precip)return 'snow';
+ if(s.precip>=6)return 'heavy';
+ if(s.precip>=1.4)return 'rain';
+ if(s.precip>=.2)return 'light';
+ return 'dry';
+}
+/* Contiguous model-grid systems; labels are placed near the highest-intensity node,
+ * not falsely anchored to a nearby city. Never invent a trajectory. */
+function systems(grid,frame,limit=4){
+ if(!grid||!frame)return [];
+ const count=grid.rows*grid.cols,seen=new Uint8Array(count),out=[];
+ const classify=i=>{
+  if(!frame.valid[i])return null;
+  const p=frame.precip[i],s=frame.snow[i],th=frame.storm[i];
+  if(th>.5&&p>=.5)return 'storm';
+  if(s>=.2&&s*2>=p)return 'snow';
+  if(p>=1.0)return 'rain';
+  return null;
+ };
+ for(let i=0;i<count;i++){
+  if(seen[i])continue;
+  const type=classify(i);
+  if(!type)continue;
+  const stack=[i];seen[i]=1;let size=0,peak=-1,best=i,sum=0;
+  while(stack.length){
+   const j=stack.pop();size++;
+   const score=type==='snow'?frame.snow[j]*3:frame.precip[j];
+   sum+=score;
+   if(score>peak){peak=score;best=j;}
+   const x=j%grid.cols,y=Math.floor(j/grid.cols);
+   for(const [nx,ny] of [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]){
+    if(nx<0||nx>=grid.cols||ny<0||ny>=grid.rows)continue;
+    const k=ny*grid.cols+nx;
+    if(!seen[k]&&classify(k)===type){seen[k]=1;stack.push(k);}
+   }
+  }
+  if(size<2&&peak<(type==='snow'?1.5:5))continue;
+  const pt=grid.points[best];
+  const value=type==='snow'?frame.snow[best]:frame.precip[best];
+  out.push({type,lat:pt.lat,lon:pt.lon,peak:value,size,weight:sum,score:peak+Math.min(5,size*.35)});
+ }
+ return out.sort((a,b)=>b.score-a.score).slice(0,Math.max(0,limit));
 }
 function blend(a,b,t){
  if(!a)return b;if(!b)return a;
@@ -99,6 +147,9 @@ function createLayer(L){
    this._frameCache=new Map();
    this.setHour(0,0);
   },
+  getFrame:function(index){return this._getFrame(index);},
+  getSample:function(lat,lon,index){return interpolate(this._grid,this._getFrame(index),lat,lon);},
+  getSystems:function(index){return systems(this._grid,this._getFrame(index));},
   _getFrame:function(index){
    if(!this._grid||!this._times?.length)return null;
    const i=clamp(Math.round(index),0,this._times.length-1);
@@ -160,12 +211,11 @@ function createLayer(L){
    }
    bctx.putImageData(pixels,0,0);
    ctx.imageSmoothingEnabled=true;
-   ctx.filter='blur(4px)';
+   // Deliberately avoid broad blur: geography must stay legible and wet areas crisp.
    ctx.drawImage(sub,0,0,c.width,c.height);
-   ctx.filter='none';
   }
  });
 }
-root.MONOWeatherField={makeGrid,samples,interpolate,rgba,blend,createLayer};
-if(typeof module!=='undefined'&&module.exports)module.exports={makeGrid,samples,interpolate,rgba,blend};
+root.MONOWeatherField={makeGrid,samples,interpolate,rgba,blend,typeAt,systems,createLayer};
+if(typeof module!=='undefined'&&module.exports)module.exports={makeGrid,samples,interpolate,rgba,blend,typeAt,systems};
 })(typeof window!=='undefined'?window:globalThis);
