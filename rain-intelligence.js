@@ -25,7 +25,7 @@ function present(stations,pws,now=Date.now(),radius=35){
     (fin(first.ww)&&((first.ww>=50&&first.ww<=69)||(first.ww>=80&&first.ww<=84)||[95,96,97,98,99].includes(first.ww)));
   const snow=wx.some(x=>snowWx.test(String(x)))||(fin(first.ww)&&first.ww>=70&&first.ww<=79);
   const local=first.dist<=radius;
-  return {kind:!local?'distant':wet?'rain':snow?'snow':'not_reported',
+  return {kind:!local?'distant':(wet||snow)&&now-first.t>45*60000?'recent_report':wet?'rain':snow?'snow':'not_reported',
     wet,snow,local,dist:first.dist,id:first.id,name:first.name,src:first.src,t:first.t,
     description:wet?'rain':snow?'snow':'no precipitation reported'};
  }
@@ -75,11 +75,12 @@ function render({lang='el',view,train,stations,pws,trainingStatus,shared}={}){
  const ref=live.name?escape(live.name):'—',distance=fin(live.dist)?num(live.dist,1)+' km':'—';
  const liveTitle=live.kind==='rain'?X('Βρέχει στον κοντινό σταθμό','Rain at the nearby station')
   :live.kind==='snow'?X('Χιονίζει στον κοντινό σταθμό','Snow at the nearby station')
+  :live.kind==='recent_report'?X('Πρόσφατη αναφορά υετού','Recent precipitation report')
   :live.kind==='not_reported'?X('Δεν αναφέρεται βροχή','No rain reported')
   :live.kind==='recent_gauge'?(live.wet?X('Έβρεξε την τελευταία ώρα','Rain in the last hour'):X('Δεν μετρήθηκε βροχή την τελευταία ώρα','No rain measured in the last hour'))
   :live.kind==='distant'?X('Μόνο μακρινός σταθμός','Only a distant station')
   :X('Χωρίς επιβεβαίωση σταθμού','No station confirmation');
- const liveIcon=live.kind==='rain'?'🌧️':live.kind==='snow'?'🌨️':live.kind==='not_reported'?'☁️':live.kind==='recent_gauge'?'🌦️':'📍';
+ const liveIcon=live.kind==='rain'?'🌧️':live.kind==='snow'?'🌨️':live.kind==='recent_report'?'🕓':live.kind==='not_reported'?'☁️':live.kind==='recent_gauge'?'🌦️':'📍';
  const liveMeta=live.kind==='unverified'?X('Δεν υπάρχουν πρόσφατες κοντινές παρατηρήσεις. Η πρόγνωση δεν είναι μέτρηση.','No fresh nearby report. A forecast is not a measurement.')
   :X('Σταθμός','Station')+' '+ref+' · '+distance+' · '+clock(live.t)+' · '+escape(live.src||'');
  const liveNote=live.kind==='rain'||live.kind==='snow'?X('Ένδειξη στη θέση του σταθμού, όχι επιβεβαίωση στον δρόμο σου.','Observed at the station, not verified on your exact street.'):live.kind==='recent_gauge'?X('Η ποσότητα της τελευταίας ώρας δεν αποδεικνύει βροχή αυτή τη στιγμή.','Past-hour accumulation does not prove rain right now.'):X('Δείχνουμε τι αναφέρθηκε — όχι μια υποτιθέμενη μέτρηση.','This shows reported observations, not an invented measurement.');
