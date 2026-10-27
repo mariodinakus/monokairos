@@ -1256,27 +1256,26 @@ function episodeText(e) {
   return T('rEpisodeText')({ prob: probWord(e.pmax), pct: pct(e.pmax), shape, mm: mm1(e.mm), range, totalWord: totalWord(e.mm), storm: e.storm >= 0.2 ? pct(e.storm) : null, snow: e.snow });
 }
 function rainStatus(eps) {
-  const V = state.view, now = Date.now(), cur = V.current, R = state.rain15;
-  let rate15 = null;
-  if (R) { const j = R.t.findIndex(t => t > now); if (j >= 0 && fin(R.p[j])) rate15 = R.p[j] * 4; }
-  const obsWet = cur.source === 'obs' && fin(cur.code) && ((cur.code >= 51 && cur.code <= 67) || (cur.code >= 80 && cur.code <= 99));
-  const e0 = eps[0], next = V.rows[V.iNow + 1];
-  const raining = obsWet || (fin(rate15) && rate15 >= 0.2) || (e0?.ongoing && (next?.pop ?? 0) >= 0.6);
-  const lines = [];
-  let big, kind;
-  if (raining) {
-    const rate = fin(rate15) && rate15 >= 0.1 ? rate15 : next ? condRate(next) : 0;
-    const w = obsWet && cur.wx ? cur.wx : rWord(rate, next && rIsSnow(next));
-    lines.push(T('rNowRaining')(w, e0?.ongoing ? rAt(e0.end) : null));
-    big = T('rain'); kind = 'wet';
-  } else if (e0 && e0.start - now <= 24 * 3600e3) {
-    const mins = Math.max(0, Math.round((e0.start - now) / 60e3 / 15) * 15);
-    lines.push(T('rNowSoon')(T('rIn')(Math.floor(mins / 60), mins % 60), rAt(e0.start), rAt(e0.end)));
-    big = T('rIn')(Math.floor(mins / 60), mins % 60); kind = 'soon';
-  } else if (e0) { lines.push(T('rNowLater')(rAt(e0.start))); big = T('rDry'); kind = 'dry'; }
-  else { lines.push(T('rNowNone')); big = T('rDry'); kind = 'dry'; }
-  if (cur.source === 'obs' && V.station) lines.push(T('rNowObs')(V.station.id, cur.wx || desc(cur.code).toLowerCase()));
-  return { raining, big, kind, lines, rate15 };
+  const V=state.view, now=Date.now(), report=window.MONORainIntelligence?.present(V.stations,state.pws,now);
+  const e0=eps[0], lines=[]; let big,kind;
+  const nearby=report?.local&&report?.kind==='rain';
+  if(nearby){
+    big=state.lang==='el'?'Βρέχει στον κοντινό σταθμό':'Rain at the nearby station';kind='wet';
+    lines.push((state.lang==='el'?'Ο σταθμός ':'Station ')+esc(report.name)+(state.lang==='el'?' αναφέρει βροχή · ':' reports rain · ')+num(report.dist,1)+' km · '+hhmm(report.t)+'.');
+    lines.push(state.lang==='el'?'Η ένδειξη αφορά τη θέση του σταθμού, όχι ακριβώς τη δική σου.':'This is reported at the station, not your exact street.');
+  }else{
+    if(report?.kind==='not_reported')lines.push((state.lang==='el'?'Ο κοντινός σταθμός ':'Nearby station ')+esc(report.name)+(state.lang==='el'?' δεν αναφέρει βροχή · ':' does not report rain · ')+hhmm(report.t)+'.');
+    else if(report?.kind==='recent_gauge'&&report.wet)lines.push((state.lang==='el'?'Βροχή την τελευταία ώρα στο ':'Rain within the last hour at ')+esc(report.name)+' · '+num(report.mm1h,1)+' mm · '+num(report.dist,1)+' km.');
+    else if(report?.kind==='distant')lines.push(state.lang==='el'?'Δεν υπάρχει πρόσφατη κοντινή επιβεβαίωση· ο διαθέσιμος σταθμός είναι μακριά.':'No fresh close confirmation; the reporting station is distant.');
+    else if(report?.kind==='unverified')lines.push(state.lang==='el'?'Δεν υπάρχει πρόσφατη αναφορά κοντινού σταθμού.':'No recent report from a nearby station.');
+    if(e0 && e0.start-now<=24*3600e3){
+      const mins=Math.max(0,Math.round((e0.start-now)/60e3/15)*15);
+      lines.push(T('rNowSoon')(T('rIn')(Math.floor(mins/60),mins%60),rAt(e0.start),rAt(e0.end)));
+      big=T('rIn')(Math.floor(mins/60),mins%60);kind='soon';
+    }else if(e0){lines.push(T('rNowLater')(rAt(e0.start)));big=T('rDry');kind='dry';}
+    else{lines.push(state.lang==='el'?'Δεν αναμένεται αξιόλογη βροχή στο κοντινό διάστημα.':'No significant rainfall forecast shortly.');big=T('rDry');kind='dry';}
+  }
+  return {raining:!!nearby,big,kind,lines,rate15:null,report};
 }
 // 15-minute bars: past hour faded, next 6 hours.
 function rain15Chart() {
