@@ -318,9 +318,25 @@
       const choiceF = choice === 'combo' ? comboF : r => pr(choice, r);
       let hit = 0, miss = 0, fa = 0;
       for (const r of test) { const yes = choiceF(r) >= 0.5; if (yes && r.wet) hit++; else if (!yes && r.wet) miss++; else if (yes && !r.wet) fa++; }
+      // Rain quantity is a separate forecast problem from rain occurrence.
+      // Select the amount correction on validation only; never pick a winner on the test data.
+      const amountScale = set => {
+        const y = set.reduce((s, r) => s + r.y, 0), f = set.reduce((s, r) => s + r.f.amt, 0);
+        return f > 2 ? clamp(y / f, 0.4, 2.5) : 1;
+      };
+      const checkAmount = (set, scale) => set.length ? {
+        mae: r1(mean(set.map(r => Math.abs(r.f.amt * scale - r.y)))),
+        rmse: r1(Math.sqrt(mean(set.map(r => (r.f.amt * scale - r.y) ** 2)))),
+        bias: r1(mean(set.map(r => r.f.amt * scale - r.y))),
+        n: set.length
+      } : null;
+      const trainScale = amountScale(train), amountValRaw = checkAmount(val, 1), amountValScaled = checkAmount(val, trainScale);
+      const amountChoice = amountValScaled && amountValRaw && amountValScaled.mae < amountValRaw.mae ? 'scaled' : 'raw';
       const prod = Object.fromEntries(RAIN_LIVE.map(m => [m, RAIN[m].fit(rows)]));
-      const sumT = rows.reduce((s, r) => s + r.y, 0), sumF = rows.reduce((s, r) => s + r.f.amt, 0);
-      out.leads[k] = { choice, ranked, prod, scale: sumF > 2 ? clamp(sumT / sumF, 0.4, 2.5) : 1, base,
+      const scale = amountScale(rows);
+      out.leads[k] = { choice, ranked, prod, scale, amountChoice, base,
+        amountVal: {raw:amountValRaw,scaled:amountValScaled},
+        amountTest: checkAmount(test, amountChoice==='scaled'?trainScale:1),
         val: mapR(valS), test: mapR(testS), pod: hit + miss ? hit / (hit + miss) : null, far: hit + fa ? fa / (hit + fa) : null,
         wetTest: test.reduce((s, r) => s + r.wet, 0), n: { train: train.length, val: val.length, test: test.length } };
     }
@@ -333,7 +349,7 @@
     if (!L) return { prob: f.frac, amount: f.amt, choice: 'untrained', methods: { vote: f.frac } };
     const methods = Object.fromEntries(RAIN_LIVE.map(m => [m, RAIN[m].pred(L.prod[m], f, H)]));
     methods.combo = mean(L.ranked.map(m => methods[m]));
-    return { prob: methods[L.choice], amount: f.amt * L.scale, choice: L.choice, methods };
+    return { prob: methods[L.choice], amount: f.amt * (L.amountChoice === 'raw' ? 1 : L.scale), choice: L.choice, methods };
   }
 
   /* ------------------------------------------------------------------ station layer */
