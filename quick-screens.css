@@ -43,3 +43,8 @@
 .ri-live-copy small{color:var(--muted,#728093);font-size:10px;line-height:1.5}
 .ri-live-action{border:1px solid var(--border,#d8dee6);border-radius:11px;background:transparent;color:var(--text,inherit);padding:10px;white-space:nowrap;cursor:pointer;font-weight:700;font-size:11px}
 @media(max-width:600px){.ri-live{padding:11px;gap:8px;flex-wrap:wrap}.ri-live-icon{flex-basis:36px;width:36px;height:36px;font-size:22px}.ri-live-copy strong{font-size:14px}.ri-live-copy span{font-size:11px}.ri-live-action{margin-left:44px;padding:8px;font-size:10px}}
+
+/* Follow the application's real light/dark tokens; do not show white cards in dark mode. */
+.qs,.ri-section{--card:var(--panel);--border:var(--line);--text:var(--ink)}
+html[data-theme=dark] .qs-pict img{filter:var(--iconfilter,none)}
+.hero-station-report{font-size:11px;font-weight:700;line-height:1.5;color:var(--sub);margin:5px 0}
