@@ -1495,12 +1495,12 @@ async function mountRadar(){
   radar.host=d.host;radar.frames=d.radar?.past||[];radar.layers=radar.frames.map(()=>null);
   const ir=d.satellite?.infrared?.at(-1);
   if(ir)radar.sat=Lf.tileLayer(`${d.host}${ir.path}/256/{z}/{x}/{y}/0/0_0.png`,{opacity:state.radarSat?0.45:0,maxNativeZoom:7,maxZoom:12,zIndex:4,attribution:'RainViewer'}).addTo(instance);
-  if(!radar.frames.length)throw new Error('No radar frames');
+  if(!radar.frames.length){if(radar.mode==='radar')throw new Error('No radar frames');return;}
   const slider=$('#radarSlider');if(slider){slider.disabled=false;slider.max=String(radar.frames.length-1);slider.oninput=e=>showFrame(+e.target.value);}
   const play=$('#radarPlay');if(play)play.disabled=radar.frames.length<2;
   showFrame(radar.frames.length-1);syncRadarMode();instance.invalidateSize();
  }catch{
-  const st=$('#radarStatus');if(st)st.textContent=state.lang==='el'?'Δεν φορτώθηκαν λήψεις · ο χάρτης παραμένει διαθέσιμος':'Radar frames unavailable · basemap still works';
+  const st=$('#radarStatus');if(st&&radar.mode==='radar')st.textContent=state.lang==='el'?'Δεν φορτώθηκαν λήψεις · ο χάρτης παραμένει διαθέσιμος':'Radar frames unavailable · basemap still works';
   if(!map){const host=$('#map');if(host)host.innerHTML=`<div class="placeholder">${T('radarFail')}</div>`;}
  }
 }
@@ -1518,7 +1518,7 @@ function syncRadarMode(){
     const on=b.dataset.v===radar.mode;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));
   });
   if(radar.rainLayer)radar.rainLayer.setOpacity(future?0:.88);
-  if(radar.sat)radar.sat.setOpacity(!future&&state.radarSat?.45:0);
+  if(radar.sat)radar.sat.setOpacity(!future&&state.radarSat?0.45:0);
   if(radar.futureLayer){
     if(future&&!map.hasLayer(radar.futureLayer))radar.futureLayer.addTo(map);
     if(!future&&map.hasLayer(radar.futureLayer))map.removeLayer(radar.futureLayer);
@@ -2789,6 +2789,10 @@ function onClick(e) {
   else if (a === 'climSrc') { state.climSrc = b.dataset.v; render(); }
   else if (a === 'climOlder') loadClimate(1940);
   else if (a === 'climLoad') { loadClimate(1991); render(); }
+  else if (a === 'radarMode') radarSelectMode(b.dataset.v);
+  else if (a === 'pmPlay') togglePhenomenaPlay();
+  else if (a === 'pmJump') jumpPhenomenaHour(+b.dataset.h);
+  else if (a === 'pmReload') loadPhenomena(map,true);
   else if (a === 'radarPlay') toggleRadar();
   else if (a === 'radarSat') toggleSat();
   else if (a === 'radarHome' && map) { map.setView([state.city.lat,state.city.lon],8); map.invalidateSize(); }
