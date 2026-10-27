@@ -426,7 +426,7 @@ const state = {
   page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
-  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarForecastBase==='satellite'?'satellite':'street',
+  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
@@ -2224,7 +2224,7 @@ const lhm = t => dt(t, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
 const ldate = t => dt(t, { day: 'numeric', month: 'short' }, LZ);
 const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 const isoMin = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
-function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode,radarForecastBase:state.radarForecastBase }); }
+function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode,radarForecastBase:state.radarForecastBase,radarClearMapV2:true }); }
 function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
 
 // Latest IMERG half-hour that already has data (latency is a few hours): probe tiny images backwards in time.
