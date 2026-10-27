@@ -38,7 +38,8 @@ function pointsFor(city,catalogue=[]){
  return greece?out:out.sort((a,b)=>a.selected?-1:b.selected?1:haversine(city,a)-haversine(city,b)).slice(0,24);
 }
 function kind(row){
- const code=Number(row?.weatherCode),mm=Number(row?.precip),snow=Number(row?.snow),prob=Number(row?.prob);
+ const n=v=>v===null||v===undefined||v===''?NaN:Number(v);
+ const code=n(row?.weatherCode),mm=n(row?.precip),snow=n(row?.snow),prob=n(row?.prob);
  const p=finite(prob)?Math.max(0,Math.min(100,prob)):null;
  if(!finite(code)&&!finite(mm)&&!finite(snow))return {id:'unknown',icon:'',labelEl:'Χωρίς δεδομένα',labelEn:'Unavailable',level:0};
  if((code>=95&&code<=99)||(code===82&&finite(mm)&&mm>=6))return {id:'storm',icon:'⛈️',labelEl:'Καταιγίδα',labelEn:'Thunderstorm',level:4};
@@ -80,9 +81,9 @@ function pin(point,row,lang='el'){
    (wet.icon?'<span class="pm-symbol" aria-hidden="true">'+wet.icon+'</span>':'<span class="pm-dot" aria-hidden="true"></span>')+
    '<span class="pm-label">'+label+'</span></div>';
 }
-function popup(point,row,t,lang='el'){
+function popup(point,row,t,lang='el',zone='UTC'){
  const el=lang!=='en',f=n=>finite(n)?Number(n).toLocaleString(el?'el-GR':'en-GB',{maximumFractionDigits:1}):'—';
- const desc=kind(row),h=finite(t)?new Date(t).toLocaleString(el?'el-GR':'en-GB',{weekday:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC'})+' UTC':'—';
+ const desc=kind(row),h=finite(t)?new Date(t).toLocaleString(el?'el-GR':'en-GB',{weekday:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:zone})+' ('+escape(zone)+')':'—';
  return '<div class="pm-popup"><strong>'+escape(el?point.name:point.nameEn)+'</strong><p>'+escape(el?desc.labelEl:desc.labelEn)+'</p>'+
   '<dl><div><dt>'+ (el?'Υετός':'Precipitation') +'</dt><dd>'+f(row?.precip)+' mm/h</dd></div>'+
   '<div><dt>'+(el?'Χιόνι':'Snow')+'</dt><dd>'+f(row?.snow)+' cm/h</dd></div>'+
