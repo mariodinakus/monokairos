@@ -1,16 +1,74 @@
-/* Full-bleed animated precipitation forecast (model field, never observed radar). */
-.mono-precip-overlay{position:absolute;pointer-events:none!important;z-index:450;will-change:contents;mix-blend-mode:normal}
-.radar-suite .radar-map-shell{isolation:isolate}
-.radar-suite .map{background:#123349}
-.pm-overhead-hint{display:flex;align-items:center;gap:7px;font-size:11px;line-height:1.5;color:var(--sub);margin:4px 5px 0}
-.pm-overhead-hint b{color:var(--ink)}
-.pm-colors{display:flex;gap:2px;align-items:center;margin:5px 3px 2px}
-.pm-colors i{flex:1;height:8px;border-radius:2px;background:linear-gradient(90deg,rgba(35,150,238,.3),#22cbda,#45df9f,#e0e348,#ffba40,#eb4b54,#a54ae0)}
-.pm-colors span{font-size:10px;color:var(--sub)}
-.phen-map-marker{pointer-events:auto}
-.pm-pin.pm-overhead{border-radius:7px;padding:4px 7px;gap:5px;box-shadow:0 2px 7px #0009;background:rgba(10,24,37,.83);color:#fff;border:1px solid rgba(255,255,255,.35)}
-.pm-pin.pm-overhead .pm-dot{width:5px;height:5px;background:#ffe39c;margin:0}
-.pm-pin.pm-overhead .pm-label{font-size:11px;font-weight:800}
-.pm-pin.pm-overhead.pm-selected{outline-color:#fbcc45}
-.pm-map-note strong{font-weight:800}
-@media(max-width:610px){.pm-pin.pm-overhead{padding:3px 5px}.pm-pin.pm-overhead .pm-label{font-size:10px}.pm-overhead-hint{font-size:10px}}
+/* MONO WEATHER MAP / Clarity edition — intuitive, geographic forecast.
+   Crisp model precipitation zones over a light map; labels and hazards sit above.
+*/
+.radar-suite{border-radius:19px;overflow:hidden}
+.radar-suite .radar-map-shell{position:relative;isolation:isolate;background:#eaf0ec}
+.radar-suite #map{height:min(73vh,690px);min-height:470px;background:#ecf4f0}
+.radar-suite .radar-map-overlay{pointer-events:none}
+.mono-precip-overlay{position:absolute;pointer-events:none!important;will-change:contents;z-index:450;opacity:.96}
+.pm-map-top{position:absolute;z-index:620;right:14px;top:14px;max-width:220px;display:flex;flex-direction:column;gap:3px;padding:12px 14px;border:1px solid #ffffffaa;border-radius:13px;background:rgba(12,26,37,.92);color:#fff;box-shadow:0 6px 25px #0003;pointer-events:none;text-align:right;backdrop-filter:blur(8px)}
+.pm-map-top b{font-size:10px;letter-spacing:.12em;color:#9ce2ff;font-weight:800}
+.pm-map-top strong{font-size:14px;font-weight:900;font-variant-numeric:tabular-nums}
+.pm-map-top small{font-size:10px;line-height:1.35;color:#e2edf3}
+.radar-modebar{margin-bottom:12px}
+.radar-modebar button.active{background:#163d53;color:#fff;border-color:#163d53}
+.pm-controls{border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:0;padding:14px 18px}
+.pm-controls .pm-play{background:#174b78;color:#fff;border-color:#174b78;border-radius:12px;font-weight:800;min-width:102px}
+.pm-controls .pm-range input{accent-color:#1476c8;min-height:32px}
+.pm-controls .pm-output{font-size:13px;font-weight:850}
+.pm-controls .pm-quick button.active{background:#174b78;border-color:#174b78;color:#fff}
+.pm-highlights{min-height:68px;display:flex;gap:13px;align-items:center;margin:0;padding:13px 18px;border-bottom:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.pm-highlights .pm-hl-icon{width:43px;height:43px;border-radius:12px;background:var(--soft);display:flex;justify-content:center;align-items:center;font-size:23px;flex-shrink:0}
+.pm-highlights div{min-width:0;display:flex;flex-direction:column;gap:4px}
+.pm-highlights b{font-size:14px;font-weight:850}
+.pm-highlights small{font-size:11px;color:var(--sub);line-height:1.5}
+.pm-overhead-hint{font-size:10px;line-height:1.4;padding:9px 18px;margin:0;color:var(--sub)}
+.pm-colors{display:flex;align-items:center;gap:10px;margin:5px 18px}
+.pm-colors i{height:12px;border-radius:8px;background:linear-gradient(90deg,#258eff 0%,#16a9c9 22%,#3cca53 38%,#f5cb32 59%,#f18526 76%,#e24a4a 89%,#9d33bd 100%)}
+.pm-colors span{font-size:10px;white-space:nowrap;font-weight:750;color:var(--sub)}
+.pm-flegend{padding:8px 18px;gap:8px 16px}
+.pm-flegend span{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;font-weight:650;font-size:11px}
+.pm-flegend .pm-key{width:12px;height:12px;flex-shrink:0;display:inline-block;border-radius:4px;border:1px solid #0002}
+.pm-k-light{background:#278ff3}.pm-k-rain{background:#31be72}.pm-k-heavy{background:#ed9b23}.pm-k-storm{background:#a638d3}.pm-k-snow{background:#9adefc}
+.pm-map-note{padding:5px 18px 15px;margin:0;line-height:1.5;font-size:10px;color:var(--sub)}
+/* Clear map labels, positioned exactly over known city coordinates. */
+.phen-map-marker,.pm-weather-marker{border:0!important;background:none!important;pointer-events:auto!important}
+.pm-city{display:inline-flex;align-items:center;gap:5px;max-width:138px;width:max-content;white-space:nowrap;color:#152d39;transform:translateY(-8px);filter:drop-shadow(0 1px 1px #ffffff) drop-shadow(0 -1px 1px #ffffff)}
+.pm-city i{width:6px;height:6px;border-radius:50%;background:#163e55;border:1px solid #fff;flex-shrink:0}
+.pm-city b{font:800 11px/1.25 Inter,system-ui,sans-serif;letter-spacing:-.015em}
+.pm-city.pm-city-selected b{font-size:12px;color:#07598d}
+.pm-city.pm-city-selected i{width:8px;height:8px;background:#106cc1}
+/* Weather systems are the main symbols; there are only a few, never a wall of icons. */
+.pm-weather-event{display:flex;align-items:center;gap:8px;transform:translateY(-6px);padding:7px 10px 7px 7px;width:max-content;min-width:104px;max-width:172px;border-radius:13px;background:#123b57;color:#fff;box-shadow:0 6px 18px #0006,0 0 0 2px #fff;border:1px solid #fff5}
+.pm-weather-event>span{font-size:23px;line-height:1;flex-shrink:0}
+.pm-weather-event>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pm-weather-event b{font:850 10px/1.15 Inter,system-ui,sans-serif;letter-spacing:.02em;white-space:nowrap}
+.pm-weather-event small{font:750 11px/1.2 Inter,system-ui,sans-serif;white-space:nowrap;color:#fff}
+.pm-event-snow{background:#174e80}
+.pm-event-heavy{background:#ad411f}
+.pm-event-storm{background:#66358c}
+.pm-event-rain{background:#105c62}
+.pm-popup{font-family:Inter,system-ui,sans-serif;min-width:170px;max-width:235px}
+.pm-popup strong{font-size:15px}
+.pm-popup p{margin:8px 0;font-size:12px;font-weight:750}
+.pm-popup dl{margin:10px 0}.pm-popup dl div{display:flex;justify-content:space-between;gap:14px;padding:5px 0;border-bottom:1px solid #ddd}
+.pm-popup dt,.pm-popup dd{font-size:11px}.pm-popup dd{font-weight:800;margin:0}
+.pm-popup small{font-size:10px;line-height:1.4;color:#475b66}
+@media(max-width:610px){
+ .radar-suite #map{height:61vh;min-height:390px;max-height:620px}
+ .pm-map-top{right:9px;top:9px;padding:9px 10px;max-width:150px;border-radius:11px}
+ .pm-map-top b{font-size:8px}.pm-map-top strong{font-size:12px}.pm-map-top small{font-size:8px}
+ .pm-controls{padding:11px 12px;gap:8px}
+ .pm-controls .pm-play{min-width:90px}
+ .pm-highlights{padding:10px 12px;gap:10px}
+ .pm-highlights .pm-hl-icon{height:37px;width:37px;font-size:21px}
+ .pm-highlights b{font-size:12px}.pm-highlights small{font-size:10px}
+ .pm-overhead-hint{padding:8px 12px;font-size:10px}
+ .pm-colors{margin:5px 12px}
+ .pm-flegend{padding:7px 12px;gap:5px 10px}
+ .pm-flegend span{font-size:10px}
+ .pm-map-note{padding:6px 12px 12px}
+ .pm-city b{font-size:10px}.pm-city.pm-city-selected b{font-size:11px}
+ .pm-weather-event{padding:6px 8px 6px 6px;gap:6px;border-radius:11px;max-width:128px;min-width:0}
+ .pm-weather-event>span{font-size:20px}.pm-weather-event b{font-size:9px}.pm-weather-event small{font-size:10px}
+}
