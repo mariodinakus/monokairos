@@ -722,6 +722,8 @@ async function loadAll(force = false) {
   loadSpace(force);
   loadCosmic(force);
   const c = state.city, gen = ++state.gen;
+  if(state.sharedRainCity !== ckey(c)) state.sharedRain = null;
+  state.sharedRainCity = ckey(c);
   state.mainErr = false; render();
   try {
     const d = await getJSON(mainURL(c));
@@ -756,6 +758,10 @@ async function loadAll(force = false) {
   jobs.push(fetchAtmosphere(c).then(d => { if (gen === state.gen) { state.atmosphere = d; schedule(); } }).catch(() => { if (gen === state.gen) { state.atmosphere = { error: true }; schedule(); } }));
   jobs.push(fetchMarine(c).then(d => { if (gen === state.gen) { state.marine = d; schedule(); } }).catch(() => { if (gen === state.gen) state.marine = { error: true }; }));
   jobs.push(fetchWarnings(c).then(d => { if (gen === state.gen) { state.warn = d; schedule(); } }).catch(() => { if (gen === state.gen) { state.warn = { error: true }; schedule(); } }));
+  // Optional city-level calibration in shared Vercel Blob, independent of this device.
+  jobs.push(getJSON(q('/api/rain-memory', {lat:(+c.lat).toFixed(3),lon:(+c.lon).toFixed(3)}), 30000)
+    .then(d => { if(gen===state.gen) {state.sharedRain=d?.available?d:null; recompute(); schedule();} })
+    .catch(() => { if(gen===state.gen) state.sharedRain=null; }));
   if (modelJobs.length) Promise.allSettled(modelJobs).then(() => { if (gen === state.gen) { recompute(); ensureTraining(c, gen); } });
   await Promise.allSettled([...jobs, ...modelJobs]);
   if (gen !== state.gen) return;
@@ -885,8 +891,8 @@ function recompute() {
       feels: fin(app) && fin(rowT.mean) && fin(temp) ? app + (temp - rowT.mean) : app,
       wind: pw.value, gust: fin(gustRaw) && fin(windRaw) && windRaw > 0.5 && fin(pw.value) ? gustRaw * pw.value / windRaw : gustRaw,
       dir: nd ? (Math.atan2(u, v) * 180 / Math.PI + 360) % 360 : null,
-      rh: M.mean(Object.values(vals('relative_humidity_2m', i))), cloud: fin(pc.value) ? M.clamp(pc.value, 0, 100) : rowC.mean, cloudChoice: pc.choice, pres: M.mean(Object.values(vals('pressure_msl', i))),
-      pMono: pr.prob, rainChoice: pr.choice, amount: pr.amount, codes: Object.values(vals('weather_code', i)),
+      rh: M.mean(Object.values(vals('relative_humidity_2m', i))), cloud: fin(pc.value) ? M.clamp(pc.value + (!tr?.cloud?.leads?.[k] && fin(state.sharedRain?.cloud?.bias) ? state.sharedRain.cloud.bias : 0), 0, 100) : rowC.mean, cloudChoice: pc.choice, pres: M.mean(Object.values(vals('pressure_msl', i))),
+      pMono: pr.prob, rainChoice: pr.choice, amount: fin(pr.amount) && !tr?.precip?.leads?.[k] && fin(state.sharedRain?.rain?.scale) ? Math.max(0,pr.amount*state.sharedRain.rain.scale) : pr.amount, codes: Object.values(vals('weather_code', i)),
       isDay: W.hourly.is_day?.[i] ?? 1, uv: W.hourly.uv_index?.[i], visMain: W.hourly.visibility?.[i],
       vi: { cape: vals('cape', i), prec: vals('precipitation', i), snowf: vals('snowfall', i), vis: vals('visibility', i), gust: vals('wind_gusts_10m', i), code: vals('weather_code', i) },
       models: Object.fromEntries(order.map(id => [id, { T: md[id].temperature_2m[i], P: md[id].precipitation[i], W: md[id].wind_speed_10m[i] }]))
@@ -1378,7 +1384,7 @@ function rainPage() {
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const eps = rainEpisodes();
   const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus}) || '') + rainNowCard(false)
+  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain}) || '') + rainNowCard(false)
     + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
        <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
