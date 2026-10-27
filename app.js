@@ -426,7 +426,7 @@ const state = {
   page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
-  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarForecastBase==='street'?'street':'satellite',
+  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarForecastBase==='satellite'?'satellite':'street',
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
@@ -1446,6 +1446,7 @@ function radarPage(){
  '<div class="radar-modebar" role="group" aria-label="'+X('Πηγή χάρτη','Map mode')+'">'+rb('future','🌧',X('Μελλοντικά φαινόμενα','Future weather'))+rb('radar','📡',X('Πραγματικό ραντάρ','Observed radar'))+'</div>'+
  '<div class="card mapcard radar-suite"><div class="radar-map-shell"><div id="map" class="map"></div>'+
  '<div class="radar-map-overlay"><div class="radar-pill" id="radarStatus" role="status">'+X('Φόρτωση…','Loading…')+'</div></div>'+
+ '<div class="pm-map-top" id="pmMapTop"><b>'+X('ΧΑΡΤΗΣ ΦΑΙΝΟΜΕΝΩΝ','WEATHER SYSTEMS')+'</b><strong id="pmMapClock">—</strong><small>'+X('Πρόγνωση ανά ώρα · όχι πραγματικό ραντάρ','Hourly model forecast · not observed radar')+'</small></div>'+
  '<div class="radar-legend" id="realRadarLegend"><strong>'+X('Ένταση επιστροφών ραντάρ','Radar reflectivity')+'</strong><div class="radar-gradient"></div><div class="radar-legend-ends"><span>'+X('Ασθενέστερη','Weaker')+'</span><span>'+X('Ισχυρότερη','Stronger')+'</span></div></div></div>'+
  '<div class="radar-controls" id="realRadarControls"><button class="outline-btn" id="radarPlay" data-action="radarPlay">▶ '+T('play')+'</button>'+
  '<div class="radar-timebar"><input type="range" id="radarSlider" min="0" max="0" value="0" disabled aria-label="'+T('time')+'"><output id="radarTime">—</output></div>'+
@@ -1458,7 +1459,7 @@ function radarPage(){
  '<div class="pm-quick">'+[3,6,12,24,48].map(h=>'<button type="button" data-action="pmJump" data-h="'+h+'" id="pmJump'+h+'">+'+h+'ω</button>').join('')+'</div>'+
  '<button type="button" class="chip" data-action="radarHome">'+X('⌖ Κέντρο','⌖ Center')+'</button>'+
  '<button type="button" class="chip" id="pmStyle" data-action="pmStyle">▧ '+X('Δρόμοι','Streets')+'</button>'+'<button type="button" class="chip" data-action="pmReload">↻</button></div>'+
- '<div class="pm-overhead-hint" id="pmModelState" role="status">'+X('Πρόγνωση πάνω στον χάρτη · όχι ραντάρ','Forecast mapped over land · not radar')+'</div>'+ '<div class="pm-colors" id="pmColors"><span>0,1</span><i></i><span>20+ mm/h</span></div>'+ '<div class="pm-flegend" id="pmLegend"><span>🌦 '+X('Ασθενής','Light rain')+'</span><span>🌧 '+X('Βροχή / έντονη','Rain / heavy')+'</span><span>⛈️ '+X('Καταιγίδα','Storm')+'</span><span>❄️ '+X('Χιόνι','Snow')+'</span><span><i></i> '+X('Χωρίς υετό','Dry')+'</span></div>'+
+ '<div class="pm-highlights" id="pmHighlights" aria-live="polite">'+X('Φόρτωση φαινομένων στον χάρτη…','Loading weather across the map…')+'</div>'+ '<div class="pm-overhead-hint" id="pmModelState" role="status">'+X('Πρόγνωση πάνω στον χάρτη · όχι ραντάρ','Forecast mapped over land · not radar')+'</div>'+ '<div class="pm-colors" id="pmColors"><span>0,1</span><i></i><span>20+ mm/h</span></div>'+ '<div class="pm-flegend" id="pmLegend"><span><i class="pm-key pm-k-light"></i>'+X('Ασθενής βροχή','Light rain')+'</span><span><i class="pm-key pm-k-rain"></i>'+X('Βροχή','Rain')+'</span><span><i class="pm-key pm-k-heavy"></i>'+X('Ισχυρή','Heavy')+'</span><span><i class="pm-key pm-k-storm"></i>'+X('Καταιγίδα','Storm')+'</span><span><i class="pm-key pm-k-snow"></i>'+X('Χιόνι','Snow')+'</span></div>'+
  '<p class="pm-map-note" id="pmNote">'+X('Χρωματιστές ζώνες = ωριαία χωρική πρόγνωση βροχής, χιονιού και καταιγίδων σε υπολογιστικό πλέγμα. Η κίνηση προκύπτει από διαδοχικές ωριαίες προβλέψεις. Όχι εικόνα πραγματικού ραντάρ ή ακριβής πορεία κάθε καταιγίδας.','Coloured areas = spatial precipitation model estimates from a forecast grid. Motion interpolates successive hourly model frames; this is not observed radar or a precise tracked storm path.')+'</p>'+
  '</div><div class="radar-info"><div class="card"><div class="radar-info-title">'+X('Πόλεις στον χάρτη','Cities on the map')+'</div><p>'+X('Αθήνα, Θεσσαλονίκη, Πάτρα, Λάρισα, Ηράκλειο και άλλες μεγάλες πόλεις. Με μεγέθυνση εμφανίζονται περισσότερες.','Athens, Thessaloniki, Patras, Larissa, Heraklion and other major cities. Zoom in for more.')+'</p></div>'+
  '<div class="card"><div class="radar-info-title">'+X('Μελλοντικά φαινόμενα','Future phenomena')+'</div><p>'+X('Σύρε την ώρα ή πάτησε +6ω / +24ω. Τα εικονίδια δείχνουν ένταση βροχής, χιόνι και καταιγίδες — χωρίς σύμβολα απλής συννεφιάς.','Drag the timeline or select +6h / +24h. Icons show rain intensity, snow and storms, never plain clouds.')+'</p></div>'+
@@ -1487,6 +1488,20 @@ async function mountRadar(){
   for(const st of (state.view?.stations||[]).filter(st=>st.last).slice(0,18))
    Lf.marker([st.lat,st.lon],{icon:Lf.divIcon({className:'stmark',html:`<span>${deg(st.last.temp)}</span>`,iconSize:[38,20]})}).addTo(radar.stationLayer).bindTooltip(`${esc(st.id)} · ${esc(st.name||'')}`);
   radar.futureLayer=Lf.layerGroup();
+  instance.on('click',e=>{
+    if(map!==instance||radar.mode!=='future'||!radar.fieldData||!radar.fieldLayer)return;
+    const s=radar.fieldLayer.getSample(e.latlng.lat,e.latlng.lng,radar.futureIndex);
+    const when=radar.futureTimes?.[radar.futureIndex];
+    if(!s||!Number.isFinite(when))return;
+    const cat=window.MONOWeatherField.typeAt(s),el=state.lang==='el';
+    const names={storm:el?'Καταιγίδα':'Thunderstorm',snow:el?'Χιονόπτωση':'Snowfall',heavy:el?'Έντονη βροχή':'Heavy rain',rain:el?'Βροχή':'Rain',light:el?'Ασθενής βροχή':'Light rain',dry:el?'Χωρίς σημαντική βροχή':'No significant rain'};
+    const rainNum=num(s.precip,1),snowNum=num(s.snow,1);
+    const html='<div class="pm-popup"><strong>'+(names[cat]||'—')+'</strong>'+
+      '<p>'+phenomenaClock(when)+'</p><dl><div><dt>'+(el?'Βροχή':'Precipitation')+'</dt><dd>'+rainNum+' mm/h</dd></div>'+
+      '<div><dt>'+(el?'Χιόνι':'Snow')+'</dt><dd>'+snowNum+' cm/h</dd></div></dl>'+
+      '<small>'+(el?'Εκτίμηση μοντέλου μεταξύ σημείων πλέγματος · όχι μέτρηση':'Interpolated model estimate · not a measurement')+'</small></div>';
+    Lf.popup({maxWidth:230,autoPan:true}).setLatLng(e.latlng).setContent(html).openOn(instance);
+  });
   radar.fieldLayer=window.MONOWeatherField?new (window.MONOWeatherField.createLayer(Lf))():null;
   instance.on('zoomend moveend',()=>{if(map===instance&&radar.mode==='future')drawPhenomena();});
   syncRadarMode();
@@ -1515,7 +1530,7 @@ function syncRadarMode(){
   if(!map)return;
   const future=radar.mode==='future';
   const toggle=(sel,on)=>{const el=$(sel);if(el)el.classList.toggle('hidden',!on);};
-  toggle('#futureRadarControls',future);toggle('#pmLegend',future);toggle('#pmNote',future);toggle('#pmColors',future);toggle('#pmModelState',future);
+  toggle('#futureRadarControls',future);toggle('#pmLegend',future);toggle('#pmNote',future);toggle('#pmColors',future);toggle('#pmModelState',future);toggle('#pmHighlights',future);toggle('#pmMapTop',future);
   toggle('#realRadarControls',!future);toggle('#realRadarLegend',!future);
   document.querySelectorAll('[data-action="radarMode"]').forEach(b=>{
     const on=b.dataset.v===radar.mode;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));
@@ -1731,7 +1746,7 @@ function baseLayers(Lf) {
   const satellite = (radar.mode==='future'?state.radarForecastBase:state.radarBasemap)==='satellite';
   const services = satellite
     ? ['World_Imagery', 'World_Topo_Map', 'World_Street_Map']
-    : ['World_Street_Map', 'World_Topo_Map', 'World_Imagery'];
+    : ['World_Topo_Map', 'World_Street_Map', 'World_Imagery'];
   const tag = (name) => name === 'World_Imagery'
     ? 'Tiles © Esri, Maxar, Earthstar Geographics and the GIS User Community'
     : 'Tiles © Esri, HERE, Garmin, USGS and the GIS User Community';
