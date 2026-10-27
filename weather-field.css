@@ -1,0 +1,16 @@
+/* Full-bleed animated precipitation forecast (model field, never observed radar). */
+.mono-precip-overlay{position:absolute;pointer-events:none!important;z-index:450;will-change:contents;mix-blend-mode:normal}
+.radar-suite .radar-map-shell{isolation:isolate}
+.radar-suite .map{background:#123349}
+.pm-overhead-hint{display:flex;align-items:center;gap:7px;font-size:11px;line-height:1.5;color:var(--sub);margin:4px 5px 0}
+.pm-overhead-hint b{color:var(--ink)}
+.pm-colors{display:flex;gap:2px;align-items:center;margin:5px 3px 2px}
+.pm-colors i{flex:1;height:8px;border-radius:2px;background:linear-gradient(90deg,rgba(35,150,238,.3),#22cbda,#45df9f,#e0e348,#ffba40,#eb4b54,#a54ae0)}
+.pm-colors span{font-size:10px;color:var(--sub)}
+.phen-map-marker{pointer-events:auto}
+.pm-pin.pm-overhead{border-radius:7px;padding:4px 7px;gap:5px;box-shadow:0 2px 7px #0009;background:rgba(10,24,37,.83);color:#fff;border:1px solid rgba(255,255,255,.35)}
+.pm-pin.pm-overhead .pm-dot{width:5px;height:5px;background:#ffe39c;margin:0}
+.pm-pin.pm-overhead .pm-label{font-size:11px;font-weight:800}
+.pm-pin.pm-overhead.pm-selected{outline-color:#fbcc45}
+.pm-map-note strong{font-weight:800}
+@media(max-width:610px){.pm-pin.pm-overhead{padding:3px 5px}.pm-pin.pm-overhead .pm-label{font-size:10px}.pm-overhead-hint{font-size:10px}}
