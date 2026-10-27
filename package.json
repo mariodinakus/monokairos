@@ -1,0 +1,12 @@
+{
+  "name": "mono-weather",
+  "private": true,
+  "version": "4.1.0",
+  "description": "MONO Weather with shared rain and cloud calibration",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "@vercel/blob": "2.8.2"
+  }
+}
