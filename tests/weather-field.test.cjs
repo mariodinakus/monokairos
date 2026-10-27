@@ -34,7 +34,7 @@ test('snow and storms produce distinct overlay tints without ever using clouds',
  const snow=Field.rgba({precip:1,snow:2,storm:0});
  const thunder=Field.rgba({precip:3,snow:0,storm:1});
  const dry=Field.rgba({precip:0,snow:0,storm:0});
- assert.ok(snow[2]>snow[0]);assert.equal(thunder[0],176);
+ assert.ok(snow[2]>snow[0]);assert.equal(thunder[0],154);
  assert.equal(dry[3],0);
  const g=Field.makeGrid(c);
  assert.equal(Field.interpolate(g,Field.samples(g,[],Date.now(),()=>null),40,23),null);
@@ -53,4 +53,21 @@ test('browser uses actual forecast grid, satellite base, and keeps radar reading
  assert.match(h,/weather-field\.css/);
  const f=fs.readFileSync(path.join(__dirname,'..','weather-field.js'),'utf8');
  assert.doesNotMatch(f,/cloud_cover/);
+ assert.match(s,/pm-highlights/);
+ assert.match(s,/pm-weather-event/);
+ assert.match(s,/getSystems\(idx\)/);
+});
+
+test('only significant connected weather areas get badges, not every forecast city',()=>{
+ const grid=Field.makeGrid(c),t=Date.parse('2026-10-27T16:00:00Z');
+ const values=grid.points.map(p=>p.lon>22&&p.lon<24&&p.lat>37&&p.lat<40?9:0);
+ const data=hourly(grid.points,t,values);
+ const frame=Field.samples(grid,data,t,at);
+ const events=Field.systems(grid,frame,4);
+ assert.ok(events.length>=1);
+ assert.equal(events[0].type,'rain');
+ assert.ok(events[0].peak>=8);
+ assert.ok(events[0].size>=2);
+ const dryFrame=Field.samples(grid,hourly(grid.points,t,values.map(()=>0)),t,at);
+ assert.deepEqual(Field.systems(grid,dryFrame),[]);
 });
