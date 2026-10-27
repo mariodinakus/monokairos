@@ -1566,41 +1566,92 @@ function radarSelectMode(mode){
   setRadarBasemap();
 }
 function drawPhenomena(animate=false){
-  const P=window.MONOPhenomenaMap;
-  if(!P||!map||!radar.futureLayer||radar.mode!=='future')return;
-  const points=radar.futureData||[],times=radar.futureTimes||[];
-  const idx=Math.max(0,Math.min(times.length-1,radar.futureIndex));
-  const t=times[idx];
-  const layer=radar.futureLayer;
-  layer.clearLayers();
-  if(radar.fieldData&&radar.fieldLayer){radar.fieldLayer.setHour(idx,animate?800:0);}
-  const stat=$('#radarStatus'),out=$('#pmTime'),slider=$('#pmSlider');
-  if(!times.length){
-    if(stat)stat.textContent=radar.futureBusy?(state.lang==='el'?'Φόρτωση πρόγνωσης πόλεων…':'Loading city forecasts…'):(state.lang==='el'?'Δεν υπάρχουν διαθέσιμες ωριαίες προγνώσεις':'Hourly forecasts unavailable');
-    if(out)out.textContent='—';
-    if(slider)slider.disabled=true;
-    return;
+ const P=window.MONOPhenomenaMap,F=window.MONOWeatherField;
+ if(!P||!map||!radar.futureLayer||radar.mode!=='future')return;
+ const points=radar.futureData||[],times=radar.futureTimes||[];
+ const idx=Math.max(0,Math.min(times.length-1,radar.futureIndex)),t=times[idx];
+ const layer=radar.futureLayer;layer.clearLayers();
+ const stat=$('#radarStatus'),out=$('#pmTime'),clock=$('#pmMapClock'),slider=$('#pmSlider'),highlights=$('#pmHighlights');
+ if(!times.length){
+  const message=radar.futureBusy||radar.fieldBusy?(state.lang==='el'?'Φόρτωση πρόγνωσης περιοχών…':'Loading regional forecasts…'):(state.lang==='el'?'Δεν διατίθενται προγνωστικά δεδομένα':'Forecast data unavailable');
+  if(stat)stat.textContent=message;
+  if(out)out.textContent='—';
+  if(clock)clock.textContent='—';
+  if(highlights)highlights.textContent=message;
+  if(slider)slider.disabled=true;
+  return;
+ }
+ if(radar.fieldData&&radar.fieldLayer)radar.fieldLayer.setHour(idx,animate?750:0);
+ const el=state.lang==='el';
+ const zoom=map.getZoom(),bounds=map.getBounds().pad(.1),occupied=[];
+ const major=[...points].sort((a,b)=>(a.selected?-1:b.selected?1:0)||(a.rank-b.rank));
+ let shown=0;
+ for(const point of major){
+  if(!P.eligible(point,zoom)||!bounds.contains([point.lat,point.lon]))continue;
+  const xy=map.latLngToContainerPoint([point.lat,point.lon]);
+  if(!point.selected&&occupied.some(p=>Math.abs(xy.x-p.x)<(zoom>=9?72:94)&&Math.abs(xy.y-p.y)<(zoom>=9?25:32)))continue;
+  occupied.push(xy);
+  const raw=P.at(point,t);
+  const withField=!!radar.fieldData;
+  let iconHtml;
+  if(withField){
+    const label=esc(el?point.name:point.nameEn);
+    iconHtml='<div class="pm-city'+(point.selected?' pm-city-selected':'')+'"><i></i><b>'+label+'</b></div>';
+  }else{
+    iconHtml=P.pin(point,raw,state.lang);
   }
-  const zoom=map.getZoom(),bounds=map.getBounds().pad(.2);let shown=0;
-  const occupied=[];
-  const ordered=[...points].sort((a,b)=>(a.selected?-1:b.selected?1:0)||(a.rank-b.rank));
-  for(const point of ordered){
-    if(!P.eligible(point,zoom)||!bounds.contains([point.lat,point.lon]))continue;
-    const xy=map.latLngToContainerPoint([point.lat,point.lon]);
-    if(!point.selected&&occupied.some(p=>Math.abs(xy.x-p.x)<(zoom>=9?69:93)&&Math.abs(xy.y-p.y)<(zoom>=9?28:36)))continue;
-    occupied.push(xy);
-    const row=P.at(point,t);
-    const iconHtml=P.pin(point,{weatherCode:null,precip:0,snow:0,prob:0},state.lang).replace('pm-pin ','pm-pin pm-overhead ');
-    const marker=window.L.marker([point.lat,point.lon],{icon:window.L.divIcon({
-      className:'phen-map-marker',html:iconHtml,iconSize:[120,42],iconAnchor:[53,21]
-    }),riseOnHover:true,keyboard:true});
-    marker.bindPopup(P.popup(point,row,t,state.lang,tz()));
-    marker.addTo(layer);shown++;
+  const marker=window.L.marker([point.lat,point.lon],{icon:window.L.divIcon({
+   className:'phen-map-marker',html:iconHtml,iconSize:[114,28],iconAnchor:[12,15]
+  }),riseOnHover:true,bubblingMouseEvents:false,keyboard:true});
+  marker.bindPopup(P.popup(point,raw,t,state.lang,tz()));
+  marker.addTo(layer);shown++;
+ }
+ let events=[];
+ if(radar.fieldData&&radar.fieldLayer&&F){
+  events=radar.fieldLayer.getSystems(idx);
+  for(const ev of events){
+   if(!bounds.contains([ev.lat,ev.lon]))continue;
+   const snow=ev.type==='snow',storm=ev.type==='storm',heavy=ev.type==='rain'&&ev.peak>=6;
+   const emo=snow?'❄️':storm?'⛈️':heavy?'🌧️':'🌦️';
+   const phrase=snow?(el?'ΧΙΟΝΙ':'SNOW'):storm?(el?'ΚΑΤΑΙΓΙΔΑ':'STORM'):heavy?(el?'ΕΝΤΟΝΗ ΒΡΟΧΗ':'HEAVY RAIN'):(el?'ΒΡΟΧΗ':'RAIN');
+   const val=num(ev.peak,1)+(snow?' cm/h':' mm/h');
+   const badge='<div class="pm-weather-event pm-event-'+(snow?'snow':storm?'storm':heavy?'heavy':'rain')+
+     '"><span>'+emo+'</span><div><b>'+phrase+'</b><small>'+val+'</small></div></div>';
+   const marker=window.L.marker([ev.lat,ev.lon],{zIndexOffset:800,riseOnHover:true,bubblingMouseEvents:false,icon:window.L.divIcon({
+     className:'pm-weather-marker',html:badge,iconSize:[148,51],iconAnchor:[74,48]
+   })}).addTo(layer);
+   marker.bindPopup('<div class="pm-popup"><strong>'+phrase+'</strong><p>'+val+' · '+phenomenaClock(t)+
+     '</p><small>'+(el?'Εκτίμηση μοντέλου στο προγνωστικό πλέγμα. Δεν αποτελεί προειδοποίηση ή μέτρηση.':'Model-grid estimate, not an official alert or a measurement.')+'</small></div>');
   }
-  if(slider){slider.disabled=false;slider.max=String(times.length-1);slider.value=String(idx);}
-  if(out)out.textContent=phenomenaClock(t);
-  if(stat)stat.textContent=(state.lang==='el'?'ΠΡΟΓΝΩΣΗ · ':'FORECAST · ')+phenomenaClock(t)+' · '+shown+(state.lang==='el'?' πόλεις':' cities');
-  for(const h of [3,6,12,24,48]){const b=$('#pmJump'+h);if(b)b.classList.toggle('active',Math.abs(t-(Date.now()+h*3600e3))<35*60e3);}
+ }
+ const time=phenomenaClock(t);
+ if(out)out.textContent=time;
+ if(clock)clock.textContent=time;
+ if(slider){slider.disabled=false;slider.max=String(times.length-1);slider.value=String(idx);}
+ if(stat)stat.textContent=(el?'ΠΡΟΓΝΩΣΗ · ':'FORECAST · ')+time;
+ if(highlights){
+  if(!radar.fieldData){
+    highlights.innerHTML='<span class="pm-hl-icon">⌛</span><div><b>'+(radar.fieldBusy?(el?'Δημιουργία χάρτη βροχής…':'Building precipitation map…'):(el?'Δεδομένα πόλεων':'City forecasts'))+'</b><small>'+
+      (el?'Εικονίδια πόλεων έως ότου φορτωθεί η χωρική πρόγνωση.':'City icons until the spatial forecast loads.')+'</small></div>';
+  }else if(events.length){
+    const lead=events[0],snow=lead.type==='snow',storm=lead.type==='storm',heavy=lead.peak>=6;
+    const type=snow?(el?'Χιόνι':'Snow'):storm?(el?'Καταιγίδες':'Thunderstorms'):heavy?(el?'Έντονη βροχή':'Heavy rain'):(el?'Βροχές':'Rain');
+    const v=num(lead.peak,1)+(snow?' cm/h':' mm/h');
+    highlights.innerHTML='<span class="pm-hl-icon">'+(snow?'❄️':storm?'⛈️':heavy?'🌧️':'🌦️')+'</span><div><b>'+type+
+      ' · '+v+'</b><small>'+(el?'Ενδεικτική μέγιστη ένταση στην περιοχή του χάρτη · πάτα σε χρώμα για λεπτομέρειες':
+      'Forecast intensity at a highlighted area · tap any colour for details')+'</small></div>';
+  }else{
+    const frame=radar.fieldLayer?.getFrame(idx);
+    const some=frame?.precip?.some(v=>v>=.2)||frame?.snow?.some(v=>v>=.15);
+    highlights.innerHTML='<span class="pm-hl-icon">'+(some?'🌦️':'✓')+'</span><div><b>'+
+      (some?(el?'Τοπικά ασθενή φαινόμενα':'Isolated light precipitation'):(el?'Χωρίς αξιόλογα φαινόμενα':'No significant precipitation'))+
+      '</b><small>'+(el?'Εκτίμηση για τη συγκεκριμένη ώρα στο προγνωστικό πλέγμα':'Forecast grid for the selected hour')+'</small></div>';
+  }
+ }
+ for(const h of [3,6,12,24,48]){
+  const b=$('#pmJump'+h);
+  if(b)b.classList.toggle('active',Math.abs(t-(Date.now()+h*3600e3))<35*60000);
+ }
 }
 function selectPhenomenaHour(idx,animate=false){
   const times=radar.futureTimes||[];
