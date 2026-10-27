@@ -402,8 +402,8 @@ Object.assign(L.en, {
   gPointAt:'Point', gNoRain6:'no rain', gNoteFoot:'Times are in your device’s time zone. Radar: only where radar coverage exists. IMERG: satellite estimate with ~4–6 h latency. Grid: current analysis every 15°.'
 });
 
-Object.assign(L.el,{guide:'Με απλά λόγια'});
-Object.assign(L.en,{guide:'Simple guide'});
+Object.assign(L.el,{guide:'Μια ματιά'});
+Object.assign(L.en,{guide:'At a glance'});
 Object.assign(L.el,{maps:'Χάρτες & τάσεις',mapsTitle:'Χάρτες & ό,τι έρχεται',mapsSub:'Δες την εξέλιξη των συστημάτων, τα σήματα κακοκαιρίας και τις τάσεις του μήνα.'});
 Object.assign(L.en,{maps:'Maps & outlook',mapsTitle:'Maps & what comes next',mapsSub:'Follow weather systems, severe-weather signals and monthly trends.'});
 Object.assign(L.el,{checkingStations:'Έλεγχος κοντινών σταθμών… Επιβεβαιώνεται η πηγή της θερμοκρασίας.'});
@@ -423,7 +423,7 @@ const state = {
   theme: P.theme === 'dark' || P.theme === 'light' ? P.theme : (sysDark() ? 'dark' : 'light'),
   city: P.city || CITIES[0], firstRun: !P.city,
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
-  page: (location.hash || '').slice(1) || 'now', hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
+  page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street',
@@ -1849,51 +1849,24 @@ function summaryCard() {
 </section>`;
 }
 function guidePage(){
-const el=state.lang==='el',X=(a,b)=>el?a:b,V=state.view;
-const head=header(X('Ο καιρός χωρίς δύσκολες λέξεις','Weather made simple'),X('Από την τωρινή κατάσταση μέχρι το τι δείχνει κάθε μοντέλο και χάρτης.','From the conditions now to what each weather map actually means.'),btn('reload','↻ '+T('refresh')));
-if(!V||!state.obsReady&&!state.snapshot)return head+(state.mainErr?errorCard():loadingCard());
-const cur=V.current,days=V.daily||[],today=days[0],tom=days[1],rows=(V.rows||[]).slice(V.iNow+1,V.iNow+13),first=V.rows?.[V.iNow]||{},S=plainSummary();
-const max=(k)=>Math.max(0,...rows.map(r=>Number.isFinite(r[k])?r[k]:0));
-const pop=max('pop'),gust=max('gust'),storm=max('pStorm'),temp=Number.isFinite(cur.temp)?deg(cur.temp):'—';
-const air=state.aq?.current?.european_aqi;
-const rainText=pop>=.6?X('Αρκετά πιθανή βροχή στις επόμενες 12 ώρες.','Rain is quite likely in the next 12 hours.'):pop>=.3?X('Υπάρχει πιθανότητα βροχής — έλεγξε τις ώρες.','Some chance of rain — check the hourly timing.'):X('Μικρή ένδειξη βροχής στις επόμενες 12 ώρες.','Low rain signal for the next 12 hours.');
-const windText=gust>=65?X('Ισχυρές ριπές: ιδιαίτερη προσοχή σε εκτεθειμένα σημεία.','Strong gusts: extra caution in exposed areas.'):gust>=45?X('Μπορεί να φυσήξει αισθητά.','Noticeable gusts are possible.'):X('Δεν προβλέπονται ιδιαίτερα ισχυρές ριπές στο 12ωρο.','No particularly strong gusts forecast for the next 12 hours.');
-const warnings=Array.isArray(state.warn)?state.warn.filter(w=>w.local):[];
-const source=cur.source==='obs'&&V.station?X(`Μέτρηση σταθμού ${V.station.id}, ${num(V.station.dist)} km μακριά. Η πρόγνωση παραμένει μοντελοποιημένη.`,`Station observation ${V.station.id}, ${num(V.station.dist)} km away. Future conditions remain modelled.`):X('Η τωρινή ένδειξη είναι εκτίμηση μοντέλου, όχι θερμόμετρο στη διεύθυνσή σου.','Current conditions are model estimates, not a thermometer at your address.');
-const panel=(eyebrow,title,body,page)=>`<article class="card guide-panel"><span class="guide-eyebrow">${eyebrow}</span><h3>${title}</h3><div class="guide-facts">${body}</div>${page?`<button class="chip guide-link" data-action="goto" data-page="${page}">${X('Δες αναλυτικά ↗','Explore ↗')}</button>`:''}</article>`;
-const fact=(title,detail)=>`<div class="guide-fact"><b>${title}</b><span>${detail}</span></div>`;
-const explain=[
-[X('Πιθανότητα βροχής','Chance of rain'),X('40% σημαίνει εκτίμηση πιθανότητας για μετρήσιμη βροχή στο συγκεκριμένο σημείο και διάστημα. Δεν σημαίνει ότι θα βρέξει στο 40% της πόλης.','40% estimates the chance of measurable rain for the specified place and period, not that 40% of the city will get wet.')],
-[X('mm βροχής','Rain mm'),X('1 mm βροχής = 1 λίτρο νερού ανά τετραγωνικό μέτρο. Πιθανότητα και ποσότητα είναι διαφορετικά μεγέθη.','1 mm equals 1 litre of water per square metre. Rain probability and rainfall amount are different measures.')],
-[X('Άνεμος και ριπές','Wind and gusts'),X('Ο άνεμος είναι η συνήθης ταχύτητα, η ριπή το προσωρινό δυνατό φύσημα. Τα Μποφόρ περιγράφουν την ένταση του ανέμου.','Wind is the sustained or average speed; a gust is a brief peak. Beaufort describes wind strength.')],
-[X('Αίσθηση θερμοκρασίας','Feels-like temperature'),X('Η αίσθηση υπολογίζεται από παράγοντες όπως άνεμος και υγρασία. Δεν είναι ξεχωριστή πραγματική θερμοκρασία.','Feels-like temperature accounts for conditions such as wind and humidity. It is not a second thermometer reading.')],
-[X('Υγρασία και δρόσος','Humidity and dew point'),X('Η υγρασία δείχνει πόσο κοντά είναι ο αέρας στον κορεσμό. Όταν η θερμοκρασία πλησιάζει το σημείο δρόσου, ευνοούνται ομίχλη και συμπύκνωση.','Relative humidity describes proximity to saturation. When temperature approaches dew point, condensation and fog become more likely.')],
-[X('Βαρομετρική πίεση','Air pressure'),X('Το hPa μετρά την ατμοσφαιρική πίεση. Χαμηλό συχνά συνδέεται με άστατο καιρό, υψηλό με πιο σταθερό, αλλά όχι πάντα.','hPa measures air pressure. Low pressure often accompanies unsettled weather, high pressure calmer weather, but there are exceptions.')],
-[X('Νέφωση και δορυφόρος','Cloud cover and satellite'),X('100% νέφωση σημαίνει πλήρως καλυμμένος ουρανός στο μοντέλο. Το υπέρυθρο βλέπει χαρακτηριστικά νεφών, όχι απευθείας βροχή στο έδαφος.','100% cloud cover is a fully covered sky in the model. Infrared imagery detects cloud characteristics, not ground-level rainfall.')],
-[X('Ραντάρ βροχής','Rain radar'),X('Δείχνει επιστροφές σημάτων από υετό. Τα χρώματα δεν είναι πιθανότητες. Κενή εικόνα μπορεί να σημαίνει και περιορισμένη κάλυψη.','Radar detects precipitation echoes. Colours are not probabilities. Blank areas can also mean limited coverage.')],
-[X('UV και ποιότητα αέρα','UV and air quality'),X('UV 3–5: μέτριος, 6–7: υψηλός, 8–10: πολύ υψηλός. Ο ευρωπαϊκός δείκτης αέρα (EAQI) αυξάνεται όταν ο αέρας χειροτερεύει.','UV 3–5: moderate; 6–7: high; 8–10: very high. Higher European air-quality index (EAQI) values indicate worse air quality.')],
-[X('Μοντέλο, ensemble, MONO','Model, ensemble, MONO'),X('Μοντέλο = μαθηματική προσομοίωση της ατμόσφαιρας. Ensemble = πολλές εκτελέσεις. Το MONO συνδυάζει προβλέψεις, αλλά δεν μπορεί να εξαλείψει την αβεβαιότητα.','A model simulates the atmosphere; an ensemble runs multiple scenarios. MONO blends forecasts but cannot eliminate uncertainty.')],
-[X('Εύρος 80%','80% range'),X('Ένα εύρος αβεβαιότητας, όχι βεβαιότητα 80% ότι η πρόγνωση θα είναι σωστή. Το πραγματικό ποσοστό κάλυψης πρέπει να επαληθεύεται στατιστικά.','An uncertainty interval, not an 80% guarantee that a forecast is correct. Its real-world coverage must be validated statistically.')],
-[X('Τροπόσφαιρα και στρατόσφαιρα','Troposphere and stratosphere'),X('Στην τροπόσφαιρα (~0–12 km) συμβαίνουν τα περισσότερα φαινόμενα του καιρού. Πιο πάνω βρίσκεται η στρατόσφαιρα (~12–50 km), με το στρώμα όζοντος.','Most weather occurs in the troposphere (~0–12 km). Above it lies the stratosphere (~12–50 km), home to the ozone layer.')],
-[X('Αεροχείμαρρος (jet stream)','Jet stream'),X('Στενή ζώνη πολύ ισχυρών ανέμων ψηλά, κοντά στην τροπόπαυση (~9–12 km στα μέσα γεωγραφικά πλάτη). Οι μετατοπίσεις του επηρεάζουν την κίνηση των βαρομετρικών.','A narrow ribbon of very fast winds near the tropopause (~9–12 km in midlatitudes). Its shifts help steer weather systems.')],
-[X('Διαστημικός καιρός / Kp','Space weather / Kp'),X('Ο Kp είναι δείκτης 0–9 για γεωμαγνητική διαταραχή· από 5 σηματοδοτεί γεωμαγνητική καταιγίδα. Δεν προβλέπει βροχή ή θερμοκρασία.','Kp runs from 0–9 for geomagnetic activity; 5+ denotes a geomagnetic storm. It does not predict ordinary weather.')]
-];
-const todo=todoGroups().flatMap(g=>g.items.slice(0,2).map(i=>({group:g.k,text:i.text,lvl:i.lvl}))).sort((a,b)=>b.lvl-a.lvl).slice(0,6);
-return head+
-(window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain}) || '')+
-`<section class="card guide-intro"><span class="guide-kicker">MONO / ${X('ΣΥΝΟΨΗ','BRIEFING')}</span><h2 class="guide-main-title">${esc(cityName(state.city))}: ${S?esc(S.headline):X('Ο καιρός με μια ματιά','Weather at a glance')}</h2><p>${X('Αυτός είναι ο γρήγορος οδηγός. Παρακάτω βλέπεις τι μετρήθηκε, τι προβλέπεται, τι πρέπει να προσέξεις και τι σημαίνουν οι όροι της εφαρμογής.','Your quick-start guide: what was measured, what is forecast, what matters and what the jargon means.')}</p><div class="guide-refresh">${X('Πηγή τρέχουσας ένδειξης:','Current value source:')} ${esc(source)} ${state.snapshot?X('· Αποθηκευμένο στιγμιότυπο','· Cached snapshot'):''}</div><div class="guide-nav">${[['now',X('Τώρα','Now')],['rain',X('Βροχή','Rain')],['radar',X('Ραντάρ','Radar')],['environment',X('Ατμόσφαιρα','Atmosphere')],['space',X('Διάστημα','Space')],['models',X('Μοντέλα','Models')]].map(([id,label])=>`<button class="chip" data-action="goto" data-page="${id}">${label} ↗</button>`).join('')}</div></section>
-<section class="guide-section card guide-panel"><h2>${X('Η ουσία σε 20 δευτερόλεπτα','The 20-second briefing')}</h2><div class="guide-briefing">${(S?.sentences||[]).slice(0,8).map(s=>`<div class="guide-brief-row">${esc(s)}</div>`).join('')}${warnings.length?`<div class="guide-brief-row"><strong>${X('Τοπική επίσημη προειδοποίηση:','Local official alert:')} ${esc(warnings[0].event||'')}</strong></div>`:''}</div></section>
-<div class="guide-grid">
-${panel(X('Αυτή τη στιγμή','Right now'),`${temp} · ${esc(cur.wx||desc(cur.code||first.code))}`,fact(X('Αίσθηση','Feels like'),Number.isFinite(cur.feels)?deg(cur.feels):'—')+fact(X('Μετρήθηκε ή προβλέφθηκε;','Observed or modelled?'),esc(source)),'now')}
-${panel(X('Επόμενο 12ωρο','Next 12 hours'),`${pct(pop)} ${X('μέγιστη ωριαία πιθανότητα','maximum hourly rain chance')}`,fact(X('Τι να καταλάβω','What it means'),rainText)+fact(X('Καταιγίδα','Thunderstorm'),`${pct(storm)} ${X('μέγιστη εκτίμηση ανά ώρα','peak hourly estimate')}`),'rain')}
-${panel(X('Άνεμος','Wind'),`${fin(cur.wind) ? windBft(cur.wind) : '—'}`,fact(X('Μέση ταχύτητα ανέμου','Mean wind speed'),`${num(cur.wind)} km/h`)+fact(X('Μέγιστη ριπή 12ώρου','Peak gust, next 12h'),`${num(gust)} km/h`)+fact(X('Πρακτικά','In practice'),windText)+fact(X('Ποια η διαφορά;','What is the difference?'),X('Ριπή = στιγμιαία κορύφωση. Δεν είναι ο συνεχής άνεμος.','A gust is a short peak, not sustained wind.')),'hourly')}
-${panel(X('Σήμερα και αύριο','Today and tomorrow'),today?`${deg(today.lo)} – ${deg(today.hi)}`:'—',fact(X('Αύριο','Tomorrow'),tom?`${deg(tom.lo)} – ${deg(tom.hi)} · ${pct(tom.pop)}`:'—')+fact(X('Πρόσεξε','Remember'),X('Η πιθανότητα βροχής και τα χιλιοστά βροχής είναι διαφορετικά.','Rain probability and rainfall amount are different.')),'phen')}
-${panel(X('Περιβάλλον','Environment'),Number.isFinite(air)?`EAQI ${num(air)}`:X('Δεν υπάρχουν ακόμη δεδομένα','Data not yet available'),fact(X('Πώς διαβάζεται','How to read it'),X('Χαμηλότερος δείκτης = καλύτερος αέρας. Η τιμή είναι συνήθως εκτίμηση μοντέλου.','Lower EAQI is better. This value is usually modelled, not a street-level sensor reading.')),'environment')}
-${panel(X('Πόσο αξιόπιστο;','How reliable?'),X('Πρόγνωση ≠ βεβαιότητα','Forecast ≠ certainty'),fact(X('Εύρος 80%','80% interval'),Number.isFinite(first.lo)&&Number.isFinite(first.hi)?`${deg(first.lo)} – ${deg(first.hi)}`:X('Δεν διατίθεται','Unavailable'))+fact(X('Σημαντικό','Important'),X('Το εύρος και τα πολλά μοντέλα δεν εγγυώνται σωστή πρόγνωση.','An ensemble and its interval cannot guarantee accuracy.')),'models')}
-</div>
-<section class="guide-section"><h2>${X('Η πρόγνωση της εβδομάδας με μία ματιά','The week at a glance')}</h2><div class="guide-week">${days.slice(0,7).map((d,k)=>`<div class="guide-day card"><small>${esc(k===0?X('Σήμερα','Today'):k===1?X('Αύριο','Tomorrow'):dt(d.t,{weekday:'short'}))}</small><strong>${deg(d.hi)}</strong><span>${deg(d.lo)} ${X('ελάχιστη','low')}</span><em>☂ ${pct(d.pop)} ${X('βροχή','rain')}</em></div>`).join('')}</div><p class="guide-disclaimer">${X('Αυτές είναι προβλέψεις ανά ημέρα, όχι μετρήσεις. Όσο απομακρυνόμαστε χρονικά, τόσο μεγαλώνει συνήθως η αβεβαιότητα.','Daily figures are forecasts, not observations. Uncertainty generally increases further into the future.')}</p></section>
-<section class="guide-section"><h2>${X('Τι να κάνω πρακτικά','What to do in practice')}</h2><div class="guide-practical">${todo.map(i=>`<div class="guide-practical-item"><small>${X('Χρήσιμη υπόδειξη','Practical tip')}</small>${esc(i.text)}</div>`).join('')||`<div class="card guide-panel">${X('Δεν υπάρχει ειδική υπόδειξη προς το παρόν.','No specific recommendation yet.')}</div>`}</div></section>
-<section class="guide-section"><h2>${X('Τι σημαίνει κάθε όρος; Πάτησε για εξήγηση','Every term explained — tap to expand')}</h2><div class="guide-explain-list">${explain.map(([q,a])=>`<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div></section><p class="guide-disclaimer">${X('Οι εκτιμήσεις αναφέρονται στο επιλεγμένο σημείο. Οι επίσημες προειδοποιήσεις και οι παρατηρήσεις ραντάρ έχουν διαφορετική γεωγραφική κάλυψη και δεν υποκαθιστούν οδηγίες αρχών.','Estimates refer to the selected location. Official alerts and radar observations have their own coverage and do not replace public safety guidance.')}</p>`;
+ const V=state.view, el=state.lang==='el',X=(a,b)=>el?a:b;
+ const head=header(X('Ο καιρός με μια ματιά','Weather at a glance'),X('Τέσσερις οθόνες. Μεγάλα στοιχεία. Ένα άγγιγμα για λεπτομέρειες.','Four short screens. Big numbers. Tap to explore.'),btn('reload','↻ '+T('refresh')));
+ if(!V||!state.obsReady&&!state.snapshot)return head+(state.mainErr?errorCard():loadingCard());
+ const Rain=window.MONORainIntelligence, skill=Rain?.metrics(state.train,state.sharedRain)||{};
+ const snapshot=window.MonoSpaceWeather?.snapshot(state.space||{})||null;
+ const localWarnings=Array.isArray(state.warn)?state.warn.filter(w=>w.local):null;
+ const data={
+  zone:V.zone,current:V.current,nowCloud:V.rows[V.iNow]?.cloud,daily:V.daily||[],
+  future:V.rows.filter(r=>r.t>Date.now()).slice(0,48),
+  live:Rain?.present(V.stations,state.pws),gauge:Rain?.observed(V.stations,state.pws),
+  aqi:state.aq?.current?.european_aqi,uv:state.main?.daily?.uv_index_max?.[0],
+  seaTemp:state.marine?.current?.sea_surface_temperature,wave:state.marine?.current?.wave_height,
+  sunrise:state.main?.daily?.sunrise?.[0]*1000,
+  kp:snapshot?.kp,models:V.active?.length,members:V.members,rainSkill:skill.amountMae,cloudSkill:skill.cloudMae,
+  warning:localWarnings?.[0]?.event,warnings:localWarnings?.length,
+  news:Array.isArray(state.news?.items)?state.news.items.length:null
+ };
+ return head+(window.MONOQuickScreens?.render(data,state.quickScreen,state.lang)||loadingCard());
 }
 function glossary() {
   return `<section class="section card"><details class="gloss"><summary><b>${T('glossTitle')}</b><span class="compact">${T('glossSub')}</span></summary><dl>${T('glossList').map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></details></section>`;
@@ -2518,6 +2491,14 @@ function render() {
   const openEnvDetails = [...document.querySelectorAll('.environment-section details[open]')].map(el => el.id);
   const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap')].map(el => [el.id, el.scrollLeft]);
   $('#content').innerHTML = (pages[state.page] || nowPage)();
+  if(state.page==='guide'){
+    const q=$('#qs-panel');let start=null;
+    q?.addEventListener('touchstart',e=>{const t=e.touches[0];if(t)start={x:t.clientX,y:t.clientY};},{passive:true});
+    q?.addEventListener('touchend',e=>{const t=e.changedTouches[0];if(!start||!t)return;
+      const dx=t.clientX-start.x,dy=t.clientY-start.y;start=null;
+      if(Math.abs(dx)>=65&&Math.abs(dx)>Math.abs(dy)*1.4){state.quickScreen=Math.max(0,Math.min(3,state.quickScreen+(dx<0?1:-1)));render();}
+    },{passive:true});
+  }
   openEnvDetails.forEach(id => { const el = document.getElementById(id); if (el) el.open = true; });
   envScroll.forEach(([id, left]) => { const el = document.getElementById(id); if (el) el.scrollLeft = left; });
   window.scrollTo(0, y);
@@ -2606,6 +2587,7 @@ function onClick(e) {
     if(mobileCategoryOpen) $('#mobileNavSheet .mobile-nav-link')?.focus();
   }
   else if (a === 'mobileNavClose') closeMobileNavigation(true);
+  else if (a === 'quickScreen') { const k=Number(b.dataset.index); if(Number.isInteger(k)&&k>=0&&k<=3){state.quickScreen=k;render();} }
   else if (a === 'envJump') document.getElementById(b.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   else if (a === 'menu') { closeMobileNavigation(); $('.sidebar').classList.toggle('open'); }
   else if (a === 'navGroup') { const key=b.dataset.v; if(NAV_GROUPS.some(g=>g.id===key)){navOpen[key]=!navOpen[key];write(NAV_OPEN_KEY,navOpen);navRender();} }
