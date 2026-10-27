@@ -1632,8 +1632,7 @@ async function loadWeatherField(instance,force=false){
  if(!force&&radar.fieldBusy&&radar.fieldKey===grid.key)return;
  const job=(radar.fieldJob||0)+1;radar.fieldJob=job;radar.fieldBusy=true;
  radar.fieldKey=grid.key;radar.fieldData=null;radar.fieldGrid=grid;
- if(radar.mode==='future'){$('#pmModelState')?.replaceChildren(document.createTextNode(
-   state.lang==='el'?'Φόρτωση χωρικής πρόγνωσης…':'Loading forecast field…')));}
+ if(radar.mode==='future'){const status=$('#pmModelState');if(status)status.textContent=state.lang==='el'?'Φόρτωση χωρικής πρόγνωσης…':'Loading forecast field…';}
  // Bounded API calls, sequential waves, so the browser doesn't hammer a public service.
  const blocks=[];
  for(let i=0;i<grid.points.length;i+=22)blocks.push({offset:i,points:grid.points.slice(i,i+22)});
