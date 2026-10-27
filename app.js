@@ -1479,7 +1479,8 @@ async function mountRadar(){
   await loadLeaflet();
   if(!$('#map')||map)return;
   const c=state.city,Lf=window.L;
-  const instance=Lf.map('map',{zoomControl:true,scrollWheelZoom:false}).setView([c.lat,c.lon],8);
+  const greekView=c.cc==='GR'||(c.lat>=34.4&&c.lat<=41.8&&c.lon>=19&&c.lon<=29.7);
+  const instance=Lf.map('map',{zoomControl:true,scrollWheelZoom:false}).setView(radar.mode==='future'&&greekView?[38.4,23.85]:[c.lat,c.lon],radar.mode==='future'&&greekView?6:8);
   map=instance;radar.baseLayers=baseLayers(Lf);radar.baseLayers.forEach(layer=>layer.addTo(instance));
   radar.stationLayer=Lf.layerGroup();
   Lf.circleMarker([c.lat,c.lon],{radius:7,color:'#fff',weight:2,fillColor:'#216eea',fillOpacity:1}).addTo(radar.stationLayer).bindTooltip(esc(cityName(c)));
@@ -1536,6 +1537,8 @@ function radarSelectMode(mode){
   if(radar.timer){clearInterval(radar.timer);radar.timer=0;}
   if(radar.futureTimer){clearInterval(radar.futureTimer);radar.futureTimer=0;}
   radar.mode=mode;persistUI();syncRadarMode();
+  const c=state.city,greece=c.cc==='GR'||(c.lat>=34.4&&c.lat<=41.8&&c.lon>=19&&c.lon<=29.7);
+  if(map&&greece)map.setView(mode==='future'?[38.4,23.85]:[c.lat,c.lon],mode==='future'?6:8);
   const r=$('#radarPlay'),p=$('#pmPlay');if(r)r.textContent='▶ '+T('play');if(p)p.textContent='▶ '+T('play');
   if(mode==='future'&&!radar.futureData)loadPhenomena(map);
 }
@@ -1555,8 +1558,13 @@ function drawPhenomena(){
     return;
   }
   const zoom=map.getZoom(),bounds=map.getBounds().pad(.2);let shown=0;
-  for(const point of points){
+  const occupied=[];
+  const ordered=[...points].sort((a,b)=>(a.selected?-1:b.selected?1:0)||(a.rank-b.rank));
+  for(const point of ordered){
     if(!P.eligible(point,zoom)||!bounds.contains([point.lat,point.lon]))continue;
+    const xy=map.latLngToContainerPoint([point.lat,point.lon]);
+    if(!point.selected&&occupied.some(p=>Math.abs(xy.x-p.x)<(zoom>=9?69:93)&&Math.abs(xy.y-p.y)<(zoom>=9?28:36)))continue;
+    occupied.push(xy);
     const row=P.at(point,t),iconHtml=P.pin(point,row,state.lang);
     const marker=window.L.marker([point.lat,point.lon],{icon:window.L.divIcon({
       className:'phen-map-marker',html:iconHtml,iconSize:[120,42],iconAnchor:[53,21]
