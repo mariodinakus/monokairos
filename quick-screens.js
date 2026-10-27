@@ -20,6 +20,7 @@ function render(data={},screen=0,lang='el'){
  const nearest=live.name?live.name+' · '+num(live.dist,1)+' km · '+hour(live.t):X('Χωρίς πρόσφατο κοντινό σταθμό','No fresh nearby station');
  const liveText=live.kind==='rain'?X('Βρέχει στον κοντινό σταθμό','Raining at nearby station'):
   live.kind==='snow'?X('Χιονίζει στον κοντινό σταθμό','Snow at nearby station'):
+  live.kind==='recent_report'?X('Πρόσφατη αναφορά βροχής','Recent rain report'):
   live.kind==='not_reported'?X('Δεν αναφέρεται βροχή','Rain not reported'):
   live.kind==='recent_gauge'?live.wet?X('Έβρεξε την τελευταία ώρα','Rained in the past hour'):X('Καμία βροχή την τελευταία ώρα','No rain over the past hour'):
   X('Δεν υπάρχει κοντινή επιβεβαίωση','No nearby verification');
