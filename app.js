@@ -1504,6 +1504,140 @@ async function mountRadar(){
   if(!map){const host=$('#map');if(host)host.innerHTML=`<div class="placeholder">${T('radarFail')}</div>`;}
  }
 }
+/* ------------------------------------------------------------------ Future city phenomena — separate from historical radar. */
+function phenomenaClock(t){
+  return dt(t,{weekday:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+}
+function syncRadarMode(){
+  if(!map)return;
+  const future=radar.mode==='future';
+  const toggle=(sel,on)=>{const el=$(sel);if(el)el.classList.toggle('hidden',!on);};
+  toggle('#futureRadarControls',future);toggle('#pmLegend',future);toggle('#pmNote',future);
+  toggle('#realRadarControls',!future);toggle('#realRadarLegend',!future);
+  document.querySelectorAll('[data-action="radarMode"]').forEach(b=>{
+    const on=b.dataset.v===radar.mode;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));
+  });
+  if(radar.rainLayer)radar.rainLayer.setOpacity(future?0:.88);
+  if(radar.sat)radar.sat.setOpacity(!future&&state.radarSat?.45:0);
+  if(radar.futureLayer){
+    if(future&&!map.hasLayer(radar.futureLayer))radar.futureLayer.addTo(map);
+    if(!future&&map.hasLayer(radar.futureLayer))map.removeLayer(radar.futureLayer);
+  }
+  if(radar.stationLayer){
+    if(!future&&!map.hasLayer(radar.stationLayer))radar.stationLayer.addTo(map);
+    if(future&&map.hasLayer(radar.stationLayer))map.removeLayer(radar.stationLayer);
+  }
+  if(future)drawPhenomena();
+  else if(radar.frames.length)showFrame(radar.i);
+  else if($('#radarStatus'))$('#radarStatus').textContent=state.lang==='el'?'Αναμονή πραγματικών λήψεων…':'Loading observed radar…';
+}
+function radarSelectMode(mode){
+  if(!['future','radar'].includes(mode)||radar.mode===mode)return;
+  if(radar.timer){clearInterval(radar.timer);radar.timer=0;}
+  if(radar.futureTimer){clearInterval(radar.futureTimer);radar.futureTimer=0;}
+  radar.mode=mode;persistUI();syncRadarMode();
+  const r=$('#radarPlay'),p=$('#pmPlay');if(r)r.textContent='▶ '+T('play');if(p)p.textContent='▶ '+T('play');
+  if(mode==='future'&&!radar.futureData)loadPhenomena(map);
+}
+function drawPhenomena(){
+  const P=window.MONOPhenomenaMap;
+  if(!P||!map||!radar.futureLayer||radar.mode!=='future')return;
+  const points=radar.futureData||[],times=radar.futureTimes||[];
+  const idx=Math.max(0,Math.min(times.length-1,radar.futureIndex));
+  const t=times[idx];
+  const layer=radar.futureLayer;
+  layer.clearLayers();
+  const stat=$('#radarStatus'),out=$('#pmTime'),slider=$('#pmSlider');
+  if(!times.length){
+    if(stat)stat.textContent=radar.futureBusy?(state.lang==='el'?'Φόρτωση πρόγνωσης πόλεων…':'Loading city forecasts…'):(state.lang==='el'?'Δεν υπάρχουν διαθέσιμες ωριαίες προγνώσεις':'Hourly forecasts unavailable');
+    if(out)out.textContent='—';
+    if(slider)slider.disabled=true;
+    return;
+  }
+  const zoom=map.getZoom(),bounds=map.getBounds().pad(.2);let shown=0;
+  for(const point of points){
+    if(!P.eligible(point,zoom)||!bounds.contains([point.lat,point.lon]))continue;
+    const row=P.at(point,t),iconHtml=P.pin(point,row,state.lang);
+    const marker=window.L.marker([point.lat,point.lon],{icon:window.L.divIcon({
+      className:'phen-map-marker',html:iconHtml,iconSize:[120,42],iconAnchor:[53,21]
+    }),riseOnHover:true,keyboard:true});
+    marker.bindPopup(P.popup(point,row,t,state.lang,tz()));
+    marker.addTo(layer);shown++;
+  }
+  if(slider){slider.disabled=false;slider.max=String(times.length-1);slider.value=String(idx);}
+  if(out)out.textContent=phenomenaClock(t);
+  if(stat)stat.textContent=(state.lang==='el'?'ΠΡΟΓΝΩΣΗ · ':'FORECAST · ')+phenomenaClock(t)+' · '+shown+(state.lang==='el'?' πόλεις':' cities');
+  for(const h of [3,6,12,24,48]){const b=$('#pmJump'+h);if(b)b.classList.toggle('active',Math.abs(t-(Date.now()+h*3600e3))<35*60e3);}
+}
+function selectPhenomenaHour(idx){
+  const times=radar.futureTimes||[];
+  if(!times.length)return;
+  radar.futureIndex=Math.max(0,Math.min(times.length-1,Math.round(idx)));
+  drawPhenomena();
+}
+function jumpPhenomenaHour(h){
+  const ts=radar.futureTimes||[];if(!ts.length)return;
+  const target=Date.now()+h*3600e3;
+  let best=0;
+  for(let i=1;i<ts.length;i++)if(Math.abs(ts[i]-target)<Math.abs(ts[best]-target))best=i;
+  selectPhenomenaHour(best);
+}
+function togglePhenomenaPlay(){
+  if(!map||radar.mode!=='future'||!radar.futureTimes?.length)return;
+  const btn=$('#pmPlay');
+  if(radar.futureTimer){clearInterval(radar.futureTimer);radar.futureTimer=0;if(btn)btn.textContent='▶ '+T('play');return;}
+  radar.futureTimer=setInterval(()=>{
+    if(!map||!$('#map')||radar.mode!=='future'){clearInterval(radar.futureTimer);radar.futureTimer=0;return;}
+    selectPhenomenaHour((radar.futureIndex+1)%radar.futureTimes.length);
+  },950);
+  if(btn)btn.textContent='❚❚ '+T('pause');
+}
+async function loadPhenomena(instance,force=false){
+  const P=window.MONOPhenomenaMap;if(!P||!instance)return;
+  const c=state.city,points=P.pointsFor(c,CITIES);
+  const key=points.map(p=>p.lat.toFixed(2)+','+p.lon.toFixed(2)).join('|');
+  const fresh=radar.forecastCache?.key===key&&Date.now()-radar.forecastCache.at<20*60000;
+  if(!force&&fresh){
+    radar.futureData=radar.forecastCache.points;
+    radar.futureTimes=P.timeline(radar.futureData);
+    radar.futureBusy=false;
+    if(radar.futureIndex>=radar.futureTimes.length)radar.futureIndex=0;
+    if(map===instance)drawPhenomena();
+    return;
+  }
+  if(radar.futureBusy&&radar.futureKey===key)return;
+  const job=(radar.futureJob||0)+1;radar.futureJob=job;
+  radar.futureBusy=true;radar.futureKey=key;radar.futureTimes=[];radar.futureData=[];
+  if(map===instance)drawPhenomena();
+  const blocks=[];for(let i=0;i<points.length;i+=15)blocks.push(points.slice(i,i+15));
+  try{
+    const fetched=await Promise.allSettled(blocks.map(async block=>{
+      const d=await getJSON(q(OM,{
+        latitude:block.map(p=>p.lat.toFixed(4)).join(','),
+        longitude:block.map(p=>p.lon.toFixed(4)).join(','),
+        hourly:'precipitation,snowfall,weather_code,precipitation_probability',
+        forecast_hours:54,timeformat:'unixtime',timezone:'UTC'
+      }),23000);
+      return P.normalize(d,block);
+    }));
+    if(map!==instance||radar.futureJob!==job)return;
+    const all=fetched.flatMap(x=>x.status==='fulfilled'?x.value:[]);
+    radar.futureData=all;radar.futureTimes=P.timeline(all);
+    radar.forecastCache={key,at:Date.now(),points:all};
+    radar.futureBusy=false;radar.futureKey='';
+    if(radar.futureTimes.length){
+      const target=Date.now()+3*3600e3;let best=0;
+      for(let i=1;i<radar.futureTimes.length;i++)
+        if(Math.abs(radar.futureTimes[i]-target)<Math.abs(radar.futureTimes[best]-target))best=i;
+      radar.futureIndex=best;
+    }
+    const slider=$('#pmSlider');if(slider)slider.oninput=e=>selectPhenomenaHour(+e.target.value);
+    drawPhenomena();
+  }catch{
+    if(map!==instance||radar.futureJob!==job)return;
+    radar.futureBusy=false;radar.futureKey='';drawPhenomena();
+  }
+}
 /* Keyless Esri basemap. Never request blocked OSMF or key-required CARTO tiles. */
 function baseLayers(Lf) {
   const satellite = state.radarBasemap === 'satellite';
@@ -1934,7 +2068,7 @@ const lhm = t => dt(t, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
 const ldate = t => dt(t, { day: 'numeric', month: 'short' }, LZ);
 const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 const isoMin = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
-function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap }); }
+function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode }); }
 function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
 
 // Latest IMERG half-hour that already has data (latency is a few hours): probe tiny images backwards in time.
