@@ -1438,11 +1438,32 @@ function phenPage() {
 }
 
 /* ------------------------------------------------------------------ page: radar */
-let map = null, radar = { frames: [], layers: [], i: 0, timer: 0, host: '' };
+let map = null, radar = { frames: [], layers: [], i: 0, timer: 0, host: '', mode: UI.radarMode==='radar'?'radar':'future', futureData:null, futureTimes:[], futureIndex:3, futureTimer:0, futureBusy:false, futureAt:0, futureKey:'' };
 function radarPage(){
-const el=state.lang==='el';
-return header(T('radarTitle'),el?'Πραγματικές λήψεις ραντάρ, με καθαρό χάρτη και χρονική εξέλιξη.':'Real radar observations on a clearer interactive map.',btn('goto',el?'Πρόγνωση ↗':'Forecast ↗','data-page="maps"'))+
-`<div class="card mapcard radar-suite"><div class="radar-map-shell"><div id="map" class="map"></div><div class="radar-map-overlay"><div class="radar-pill" id="radarStatus">${el?'Φόρτωση λήψεων…':'Loading frames…'}</div></div><div class="radar-legend"><strong>${el?'Ένταση επιστροφών ραντάρ':'Radar reflectivity'}</strong><div class="radar-gradient"></div><div class="radar-legend-ends"><span>${el?'Ασθενέστερη':'Weaker'}</span><span>${el?'Ισχυρότερη':'Stronger'}</span></div></div></div><div class="radar-controls"><button class="outline-btn" id="radarPlay" data-action="radarPlay">▶ ${T('play')}</button><div class="radar-timebar"><input type="range" id="radarSlider" min="0" max="0" value="0" disabled aria-label="${T('time')}"><output id="radarTime">—</output></div><button class="chip" data-action="radarHome">${el?'⌖ Κέντρο':'⌖ Center'}</button><button class="chip" id="radarStyle" data-action="radarStyle">${el?'▧ Χάρτης':'▧ Map style'}</button><button class="chip" id="radarSat" data-action="radarSat" aria-pressed="${state.radarSat}">${T('satIR')}</button><button class="chip" data-action="radarReload">↻</button></div></div><div class="radar-info"><div class="card"><div class="radar-info-title">${el?'Τι δείχνει':'What it shows'}</div><p>${el?'Το ραντάρ ανιχνεύει υετό στην ατμόσφαιρα. Δεν είναι πρόβλεψη και δεν εγγυάται βροχή στο έδαφος.':'Radar detects precipitation in the atmosphere. It is not a forecast and cannot guarantee ground-level rain.'}</p></div><div class="card"><div class="radar-info-title">${el?'Πώς κινείται':'How it moves'}</div><p>${el?'Πάτησε ▶ ή σύρε τη χρονική μπάρα. Τα χρώματα είναι ενδεικτικά, όχι βαθμονομημένα mm/h.':'Press ▶ or move the timeline. Colours are indicative, not calibrated mm/h.'}</p></div><div class="card"><div class="radar-info-title">${el?'Πότε θα βρέξει;':'When will it rain?'}</div><p>${el?'Δες τη Βροχή για πρόγνωση. Το υπέρυθρο δείχνει νέφη, όχι βροχή. Κενή περιοχή μπορεί να σημαίνει έλλειψη κάλυψης.':'Use Rain for forecasts. Infrared shows clouds, not rainfall. Empty areas can mean coverage gaps.'}</p></div></div><p class="notice">${T('radarNote')} · RainViewer · Esri · © OpenStreetMap</p>`;
+ const el=state.lang==='el',X=(a,b)=>el?a:b;
+ const rb=(mode,sym,text)=>'<button type="button" class="'+(radar.mode===mode?'active':'')+'" data-action="radarMode" data-v="'+mode+'" aria-pressed="'+(radar.mode===mode)+'"><span aria-hidden="true">'+sym+'</span>'+text+'</button>';
+ return header(T('radarTitle'),X('Χάρτης μεγάλων πόλεων: βροχή, καταιγίδες και χιόνι ανά ώρα. Χωρίς εικονίδια νέφωσης.','Major cities with hourly rain, storm and snow forecast. No cloud symbols.'),btn('goto',X('Αναλυτική πρόγνωση ↗','Full forecast ↗'),'data-page="maps"'))+
+ '<div class="radar-modebar" role="group" aria-label="'+X('Πηγή χάρτη','Map mode')+'">'+rb('future','🌧',X('Μελλοντικά φαινόμενα','Future weather'))+rb('radar','📡',X('Πραγματικό ραντάρ','Observed radar'))+'</div>'+
+ '<div class="card mapcard radar-suite"><div class="radar-map-shell"><div id="map" class="map"></div>'+
+ '<div class="radar-map-overlay"><div class="radar-pill" id="radarStatus" role="status">'+X('Φόρτωση…','Loading…')+'</div></div>'+
+ '<div class="radar-legend" id="realRadarLegend"><strong>'+X('Ένταση επιστροφών ραντάρ','Radar reflectivity')+'</strong><div class="radar-gradient"></div><div class="radar-legend-ends"><span>'+X('Ασθενέστερη','Weaker')+'</span><span>'+X('Ισχυρότερη','Stronger')+'</span></div></div></div>'+
+ '<div class="radar-controls" id="realRadarControls"><button class="outline-btn" id="radarPlay" data-action="radarPlay">▶ '+T('play')+'</button>'+
+ '<div class="radar-timebar"><input type="range" id="radarSlider" min="0" max="0" value="0" disabled aria-label="'+T('time')+'"><output id="radarTime">—</output></div>'+
+ '<button class="chip" data-action="radarHome">'+X('⌖ Κέντρο','⌖ Center')+'</button>'+
+ '<button class="chip" id="radarSat" data-action="radarSat" aria-pressed="'+state.radarSat+'">'+T('satIR')+'</button>'+
+ '<button class="chip" data-action="radarReload">↻</button></div>'+
+ '<div id="futureRadarControls" class="pm-controls">'+
+ '<button type="button" class="outline-btn pm-play" id="pmPlay" data-action="pmPlay" aria-label="'+X('Κίνηση πρόγνωσης','Play forecast animation')+'">▶ '+T('play')+'</button>'+
+ '<div class="pm-range"><input type="range" id="pmSlider" min="0" max="0" value="0" disabled aria-label="'+X('Μελλοντική ώρα πρόγνωσης','Forecast time')+'"><output class="pm-output" id="pmTime">—</output></div>'+
+ '<div class="pm-quick">'+[3,6,12,24,48].map(h=>'<button type="button" data-action="pmJump" data-h="'+h+'" id="pmJump'+h+'">+'+h+'ω</button>').join('')+'</div>'+
+ '<button type="button" class="chip" data-action="radarHome">'+X('⌖ Κέντρο','⌖ Center')+'</button>'+
+ '<button type="button" class="chip" data-action="pmReload">↻</button></div>'+
+ '<div class="pm-flegend" id="pmLegend"><span>🌦 '+X('Ασθενής','Light rain')+'</span><span>🌧 '+X('Βροχή / έντονη','Rain / heavy')+'</span><span>⛈️ '+X('Καταιγίδα','Storm')+'</span><span>❄️ '+X('Χιόνι','Snow')+'</span><span><i></i> '+X('Χωρίς υετό','Dry')+'</span></div>'+
+ '<p class="pm-map-note" id="pmNote">'+X('Πρόγνωση μοντέλων Open-Meteo για τις πόλεις (έως 48 ώρες), όχι πραγματική λήψη ραντάρ. Τα σύμβολα αφορούν τα σημεία των πόλεων.','Open-Meteo city-cell forecast (up to 48 hours), not observed radar imagery. Pins represent cities, not entire weather systems.')+'</p>'+
+ '</div><div class="radar-info"><div class="card"><div class="radar-info-title">'+X('Πόλεις στον χάρτη','Cities on the map')+'</div><p>'+X('Αθήνα, Θεσσαλονίκη, Πάτρα, Λάρισα, Ηράκλειο και άλλες μεγάλες πόλεις. Με μεγέθυνση εμφανίζονται περισσότερες.','Athens, Thessaloniki, Patras, Larissa, Heraklion and other major cities. Zoom in for more.')+'</p></div>'+
+ '<div class="card"><div class="radar-info-title">'+X('Μελλοντικά φαινόμενα','Future phenomena')+'</div><p>'+X('Σύρε την ώρα ή πάτησε +6ω / +24ω. Τα εικονίδια δείχνουν ένταση βροχής, χιόνι και καταιγίδες — χωρίς σύμβολα απλής συννεφιάς.','Drag the timeline or select +6h / +24h. Icons show rain intensity, snow and storms, never plain clouds.')+'</p></div>'+
+ '<div class="card"><div class="radar-info-title">'+X('Τι είναι πραγματικό;','What is observed?')+'</div><p>'+X('Η καρτέλα «Πραγματικό ραντάρ» δείχνει λήψεις υετού του παρελθόντος. Η «Πρόγνωση» προέρχεται από αριθμητικά μοντέλα.','Observed radar shows recent past precipitation. The future mode uses numerical weather model forecasts.')+'</p></div></div>'+
+ '<p class="notice">'+T('radarNote')+' · Open-Meteo · RainViewer · Esri</p>';
 }
 function loadLeaflet() {
   if (window.L) return Promise.resolve();
@@ -1451,7 +1472,7 @@ function loadLeaflet() {
     const s = document.createElement('script'); s.src = 'vendor/leaflet.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s);
   });
 }
-function killMap() { if (radar.timer) { clearInterval(radar.timer); radar.timer = 0; } if (map) { map.remove(); map = null; } radar.layers = []; radar.frames = []; radar.sat = null; radar.rainLayer = null; radar.baseLayers = []; }
+function killMap() { if(radar.timer)clearInterval(radar.timer);radar.timer=0;if(radar.futureTimer)clearInterval(radar.futureTimer);radar.futureTimer=0;radar.futureBusy=false;radar.futureKey='';if(map){map.remove();map=null;}radar.layers=[];radar.frames=[];radar.sat=null;radar.rainLayer=null;radar.baseLayers=[];radar.futureLayer=null;radar.stationLayer=null; }
 async function mountRadar(){
  if(!$('#map')||map)return;
  try{
