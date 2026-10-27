@@ -1,0 +1,34 @@
+/* Forecast phenomena on radar tab: named cities, rain/snow/storm — no cloud cover symbology. */
+.radar-modebar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 12px}
+.radar-modebar button{display:inline-flex;gap:8px;align-items:center;justify-content:center;flex:1 1 160px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:13px;padding:12px 17px;font-size:12px;font-weight:800}
+.radar-modebar button.active{background:var(--ink);color:var(--inv);border-color:var(--ink)}
+.radar-modebar button span{font-size:19px}
+.radar-future-note{font-size:11px;color:var(--sub);line-height:1.65;padding:11px 2px;margin:0}
+.pm-controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:17px 5px}
+.pm-controls .pm-play{flex:0 0 auto}
+.pm-range{flex:1 1 190px;display:flex;align-items:center;gap:13px;min-width:0}
+.pm-range input{flex:1;min-width:0;accent-color:var(--ink)}
+.pm-output{white-space:nowrap;font-size:12px;min-width:115px;text-align:right;font-weight:780;font-variant-numeric:tabular-nums}
+.pm-quick{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pm-quick button{border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:8px 10px;color:var(--ink);font-size:11px;font-weight:750}
+.pm-quick button.active{background:var(--ink);color:var(--inv)}
+.pm-flegend{display:flex;gap:8px 15px;flex-wrap:wrap;align-items:center;font-size:11px;font-weight:750;padding:10px 4px;color:var(--sub)}
+.pm-flegend span{display:inline-flex;align-items:center;gap:4px}
+.pm-flegend i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.pm-map-note{font-size:10px;line-height:1.55;color:var(--sub);margin:6px 4px 14px}
+.pm-state{border:1px solid var(--line);padding:7px 11px;border-radius:12px;background:var(--panel);font-size:11px;font-weight:760}
+.phen-map-marker{border:none!important;background:none!important}
+.pm-pin{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(255,255,255,.8);border-radius:50px;padding:4px 8px 4px 5px;box-shadow:0 2px 8px #0004;background:#fff;color:#141b24;white-space:nowrap;max-width:156px;width:max-content;transform:translateX(-15%);pointer-events:auto!important}
+.pm-pin.pm-dry{background:rgba(255,255,255,.88);color:#2f3d47;box-shadow:0 1px 5px #0003}
+.pm-pin.pm-selected{outline:2px solid #1f6df1;outline-offset:2px}
+.pm-symbol{display:inline-flex;align-items:center;justify-content:center;border-radius:100%;width:28px;height:28px;font-size:21px;background:#edf3ff}
+.pm-heavyRain .pm-symbol,.pm-storm .pm-symbol{background:#ffdfc7}
+.pm-snow .pm-symbol,.pm-heavySnow .pm-symbol{background:#d8f0ff}
+.pm-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#718399;margin:0 3px 0 5px}
+.pm-label{font-size:11px;font-weight:800;line-height:1.2;overflow:hidden;text-overflow:ellipsis}
+.pm-popup{font-family:inherit;min-width:175px;max-width:230px;color:#18202b}
+.pm-popup strong{font-size:15px}.pm-popup p{font-size:12px;font-weight:800;margin:8px 0}
+.pm-popup dl{margin:10px 0}.pm-popup dl div{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid #ddd}
+.pm-popup dt{font-size:11px}.pm-popup dd{margin:0;font-size:11px;font-weight:800}.pm-popup small{font-size:10px;line-height:1.4}
+.pm-controls [disabled],.radar-modebar [disabled]{opacity:.4;cursor:default}
+@media(max-width:610px){.radar-modebar button{flex:1 1 45%;padding:10px 8px;font-size:11px}.radar-modebar button span{font-size:17px}.pm-controls{gap:10px;padding:11px 1px}.pm-range{order:2;flex-basis:100%}.pm-quick{order:3;flex-basis:100%;justify-content:space-between}.pm-quick button{padding:7px 6px;flex:1}.pm-flegend{font-size:10px;gap:5px 10px}.pm-pin{padding:3px 7px 3px 4px;max-width:130px}.pm-symbol{width:26px;height:26px;font-size:19px}.pm-label{font-size:10px}.pm-output{min-width:95px;font-size:11px}}
