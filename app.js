@@ -8,7 +8,7 @@
 'use strict';
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
-const VERSION = '4.0';
+const VERSION = '4.1';
 const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
@@ -767,7 +767,7 @@ function schedule() { clearTimeout(pending); pending = setTimeout(() => { recomp
 let worker = null, workerOk = true, jobId = 0;
 function runTraining(payload) {
   return new Promise((resolve, reject) => {
-    const inline = () => setTimeout(() => { try { resolve({ temp: M.fitVariable(payload.temp), wind: M.fitVariable(payload.wind, { nonNegative: true }), precip: M.fitRain(payload.precip) }); } catch (e) { reject(e); } }, 30);
+    const inline = () => setTimeout(() => { try { resolve({ temp: M.fitVariable(payload.temp), wind: M.fitVariable(payload.wind, { nonNegative: true }), precip: M.fitRain(payload.precip), cloud: M.fitVariable(payload.cloud) }); } catch (e) { reject(e); } }, 30);
     if (!workerOk || typeof Worker === 'undefined' || location.protocol === 'file:' || window.ICONS) return inline();
     try {
       worker ||= new Worker('trainer.js');
@@ -787,21 +787,21 @@ async function ensureTraining(c, gen, force = false) {
   state.trainStatus = 'loading'; state.train = hit && hit.v === VERSION ? hit : null; schedule();
   try {
     const start = isoDate(-62), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
-    const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`]);
-    const full = M.LEADS.flatMap(vars).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
+    const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
+    const full = M.LEADS.flatMap(vars).join(','), noCloud = M.LEADS.flatMap(k => vars(k).slice(0,3)).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
     const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
-    const truthP = getJSON(q(ARCH, { ...base, hourly: 'temperature_2m,precipitation,wind_speed_10m' }), 40000);
+    const truthP = getJSON(q(ARCH, { ...base, hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover' }), 40000);
     const ms = MODELS.filter(m => active.includes(m.id));
-    const runs = await Promise.allSettled(ms.map(m => { const used = state.models[m.id]?.used || m.id; return chain([used], id => q(PREV, { ...base, models: id, hourly: full })).catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: tOnly }))); }));
+    const runs = await Promise.allSettled(ms.map(m => { const used = state.models[m.id]?.used || m.id; return chain([used], id => q(PREV, { ...base, models: id, hourly: full })).catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: noCloud }))).catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: tOnly }))); }));
     const truth = await truthP;
     if (gen !== state.gen) return;
     const times = truth.hourly.time.map(s => s * 1000), idx = new Map(times.map((t, i) => [t, i]));
     const hours = times.map(t => localHour(t, zone));
-    const sets = { temp: {}, precip: {}, wind: {} }; let used = 0;
+    const sets = { temp: {}, precip: {}, wind: {}, cloud: {} }; let used = 0;
     runs.forEach((r, j) => {
       if (r.status !== 'fulfilled') return;
       const h = r.value.data.hourly, id = ms[j].id; let any = false;
-      for (const [key, v] of [['temp', 'temperature_2m'], ['precip', 'precipitation'], ['wind', 'wind_speed_10m']]) {
+      for (const [key, v] of [['temp', 'temperature_2m'], ['precip', 'precipitation'], ['wind', 'wind_speed_10m'], ['cloud', 'cloud_cover']]) {
         const byK = {};
         for (const k of M.LEADS) { const name = k === 0 ? v : `${v}_previous_day${k}`; if (!h[name]) continue; const a = align(h.time, h[name], idx); if (a.filter(fin).length >= 120) { byK[k] = a; any = true; } }
         if (Object.keys(byK).length) sets[key][id] = byK;
@@ -809,10 +809,10 @@ async function ensureTraining(c, gen, force = false) {
       if (any) used++;
     });
     const data = (key, tv) => ({ times, hours, truth: tv, models: sets[key] });
-    const res = await runTraining({ temp: data('temp', truth.hourly.temperature_2m), wind: data('wind', truth.hourly.wind_speed_10m), precip: data('precip', truth.hourly.precipitation) });
+    const res = await runTraining({ temp: data('temp', truth.hourly.temperature_2m), wind: data('wind', truth.hourly.wind_speed_10m), precip: data('precip', truth.hourly.precipitation), cloud: data('cloud', truth.hourly.cloud_cover) });
     if (gen !== state.gen) return;
     if (!Object.keys(res.temp.leads).length) throw new Error('nothing to train');
-    const rec = { v: VERSION, at: Date.now(), start, end, hours: times.length, models: used, temp: res.temp, wind: res.wind, precip: res.precip };
+    const rec = { v: VERSION, at: Date.now(), start, end, hours: times.length, models: used, temp: res.temp, wind: res.wind, precip: res.precip, cloud: res.cloud };
     state.train = rec; state.trainStatus = 'done';
     const keep = Object.entries({ ...all, [ckey(c)]: rec }).sort((a, b) => b[1].at - a[1].at).slice(0, 3);
     if (!write(K.train, Object.fromEntries(keep))) write(K.train, { [ckey(c)]: rec });
@@ -869,6 +869,10 @@ function recompute() {
     const vt = vals('temperature_2m', i), n = Object.keys(vt).length;
     const rowT = { H, vals: vt, mean: M.mean(Object.values(vt)) }; rowT.prev = meanAt('temperature_2m', i - 1) ?? rowT.mean; rowT.next = meanAt('temperature_2m', i + 1) ?? rowT.mean;
     const vw = vals('wind_speed_10m', i), rowW = { H, vals: vw, mean: M.mean(Object.values(vw)) }; rowW.prev = meanAt('wind_speed_10m', i - 1) ?? rowW.mean; rowW.next = meanAt('wind_speed_10m', i + 1) ?? rowW.mean;
+    const vc = vals('cloud_cover', i), rowC = { H, vals: vc, mean: M.mean(Object.values(vc)) };
+    rowC.prev = meanAt('cloud_cover', i - 1) ?? rowC.mean;
+    rowC.next = meanAt('cloud_cover', i + 1) ?? rowC.mean;
+    const pc = Object.keys(vc).length ? M.predictVariable(tr?.cloud, k, rowC) : { value: null, choice: 'none' };
     const pt = n ? M.predictVariable(tr?.temp, k, rowT) : { value: W.hourly.temperature_2m?.[i] ?? null, choice: 'none', methods: {} };
     const pw = Object.keys(vw).length ? M.predictVariable(tr?.wind, k, rowW, { nonNegative: true }) : { value: null };
     const pr = n ? M.predictRain(tr?.precip, k, vals('precipitation', i), H) : { prob: fin(W.hourly.precipitation_probability?.[i]) ? W.hourly.precipitation_probability[i] / 100 : null, amount: null };
@@ -881,7 +885,7 @@ function recompute() {
       feels: fin(app) && fin(rowT.mean) && fin(temp) ? app + (temp - rowT.mean) : app,
       wind: pw.value, gust: fin(gustRaw) && fin(windRaw) && windRaw > 0.5 && fin(pw.value) ? gustRaw * pw.value / windRaw : gustRaw,
       dir: nd ? (Math.atan2(u, v) * 180 / Math.PI + 360) % 360 : null,
-      rh: M.mean(Object.values(vals('relative_humidity_2m', i))), cloud: M.mean(Object.values(vals('cloud_cover', i))), pres: M.mean(Object.values(vals('pressure_msl', i))),
+      rh: M.mean(Object.values(vals('relative_humidity_2m', i))), cloud: fin(pc.value) ? M.clamp(pc.value, 0, 100) : rowC.mean, cloudChoice: pc.choice, pres: M.mean(Object.values(vals('pressure_msl', i))),
       pMono: pr.prob, rainChoice: pr.choice, amount: pr.amount, codes: Object.values(vals('weather_code', i)),
       isDay: W.hourly.is_day?.[i] ?? 1, uv: W.hourly.uv_index?.[i], visMain: W.hourly.visibility?.[i],
       vi: { cape: vals('cape', i), prec: vals('precipitation', i), snowf: vals('snowfall', i), vis: vals('visibility', i), gust: vals('wind_gusts_10m', i), code: vals('weather_code', i) },
@@ -1374,7 +1378,7 @@ function rainPage() {
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const eps = rainEpisodes();
   const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  return head + rainNowCard(false)
+  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus}) || '') + rainNowCard(false)
     + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
        <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
