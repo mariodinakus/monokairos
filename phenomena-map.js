@@ -42,7 +42,7 @@ function kind(row){
  const code=n(row?.weatherCode),mm=n(row?.precip),snow=n(row?.snow),prob=n(row?.prob);
  const p=finite(prob)?Math.max(0,Math.min(100,prob)):null;
  if(!finite(code)&&!finite(mm)&&!finite(snow))return {id:'unknown',icon:'',labelEl:'Χωρίς δεδομένα',labelEn:'Unavailable',level:0};
- if((code>=95&&code<=99)||(code===82&&finite(mm)&&mm>=6))return {id:'storm',icon:'⛈️',labelEl:'Καταιγίδα',labelEn:'Thunderstorm',level:4};
+ if(code>=95&&code<=99)return {id:'storm',icon:'⛈️',labelEl:'Καταιγίδα',labelEn:'Thunderstorm',level:4};
  if((finite(snow)&&snow>=1.5)||code===75||code===86)return {id:'heavySnow',icon:'🌨️',labelEl:'Έντονο χιόνι',labelEn:'Heavy snow',level:3};
  if((finite(snow)&&snow>=0.15)||[71,73,77,85].includes(code))return {id:'snow',icon:'❄️',labelEl:'Χιόνι',labelEn:'Snow',level:2};
  if((finite(mm)&&mm>=7)||code===65||code===67||code===82)return {id:'heavyRain',icon:'🌧️',labelEl:'Έντονη βροχή',labelEn:'Heavy rain',level:3};
