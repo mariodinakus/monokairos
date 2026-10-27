@@ -1283,7 +1283,8 @@ function rainStatus(eps) {
     lines.push((state.lang==='el'?'Ο σταθμός ':'Station ')+esc(report.name)+(state.lang==='el'?' αναφέρει βροχή · ':' reports rain · ')+num(report.dist,1)+' km · '+hhmm(report.t)+'.');
     lines.push(state.lang==='el'?'Η ένδειξη αφορά τη θέση του σταθμού, όχι ακριβώς τη δική σου.':'This is reported at the station, not your exact street.');
   }else{
-    if(report?.kind==='not_reported')lines.push((state.lang==='el'?'Ο κοντινός σταθμός ':'Nearby station ')+esc(report.name)+(state.lang==='el'?' δεν αναφέρει βροχή · ':' does not report rain · ')+hhmm(report.t)+'.');
+    if(report?.kind==='recent_report')lines.push((state.lang==='el'?'Ο σταθμός ':'Station ')+esc(report.name)+(state.lang==='el'?' ανέφερε υετό στις ':' reported precipitation at ')+hhmm(report.t)+(state.lang==='el'?' · όχι επιβεβαίωση αυτή τη στιγμή.':'; not confirmed now.'));
+    else if(report?.kind==='not_reported')lines.push((state.lang==='el'?'Ο κοντινός σταθμός ':'Nearby station ')+esc(report.name)+(state.lang==='el'?' δεν αναφέρει βροχή · ':' does not report rain · ')+hhmm(report.t)+'.');
     else if(report?.kind==='recent_gauge'&&report.wet)lines.push((state.lang==='el'?'Βροχή την τελευταία ώρα στο ':'Rain within the last hour at ')+esc(report.name)+' · '+num(report.mm1h,1)+' mm · '+num(report.dist,1)+' km.');
     else if(report?.kind==='distant')lines.push(state.lang==='el'?'Δεν υπάρχει πρόσφατη κοντινή επιβεβαίωση· ο διαθέσιμος σταθμός είναι μακριά.':'No fresh close confirmation; the reporting station is distant.');
     else if(report?.kind==='unverified')lines.push(state.lang==='el'?'Δεν υπάρχει πρόσφατη αναφορά κοντινού σταθμού.':'No recent report from a nearby station.');
