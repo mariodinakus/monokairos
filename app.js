@@ -1084,10 +1084,20 @@ function nowPage() {
   const cur = V.current, rows = V.rows, iN = V.iNow, today = V.daily[0];
   const pop6 = Math.max(0, ...rows.slice(iN + 1, iN + 7).map(r => r.pop ?? 0));
   const src = cur.source === 'obs' ? `${T('observed')} · ${esc(V.station.id)} · ${num(V.station.dist)} km · ${hhmm(cur.t)}` : `${T('modelNow')} · ${hhmm(cur.t)}`;
-  const condition = cur.wx ? esc(cur.wx[0].toUpperCase() + cur.wx.slice(1)) : desc(cur.code ?? rows[iN]?.code);
+  const nearbyReport=window.MONORainIntelligence?.present(V.stations,state.pws);
+  const conditionBase=cur.wx ? esc(cur.wx[0].toUpperCase() + cur.wx.slice(1)) : desc(cur.code ?? rows[iN]?.code);
+  // Observed precipitation in the hero is always attributed to a fresh nearby station.
+  // An unverified model weather code is identified as a model estimate instead.
+  const condition=nearbyReport?.kind==='rain'
+    ? (state.lang==='el'?'Βρέχει στον σταθμό ':'Raining at station ')+esc(nearbyReport.name)
+    :nearbyReport?.kind==='snow'
+      ? (state.lang==='el'?'Χιονίζει στον σταθμό ':'Snowing at station ')+esc(nearbyReport.name)
+      :conditionBase+(cur.source==='model'?' · '+T('modelNow'):'');
+  const weatherSource=nearbyReport?.kind==='rain'||nearbyReport?.kind==='snow'
+    ? '<div class="hero-station-report">📍 '+num(nearbyReport.dist,1)+' km · '+hhmm(nearbyReport.t)+' · '+esc(nearbyReport.src||'')+'</div>' : '';
   const hero = `<article class="card hero"><div class="hero-header"><div><div class="hero-place">${esc(cityName(c))}</div><div class="hero-country">${esc(dt(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' }))} · ${hhmm(Date.now())}</div></div>${icon(cur.code ?? rows[iN]?.code ?? 3, cur.isDay, 'hero-icon')}</div>
     <div class="temperature" aria-label="${fin(cur.temp) ? num(Math.round(cur.temp)) + ' °C' : '—'}">${fin(cur.temp) ? num(Math.round(cur.temp)) : '—'}<span class="temp-unit">°C</span></div>
-    <div class="hero-bottom"><div><div class="condition">${condition}</div><div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div></div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
+    <div class="hero-bottom"><div><div class="condition">${condition}</div>${weatherSource}<div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div></div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
   const minis = `<div class="mini-grid">
     ${mini(T('rainChance'), pct(pop6), T('next6') + (today?.mm >= 0.1 ? ` · ${num(today.mm, 1)} mm ${T('today').toLowerCase()}` : ''), 'umbrella')}
     ${mini(T('wind'), `${num(cur.wind)} <small>km/h</small> ${dirArrow(cur.dir)}${fin(cur.wind) ? `<span class="wind-beaufort" title="${state.lang === 'el' ? 'Κλίμακα Μποφόρ για μέση ταχύτητα ανέμου' : 'Beaufort scale for mean wind speed'}">${windBft(cur.wind)}</span>` : ''}`, fin(cur.gust) ? `${T('gust')} ${num(cur.gust)} km/h` : '&nbsp;', 'wind')}
@@ -2273,8 +2283,8 @@ function stationsPage() {
   const head = header(T('stTitle'), T('stSub'));
   if (!V || !state.obs) return head + loadingCard();
   if (!V.stations.length) return head + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
-  const cards = V.stations.slice(0, 30).map(s => { const o = s.last, inUse = V.station?.id === s.id;
-    return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div></div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
+  const cards = V.stations.slice(0, 30).map(s => { const o = s.last, inUse = V.station?.id === s.id, gauge = window.MONORainIntelligence?.observed([s],null);
+    return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div>${gauge ? `<div class="citycountry">🌧 ${num(gauge.mm,1)} mm · ${num(gauge.covered,0)}/24 h · ${esc(gauge.type)}</div>` : ''}</div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
       <div class="stvals"><span class="citytemp">${deg(o?.temp)}</span><div class="compact">${T('humidity')} ${num(M.rhFromDew(o?.temp, o?.dewp))}% · ${T('dew')} ${deg(o?.dewp)}<br>${T('wind')} ${num(o?.wspd)} km/h ${dirArrow(o?.wdir)}${fin(o?.wspd) ? ` · ${windBft(o.wspd)}` : ''}${fin(o?.wgst) ? ` · ${T('gust')} ${num(o.wgst)} km/h` : ''}<br>${num(o?.pres)} hPa${fin(o?.vis) ? ` · ${num(o.vis, o.vis < 10 ? 1 : 0)} km` : ''}</div></div>
       <div class="compact">${o?.wx?.length ? esc(wxText(o)) + ' · ' : ''}${o ? esc(ageText(o.t)) : ''}</div>
       <div class="citybottom">${inUse ? `<span class="badge">✓ ${T('stInUse')}</span>` : `<button class="cityopen" data-action="station" data-id="${esc(s.id)}">${T('stUse')}</button>`}</div></article>`; }).join('');
