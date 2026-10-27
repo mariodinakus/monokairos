@@ -1457,9 +1457,9 @@ function radarPage(){
  '<div class="pm-range"><input type="range" id="pmSlider" min="0" max="0" value="0" disabled aria-label="'+X('Μελλοντική ώρα πρόγνωσης','Forecast time')+'"><output class="pm-output" id="pmTime">—</output></div>'+
  '<div class="pm-quick">'+[3,6,12,24,48].map(h=>'<button type="button" data-action="pmJump" data-h="'+h+'" id="pmJump'+h+'">+'+h+'ω</button>').join('')+'</div>'+
  '<button type="button" class="chip" data-action="radarHome">'+X('⌖ Κέντρο','⌖ Center')+'</button>'+
- '<button type="button" class="chip" data-action="pmReload">↻</button></div>'+
- '<div class="pm-flegend" id="pmLegend"><span>🌦 '+X('Ασθενής','Light rain')+'</span><span>🌧 '+X('Βροχή / έντονη','Rain / heavy')+'</span><span>⛈️ '+X('Καταιγίδα','Storm')+'</span><span>❄️ '+X('Χιόνι','Snow')+'</span><span><i></i> '+X('Χωρίς υετό','Dry')+'</span></div>'+
- '<p class="pm-map-note" id="pmNote">'+X('Πρόγνωση μοντέλων Open-Meteo για τις πόλεις (έως 48 ώρες), όχι πραγματική λήψη ραντάρ. Τα σύμβολα αφορούν τα σημεία των πόλεων.','Open-Meteo city-cell forecast (up to 48 hours), not observed radar imagery. Pins represent cities, not entire weather systems.')+'</p>'+
+ '<button type="button" class="chip" id="pmStyle" data-action="pmStyle">▧ '+X('Δρόμοι','Streets')+'</button>'+'<button type="button" class="chip" data-action="pmReload">↻</button></div>'+
+ '<div class="pm-overhead-hint" id="pmModelState" role="status">'+X('Πρόγνωση πάνω στον χάρτη · όχι ραντάρ','Forecast mapped over land · not radar')+'</div>'+ '<div class="pm-colors" id="pmColors"><span>0,1</span><i></i><span>20+ mm/h</span></div>'+ '<div class="pm-flegend" id="pmLegend"><span>🌦 '+X('Ασθενής','Light rain')+'</span><span>🌧 '+X('Βροχή / έντονη','Rain / heavy')+'</span><span>⛈️ '+X('Καταιγίδα','Storm')+'</span><span>❄️ '+X('Χιόνι','Snow')+'</span><span><i></i> '+X('Χωρίς υετό','Dry')+'</span></div>'+
+ '<p class="pm-map-note" id="pmNote">'+X('Χρωματιστές ζώνες = ωριαία χωρική πρόγνωση βροχής, χιονιού και καταιγίδων σε υπολογιστικό πλέγμα. Η κίνηση προκύπτει από διαδοχικές ωριαίες προβλέψεις. Όχι εικόνα πραγματικού ραντάρ ή ακριβής πορεία κάθε καταιγίδας.','Coloured areas = spatial precipitation model estimates from a forecast grid. Motion interpolates successive hourly model frames; this is not observed radar or a precise tracked storm path.')+'</p>'+
  '</div><div class="radar-info"><div class="card"><div class="radar-info-title">'+X('Πόλεις στον χάρτη','Cities on the map')+'</div><p>'+X('Αθήνα, Θεσσαλονίκη, Πάτρα, Λάρισα, Ηράκλειο και άλλες μεγάλες πόλεις. Με μεγέθυνση εμφανίζονται περισσότερες.','Athens, Thessaloniki, Patras, Larissa, Heraklion and other major cities. Zoom in for more.')+'</p></div>'+
  '<div class="card"><div class="radar-info-title">'+X('Μελλοντικά φαινόμενα','Future phenomena')+'</div><p>'+X('Σύρε την ώρα ή πάτησε +6ω / +24ω. Τα εικονίδια δείχνουν ένταση βροχής, χιόνι και καταιγίδες — χωρίς σύμβολα απλής συννεφιάς.','Drag the timeline or select +6h / +24h. Icons show rain intensity, snow and storms, never plain clouds.')+'</p></div>'+
  '<div class="card"><div class="radar-info-title">'+X('Τι είναι πραγματικό;','What is observed?')+'</div><p>'+X('Η καρτέλα «Πραγματικό ραντάρ» δείχνει λήψεις υετού του παρελθόντος. Η «Πρόγνωση» προέρχεται από αριθμητικά μοντέλα.','Observed radar shows recent past precipitation. The future mode uses numerical weather model forecasts.')+'</p></div></div>'+
@@ -1515,7 +1515,7 @@ function syncRadarMode(){
   if(!map)return;
   const future=radar.mode==='future';
   const toggle=(sel,on)=>{const el=$(sel);if(el)el.classList.toggle('hidden',!on);};
-  toggle('#futureRadarControls',future);toggle('#pmLegend',future);toggle('#pmNote',future);
+  toggle('#futureRadarControls',future);toggle('#pmLegend',future);toggle('#pmNote',future);toggle('#pmColors',future);toggle('#pmModelState',future);
   toggle('#realRadarControls',!future);toggle('#realRadarLegend',!future);
   document.querySelectorAll('[data-action="radarMode"]').forEach(b=>{
     const on=b.dataset.v===radar.mode;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));
@@ -1609,6 +1609,76 @@ function togglePhenomenaPlay(){
     selectPhenomenaHour((radar.futureIndex+1)%radar.futureTimes.length,true);
   },950);
   if(btn)btn.textContent='❚❚ '+T('pause');
+}
+/* Spatial forecast model grid, rendered as an overhead coloured field.
+ * No radar layer or cloud imagery is used for future hours. */
+function attachWeatherField(){
+ const F=window.MONOWeatherField;
+ if(!F||!radar.fieldLayer||!radar.fieldGrid||!radar.fieldData)return;
+ if(!radar.futureTimes?.length)radar.futureTimes=window.MONOPhenomenaMap.timeline(radar.fieldData);
+ if(!radar.futureTimes.length)return;
+ radar.fieldLayer.setForecast(radar.fieldGrid,radar.fieldData,window.MONOPhenomenaMap.at,radar.futureTimes);
+ if(map&&radar.mode==='future')drawPhenomena();
+}
+async function loadWeatherField(instance,force=false){
+ const F=window.MONOWeatherField,P=window.MONOPhenomenaMap;
+ if(!F||!P||!instance)return;
+ const grid=F.makeGrid(state.city);
+ const cache=radar.fieldCache;
+ if(!force&&cache?.key===grid.key&&Date.now()-cache.at<20*60000){
+  radar.fieldGrid=cache.grid;radar.fieldData=cache.data;radar.fieldBusy=false;
+  if(map===instance)attachWeatherField();return;
+ }
+ if(!force&&radar.fieldBusy&&radar.fieldKey===grid.key)return;
+ const job=(radar.fieldJob||0)+1;radar.fieldJob=job;radar.fieldBusy=true;
+ radar.fieldKey=grid.key;radar.fieldData=null;radar.fieldGrid=grid;
+ if(radar.mode==='future'){$('#pmModelState')?.replaceChildren(document.createTextNode(
+   state.lang==='el'?'Φόρτωση χωρικής πρόγνωσης…':'Loading forecast field…')));}
+ // Bounded API calls, sequential waves, so the browser doesn't hammer a public service.
+ const blocks=[];
+ for(let i=0;i<grid.points.length;i+=22)blocks.push({offset:i,points:grid.points.slice(i,i+22)});
+ const data=new Array(grid.points.length).fill(null);
+ let loaded=0;
+ for(let wave=0;wave<blocks.length;wave+=3){
+  if(!map||map!==instance||radar.fieldJob!==job)return;
+  const batch=blocks.slice(wave,wave+3);
+  const requests=await Promise.allSettled(batch.map(async b=>{
+   const resp=await getJSON(q(OM,{
+     latitude:b.points.map(p=>p.lat.toFixed(3)).join(','),
+     longitude:b.points.map(p=>p.lon.toFixed(3)).join(','),
+     hourly:'precipitation,snowfall,weather_code,precipitation_probability',
+     forecast_hours:54,timeformat:'unixtime',timezone:'UTC'
+   }),25000);
+   return P.normalize(resp,b.points);
+  }));
+  if(map!==instance||radar.fieldJob!==job)return;
+  requests.forEach((result,j)=>{
+   if(result.status!=='fulfilled')return;
+   const block=batch[j];
+   for(let k=0;k<block.points.length;k++){
+    const value=result.value[k];
+    if(value?.hourly?.precip?.length){
+     data[block.offset+k]=value;loaded++;
+    }
+   }
+  });
+ }
+ if(map!==instance||radar.fieldJob!==job)return;
+ radar.fieldBusy=false;radar.fieldKey='';
+ if(loaded<Math.floor(grid.points.length*.55)){
+   radar.fieldData=null;
+   const note=$('#pmModelState');
+   if(note)note.textContent=state.lang==='el'
+    ?'Χωρική πρόγνωση μη διαθέσιμη τώρα · παραμένουν οι προβλέψεις πόλεων.'
+    :'Spatial model forecast unavailable · city forecasts remain.';
+   return;
+ }
+ radar.fieldData=data;
+ radar.fieldCache={key:grid.key,at:Date.now(),grid,data};
+ const note=$('#pmModelState');
+ if(note)note.textContent=(state.lang==='el'?'Προγνωστικό πλέγμα':'Forecast grid')+
+   ' · '+loaded+'/'+grid.points.length+(state.lang==='el'?' σημεία':' points');
+ attachWeatherField();
 }
 async function loadPhenomena(instance,force=false){
   const P=window.MONOPhenomenaMap;if(!P||!instance)return;
