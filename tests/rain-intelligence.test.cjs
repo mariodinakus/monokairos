@@ -55,3 +55,14 @@ test('nearest instrument wins over more distant gauge with longer reporting cove
  const o=Rain.observed([far,near],null,now);
  assert.equal(o.name,'Near gauge');assert.equal(o.mm,2);assert.equal(o.covered,1);
 });
+
+test('a 70-minute-old wet report is marked recent, not active rain',()=>{
+ const st={id:'OLDER',name:'Old weather report',dist:8,src:'metar',list:[{t:now-70*60000,wx:['RA']}]};
+ assert.equal(Rain.present([st],null,now).kind,'recent_report');
+});
+test('SYNOP rain gauge totals survive merging into the matching METAR airport',()=>{
+ const st={id:'LGTS',name:'Thessaloniki Airport',dist:13.9,src:'metar',list:[{t:now-20*60000,wx:[]}],
+ rainReports:[{t:now-1*H,prcp:3.2,prcpH:6}]};
+ const o=Rain.observed([st],null,now);
+ assert.equal(o.mm,3.2);assert.equal(o.name,'Thessaloniki Airport');assert.equal(o.covered,6);
+});
