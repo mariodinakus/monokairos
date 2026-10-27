@@ -39,7 +39,7 @@ function present(stations,pws,now=Date.now(),radius=35){
 }
 function observed(stations,pws,now=Date.now()){
  const candidates=(stations||[]).filter(s=>fin(s.dist)&&s.dist>=0&&s.dist<=120).map(st=>{
-  const reports=(st.list||[]).filter(r=>fin(r.t)&&fin(r.prcp)&&r.prcp>=0&&fin(r.prcpH)&&r.prcpH>0&&r.prcpH<=24&&r.t<=now+15*60000&&r.t>now-48*hour)
+  const reports=[...(st.list||[]),...(st.rainReports||[])].filter(r=>fin(r.t)&&fin(r.prcp)&&r.prcp>=0&&fin(r.prcpH)&&r.prcpH>0&&r.prcpH<=24&&r.t<=now+15*60000&&r.t>now-48*hour)
    .map(r=>({start:r.t-r.prcpH*hour,end:r.t,mm:r.prcp,h:r.prcpH}))
    .sort((a,b)=>b.end-a.end||a.h-b.h);
   const chosen=[],cutoff=now-24*hour;
