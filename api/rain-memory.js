@@ -41,19 +41,21 @@ async function compute(city){
  const validC=rows.filter(r=>[r.yC,r.ec,r.gc].every(fin));
  if(validR.length<120&&validC.length<120)throw Error('Insufficient matching historical data');
  const error=(rows,y,p)=>rows.length?round(mean(rows.map(r=>Math.abs(r[p]-r[y]))),3):null;
- const skillR=[{id:'ecmwf',mae:error(validR,'yR','er')},{id:'gfs',mae:error(validR,'yR','gr')}];
- const skillC=[{id:'ecmwf',mae:error(validC,'yC','ec')},{id:'gfs',mae:error(validC,'yC','gc')}];
+ const splitR=Math.floor(validR.length*.7),fitR=validR.slice(0,splitR),testR=validR.slice(splitR);
+ const splitC=Math.floor(validC.length*.7),fitC=validC.slice(0,splitC),testC=validC.slice(splitC);
+ const skillR=[{id:'ecmwf',mae:error(fitR,'yR','er')},{id:'gfs',mae:error(fitR,'yR','gr')}];
+ const skillC=[{id:'ecmwf',mae:error(fitC,'yC','ec')},{id:'gfs',mae:error(fitC,'yC','gc')}];
  const weight=s=>{const w=s.map(x=>fin(x.mae)?1/Math.max(x.mae,0.05):0),total=w.reduce((a,b)=>a+b,0);return total?w.map(v=>v/total):[.5,.5];};
  const wr=weight(skillR),wc=weight(skillC);
  const predRain=r=>r.er*wr[0]+r.gr*wr[1],predCloud=r=>r.ec*wc[0]+r.gc*wc[1];
- const rTruth=validR.reduce((s,r)=>s+r.yR,0),rPred=validR.reduce((s,r)=>s+predRain(r),0);
+ const rTruth=fitR.reduce((s,r)=>s+r.yR,0),rPred=fitR.reduce((s,r)=>s+predRain(r),0);
  const scale=rPred>1?clamp(rTruth/rPred,0.65,1.4):1;
- const cloudBias=validC.length?clamp(mean(validC.map(r=>r.yC-predCloud(r))),-15,15):0;
- const rMae=validR.length?mean(validR.map(r=>Math.abs(predRain(r)*scale-r.yR))):null;
- const cloudMae=validC.length?mean(validC.map(r=>Math.abs(predCloud(r)+cloudBias-r.yC))):null;
+ const cloudBias=fitC.length?clamp(mean(fitC.map(r=>r.yC-predCloud(r))),-15,15):0;
+ const rMae=testR.length?mean(testR.map(r=>Math.abs(predRain(r)*scale-r.yR))):null;
+ const cloudMae=testC.length?mean(testC.map(r=>Math.abs(predCloud(r)+cloudBias-r.yC))):null;
  return {version:1,city:id,at:Date.now(),period:[iso(start),iso(end)],source:'ERA5 reanalysis / Previous Runs (24h horizon)',
-  rain:{n:validR.length,mae:round(rMae),scale:round(scale),ecmwf:skillR[0],gfs:skillR[1],weights:wr.map(x=>round(x))},
-  cloud:{n:validC.length,mae:round(cloudMae),bias:round(cloudBias),ecmwf:skillC[0],gfs:skillC[1],weights:wc.map(x=>round(x))}};
+  rain:{n:testR.length,train:fitR.length,mae:round(rMae),scale:round(scale),ecmwf:skillR[0],gfs:skillR[1],weights:wr.map(x=>round(x))},
+  cloud:{n:testC.length,train:fitC.length,mae:round(cloudMae),bias:round(cloudBias),ecmwf:skillC[0],gfs:skillC[1],weights:wc.map(x=>round(x))}};
 }
 module.exports=async(req,res)=>{
  if(!guard(req,res))return;
@@ -83,3 +85,5 @@ module.exports=async(req,res)=>{
 };
 module.exports.compute=compute;
 module.exports.CITIES=CITIES;
+
+module.exports.config = {maxDuration:60};
