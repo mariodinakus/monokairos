@@ -1481,9 +1481,14 @@ async function mountRadar(){
   const c=state.city,Lf=window.L;
   const instance=Lf.map('map',{zoomControl:true,scrollWheelZoom:false}).setView([c.lat,c.lon],8);
   map=instance;radar.baseLayers=baseLayers(Lf);radar.baseLayers.forEach(layer=>layer.addTo(instance));
-  Lf.circleMarker([c.lat,c.lon],{radius:7,color:'#fff',weight:2,fillColor:'#216eea',fillOpacity:1}).addTo(instance).bindTooltip(esc(cityName(c)));
+  radar.stationLayer=Lf.layerGroup();
+  Lf.circleMarker([c.lat,c.lon],{radius:7,color:'#fff',weight:2,fillColor:'#216eea',fillOpacity:1}).addTo(radar.stationLayer).bindTooltip(esc(cityName(c)));
   for(const st of (state.view?.stations||[]).filter(st=>st.last).slice(0,18))
-   Lf.marker([st.lat,st.lon],{icon:Lf.divIcon({className:'stmark',html:`<span>${deg(st.last.temp)}</span>`,iconSize:[38,20]})}).addTo(instance).bindTooltip(`${esc(st.id)} · ${esc(st.name||'')}`);
+   Lf.marker([st.lat,st.lon],{icon:Lf.divIcon({className:'stmark',html:`<span>${deg(st.last.temp)}</span>`,iconSize:[38,20]})}).addTo(radar.stationLayer).bindTooltip(`${esc(st.id)} · ${esc(st.name||'')}`);
+  radar.futureLayer=Lf.layerGroup();
+  instance.on('zoomend moveend',()=>{if(map===instance&&radar.mode==='future')drawPhenomena();});
+  syncRadarMode();
+  loadPhenomena(instance);
   setTimeout(()=>{if(map===instance)instance.invalidateSize();},150);
   const d=await getJSON('https://api.rainviewer.com/public/weather-maps.json',12000);
   if(map!==instance||!$('#map'))return;
@@ -1493,7 +1498,7 @@ async function mountRadar(){
   if(!radar.frames.length)throw new Error('No radar frames');
   const slider=$('#radarSlider');if(slider){slider.disabled=false;slider.max=String(radar.frames.length-1);slider.oninput=e=>showFrame(+e.target.value);}
   const play=$('#radarPlay');if(play)play.disabled=radar.frames.length<2;
-  showFrame(radar.frames.length-1);instance.invalidateSize();
+  showFrame(radar.frames.length-1);syncRadarMode();instance.invalidateSize();
  }catch{
   const st=$('#radarStatus');if(st)st.textContent=state.lang==='el'?'Δεν φορτώθηκαν λήψεις · ο χάρτης παραμένει διαθέσιμος':'Radar frames unavailable · basemap still works';
   if(!map){const host=$('#map');if(host)host.innerHTML=`<div class="placeholder">${T('radarFail')}</div>`;}
@@ -1546,6 +1551,7 @@ function baseLayers(Lf) {
   };
   return [make(0)];
 }
+// Forecast pins and observed radar deliberately occupy different Leaflet layer groups.
 function setRadarBasemap(){
  if(!map)return;
  for(const layer of (radar.baseLayers||[]))if(map.hasLayer(layer))map.removeLayer(layer);
@@ -1555,7 +1561,7 @@ function setRadarBasemap(){
 }
 function toggleSat() {
   state.radarSat = !state.radarSat; persistUI();
-  if (radar.sat) radar.sat.setOpacity(state.radarSat ? 0.45 : 0);
+  if (radar.sat) radar.sat.setOpacity(state.radarSat&&radar.mode==='radar'?0.45:0);
   const b = $('#radarSat'); if (b) b.setAttribute('aria-pressed', String(state.radarSat));
 }
 function showFrame(i) {
@@ -1581,7 +1587,8 @@ function showFrame(i) {
   const output = $('#radarTime');
   if (output) output.textContent = time;
   const status = $('#radarStatus');
-  if (status) status.textContent = (state.lang === 'el' ? 'Πραγματική λήψη · ' : 'Radar observation · ') + time;
+  if (status && radar.mode==='radar') status.textContent = (state.lang === 'el' ? 'Πραγματική λήψη · ' : 'Radar observation · ') + time;
+  if(radar.rainLayer)radar.rainLayer.setOpacity(radar.mode==='radar'?0.88:0);
 }
 function toggleRadar() {
   if (!map || radar.frames.length < 2) return;
