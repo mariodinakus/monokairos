@@ -46,7 +46,7 @@ test('browser uses actual forecast grid, satellite base, and keeps radar reading
  assert.match(s,/function loadWeatherField/);
  assert.match(s,/function attachWeatherField/);
  assert.match(s,/forecast_hours:54/);
- assert.match(s,/setHour\(idx,animate\?800:0\)/);
+ assert.match(s,/setHour\(idx,animate\?750:0\)/);
  assert.match(s,/radarForecastBase/);
  assert.match(s,/syncRadarMode/);
  assert.match(h,/weather-field\.js/);
