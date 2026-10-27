@@ -31,8 +31,8 @@ test('mobile category drawer does not erase desktop sidebar',()=>{
 });
 test('PWA updates with mobile navigation stylesheet',()=>{
   const sw=read('sw.js');
-  assert.match(sw,/rain-intelligence\\.js/);
-  assert.match(sw,/rain-intelligence\\.css/);
+  assert.match(sw,/rain-intelligence\.js/);
+  assert.match(sw,/rain-intelligence\.css/);
   assert.match(sw,/mobile-nav\.css/);
   assert.match(sw,/mono-weather-v4\.23/);
 });
