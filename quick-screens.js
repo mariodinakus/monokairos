@@ -74,7 +74,7 @@ function render(data={},screen=0,lang='el'){
     tile('thermometer',X('Μοντέλα σε χρήση','Active models'),fin(data.models)?num(data.models):'—',X('Για την επιλεγμένη τοποθεσία','For this location'),'models')+
     tile('cloud',X('Μέλη ensemble','Ensemble members'),fin(data.members)?num(data.members):'—',X('Πολλαπλά σενάρια','Multiple scenarios'),'models')+
     tile('rain',X('Σφάλμα βροχής','Rain forecast error'),fin(rainSkill)?num(rainSkill,2)+' mm':'—',X('Ιστορικός έλεγχος έναντι ERA5 · mm/ώρα','Held-out ERA5 check · mm/hour'),'lab')+
-    tile('cloud',X('Σφάλμα νέφωσης','Cloud forecast error'),fin(cloudSkill)?num(cloudSkill,1)+' μ.μ.':'—',X('Ποσοστιαίες μονάδες · ERA5','Percentage points · ERA5'),'lab')+
+    tile('cloud',X('Σφάλμα νέφωσης','Cloud forecast error'),fin(cloudSkill)?num(cloudSkill,1)+(el?' π.μ.':' pp'):'—',X('Ποσοστιαίες μονάδες · ERA5','Percentage points · ERA5'),'lab')+
     tile('storm',X('Τοπικές προειδοποιήσεις','Local warnings'),fin(data.warnings)?num(data.warnings):'—',X('Διαθέσιμες επίσημες αναφορές','Available official notices'),'phen')+
     tile('sun',X('Ειδήσεις καιρού','Weather news'),fin(data.news)?num(data.news):'—',X('Διαθέσιμες ειδήσεις','Loaded articles'),'news')+
     '</div>'+links([['≋',X('Μοντέλα','Models'),'models'],['✳',X('Ακρίβεια','Accuracy'),'lab'],['¶',X('Ειδήσεις','News'),'news'],['⊞',X('Πόλεις','Cities'),'cities'],['📍',X('Σταθμοί','Stations'),'stations'],['◷',X('Όλες οι ώρες','Full hourly'),'hourly']])
