@@ -601,8 +601,17 @@ async function fetchSynop(c) {
 async function fetchAllObs(c) {
   const [m, y] = await Promise.allSettled([fetchObs(c), location.protocol.startsWith('http') ? fetchSynop(c) : Promise.reject(new Error('file'))]);
   const metar = m.status === 'fulfilled' ? m.value.stations.map(s => ({ ...s, src: 'metar', srcName: m.value.source })) : [];
-  // a SYNOP station at the same airport as a METAR one is the same place: keep the (hourly) METAR
-  const synop = y.status === 'fulfilled' ? y.value.filter(s => !metar.some(x => km(x, s) < 3 || (s.icao && x.id === s.icao))) : [];
+  // Keep METAR's frequent weather reports, BUT attach SYNOP gauge totals from the
+  // same physical airport. Previously duplicate removal silently erased real rain.
+  const synop = [];
+  if(y.status === 'fulfilled')for(const s of y.value){
+    const same=metar.find(x=>km(x,s)<3||(s.icao&&x.id===s.icao));
+    if(same){
+      same.rainReports=(s.list||[]).filter(o=>fin(o.prcp)&&fin(o.prcpH)&&o.prcpH>0);
+      same.rainSource='WMO SYNOP · OGIMET';
+      same.synopId=s.id;
+    }else synop.push(s);
+  }
   const stations = [...metar, ...synop].sort((a, b) => a.dist - b.dist);
   if (!stations.length) throw new Error('no obs');
   const source = [metar.length ? m.value.source : '', synop.length ? 'WMO SYNOP (OGIMET)' : ''].filter(Boolean).join(' + ');
