@@ -17,7 +17,7 @@ test('sky windows only rank dark hours from actual MONO cloud data',()=>{
   const o={lat:40.64,lon:22.94,rows:[
    {t:day+19*3600e3,cloud:90,pop:.8,amount:1},
    {t:day+20*3600e3,cloud:0,pop:0,amount:0},
-   {t:day+19*3600e3-24*3600e3,cloud:40,pop:0,amount:0}
+   {t:Date.now()-2*3600e3,cloud:40,pop:0,amount:0}
   ]};
   const w=C.skyWindows(o);assert.equal(w.length,1);assert.ok(w[0].score<30);
  }finally{globalThis.Astronomy=prior[0];globalThis.MonoSky=prior[1];}
