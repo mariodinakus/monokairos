@@ -3,6 +3,7 @@
  * Reference truth is ERA5 reanalysis, NOT rainfall-gauge or satellite observation. */
 'use strict';
 const {guard,coordinates}=require('../lib/server.cjs');
+const stationLearning=require('../lib/station-rain-learning.cjs');
 const CITIES=[
  ['thessaloniki',40.6401,22.9444],['athens',37.9838,23.7275],['patras',38.2466,21.7346],
  ['heraklion',35.3387,25.1442],['larisa',39.639,22.4191],['volos',39.3667,22.9458],
@@ -63,6 +64,34 @@ module.exports=async(req,res)=>{
  if(!c){res.status(400).json({error:'Invalid coordinates'});return;}
  const city=CITIES.map(v=>({v,dist:km(c.lat,c.lon,v[1],v[2])})).sort((a,b)=>a.dist-b.dist)[0];
  if(!city||city.dist>25){res.setHeader('Cache-Control','s-maxage=21600');res.status(200).json({available:false,reason:'city_not_supported'});return;}
+ if(c.params.get('mode')==='station'){
+  if(!process.env.BLOB_READ_WRITE_TOKEN){res.setHeader('Cache-Control','no-store');res.status(503).json({available:false,reason:'shared_storage_not_configured'});return;}
+  try{
+   const {get,put}=require('@vercel/blob'),path='station-rain-learning/'+city.v[0]+'.json';
+   let cached=null;
+   try{const b=await get(path,{access:'private'});if(b?.stream)cached=await new Response(b.stream).json();}catch{}
+   const publish=(v,stale=false)=>{
+    const {rows,...publicData}=v;
+    const station=publicData.station?{...publicData.station,dist:Math.round(stationLearning.km(c,publicData.station)*10)/10}:null;
+    res.setHeader('Cache-Control','no-store');
+    res.status(200).json({...publicData,station,cityDistance:Math.round(city.dist*10)/10,stale});
+   };
+   if(cached?.version===2&&Date.now()-cached.checkedAt<2*3600e3){publish(cached);return;}
+   try{
+    const next=await stationLearning.update(city.v,cached);
+    if(!next.available){
+     if(cached?.available){publish(cached,true);return;}
+     res.setHeader('Cache-Control','no-store');res.status(200).json(next);return;
+    }
+    await put(path,JSON.stringify(next),{access:'private',allowOverwrite:true,addRandomSuffix:false,contentType:'application/json'});
+    publish(next);
+   }catch{
+    if(cached?.available)publish(cached,true);
+    else{res.setHeader('Cache-Control','no-store');res.status(503).json({available:false,reason:'station_data_unavailable'});}
+   }
+  }catch{res.setHeader('Cache-Control','no-store');res.status(503).json({available:false,reason:'storage_unavailable'});}
+  return;
+ }
  if(!process.env.BLOB_READ_WRITE_TOKEN){res.setHeader('Cache-Control','no-store');res.status(503).json({available:false,reason:'shared_storage_not_configured'});return;}
  try{
   const {get,put}=require('@vercel/blob'),path='rain-learning/'+city.v[0]+'.json';

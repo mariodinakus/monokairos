@@ -63,7 +63,47 @@ function metrics(train,shared){
  const rain=train?.precip?.leads?.[0],cloud=train?.cloud?.leads?.[0];
  return {rain,cloud,shared,amountMae:rain?.amountTest?.mae??shared?.rain?.mae??null,brier:rain?.test?.[rain?.choice]??null,cloudMae:cloud?.test?.[cloud?.choice]?.mae??shared?.cloud?.mae??null};
 }
-function render({lang='el',view,train,stations,pws,trainingStatus,shared}={}){
+function stationAmount(data,ecmwf,gfs,target,now=Date.now()){
+ const L=data?.learning,lead=target-now;
+ if(!data?.available||data.stale||!finiteStationTime(data.checkedAt,now)||!L?.ready||
+    !fin(data.station?.dist)||data.station.dist>20||!fin(data.cityDistance)||data.cityDistance>15||
+    ![ecmwf,gfs,L.weight,L.scale,target].every(fin)||ecmwf<0||gfs<0||L.weight<0||L.weight>1||L.scale<0.7||L.scale>1.3||lead<18*hour||lead>30*hour)return null;
+ return Math.max(0,(L.weight*ecmwf+(1-L.weight)*gfs)*L.scale);
+}
+function finiteStationTime(t,now){return fin(t)&&t<=now+5*60000&&now-t<=8*hour;}
+function stationLearningCard(data,lang='el',zone='Europe/Athens',now=Date.now()){
+ const el=lang!=='en',X=(a,b)=>el?a:b;
+ const heading=X('Μαθαίνουμε από τη βροχή','Learning from precipitation');
+ if(!data?.available){
+  const msg=data?.reason==='city_not_supported'?X('Η αυτόματη μάθηση σταθμού δεν καλύπτει ακόμη αυτή την περιοχή.','Automatic station learning is not yet available for this area.'):
+   data?.reason==='no_recent_gauge'?X('Δεν βρέθηκε κοντινό βροχόμετρο με πρόσφατες μετρήσεις.','No nearby gauge has recent readings.'):
+   X('Αναζητούμε πραγματικές μετρήσεις σταθμού για να ξεκινήσει ο έλεγχος.','Looking for real station measurements to start verification.');
+  return `<section class="ri-learning card"><div class="panelhead"><b>🎯 ${heading}</b></div><p class="ri-foot">${msg}</p></section>`;
+ }
+ const s=data.samples||{},L=data.learning||{},st=data.station||{};
+ const fmt=t=>fin(t)?new Date(t).toLocaleString(el?'el-GR':'en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:zone}):'—';
+ const canUse=L.ready&&!data.stale&&finiteStationTime(data.checkedAt,now)&&fin(st.dist)&&st.dist<=20&&fin(data.cityDistance)&&data.cityDistance<=15;
+ const status=canUse?X('Ενεργή διόρθωση στις 18–30 ώρες','Adjustment active at 18–30 hours'):
+  L.ready?X('Υπάρχει μοντέλο, αλλά δεν εφαρμόζεται εδώ ή τα στοιχεία είναι παλιά','Model available, but not applied here or data are stale'):
+  L.reason==='not_better_in_test'?X('Ο έλεγχος δεν βελτιώθηκε: η διόρθωση παραμένει κλειστή','Validation did not improve: adjustment remains off'):
+  X('Η μάθηση συνεχίζεται — χρειάζονται περισσότερες περίοδοι και βροχές','Learning continues — more periods and rain events are needed');
+ const stats=[
+  [X('Βροχή που βρέθηκε','Rain correctly forecast'),s.hit],
+  [X('Βροχή που χάθηκε','Missed rain'),s.miss],
+  [X('Λάθος συναγερμός','False alarm'),s.falseAlarm],
+  [X('Σωστά χωρίς υετό','Correct dry'),s.correctDry]
+ ].map(([label,n])=>`<div><strong>${fin(n)?n:'—'}</strong><span>${label}</span></div>`).join('');
+ const labels={hit:X('Την βρήκε','Hit'),miss:X('Την έχασε','Miss'),false_alarm:X('Λάθος συναγερμός','False alarm'),correct_dry:X('Σωστά χωρίς υετό','Correct dry')};
+ const recent=(data.recent||[]).map(r=>`<div class="ri-history-row"><span>${fmt(r.start)} → ${fmt(r.end)}<small>${num(r.hours,0)} ${X('ώρες','hours')}</small></span><span>${X('Πρόβλεψη','Forecast')} ${num(r.predicted,2)} mm<br>${X('Σταθμός','Gauge')} ${num(r.observed,2)} mm</span><strong>${labels[r.result]||'—'}</strong></div>`).join('');
+ const validation=fin(L.baselineMae)&&fin(L.adjustedMae)?X(`Ανεξάρτητος έλεγχος: ${num(L.baselineMae,2)} → ${num(L.adjustedMae,2)} mm μέσο σφάλμα ανά περίοδο (${num(L.test,0)} περίοδοι).`,`Held-out test: ${num(L.baselineMae,2)} → ${num(L.adjustedMae,2)} mm mean error per period (${num(L.test,0)} periods).`):'';
+ return `<section class="ri-learning card"><div class="panelhead"><div><b>🎯 ${heading}</b><div class="section-sub">${escape(st.name||st.id||'—')} · ${num(st.dist,1)} km · ${X('τελευταίος έλεγχος','last checked')} ${fmt(data.checkedAt)}${data.stale?' · '+X('παλιά στοιχεία','stale'):''}</div></div></div>
+ <p class="ri-foot">${X('Σύγκριση πραγματικού υετού σταθμού με συνδυασμό ECMWF/GFS που είχε δοθεί 24 ώρες πριν.','Actual station precipitation compared with an ECMWF/GFS blend issued 24 hours earlier.')} ${X('Αυτή η μέτρηση δεν ελέγχει τις παλιές ενδείξεις του πλήρους MONO.','This does not verify previously displayed full MONO forecasts.')}</p>
+ <div class="ri-learning-stats">${stats}</div>
+ <p class="ri-foot"><b>${escape(status)}</b> · ${num(s.n,0)} ${X('ανεξάρτητες περίοδοι','non-overlapping periods')} · ${X('όριο υετού','wet threshold')} ${num(data.threshold,1)} mm.${validation?' '+escape(validation):''}</p>
+ <details class="ri-history"><summary>${X('Αναλυτικό ιστορικό','Detailed history')}</summary>${recent||`<p class="ri-foot">${X('Δεν υπάρχουν ακόμη πλήρεις συγκρίσιμες περίοδοι.','No complete comparable periods yet.')}</p>`}</details>
+ <p class="ri-foot">${X('Ο υετός περιλαμβάνει και το ισοδύναμο νερού από χιόνι. Η μέτρηση αφορά τη θέση του σταθμού, όχι κάθε δρόμο της περιοχής.','Precipitation includes snow water equivalent. The gauge reports its own location, not every street nearby.')}</p></section>`;
+}
+function render({lang='el',view,train,stations,pws,trainingStatus,shared,stationLearning}={}){
  const el=lang!=='en',X=(a,b)=>el?a:b;
  if(!view?.rows?.length)return '';
  const now=Date.now(), obs=observed(stations,pws,now),live=present(stations,pws,now),next=view.rows.filter(r=>r.t>now).slice(0,24);
@@ -88,7 +128,7 @@ function render({lang='el',view,train,stations,pws,trainingStatus,shared}={}){
 
  const nearGauges=[...(stations||[]).map(s=>observed([s],null,now)),
    ...(pws?.stations||[]).map(s=>observed([],{stations:[s]},now))]
-   .filter(g=>g&&fin(g.dist)&&g.dist<=120).sort((a,b)=>a.dist-b.dist).slice(0,3);
+   .filter(g=>g&&fin(g.dist)&&g.dist<=120).sort((a,b)=>a.dist-b.dist).slice(0,6);
  const nearCards=nearGauges.map(g=>'<button type="button" class="ri-station" data-action="goto" data-page="stations">'+
    '<span class="ri-station-icon" aria-hidden="true">📍</span><span class="ri-station-name">'+escape(g.name)+
    '<small>'+num(g.dist,1)+' km · '+escape(g.type)+' · '+num(g.covered,0)+'/24 h</small></span>'+
@@ -109,8 +149,8 @@ function render({lang='el',view,train,stations,pws,trainingStatus,shared}={}){
  card('🎯',X('ΠΟΣΟ ΜΕΣΑ ΠΕΣΑΜΕ','FORECAST SKILL'),fin(M.amountMae)?`${num(M.amountMae,2)} <i>mm</i>`:'—',accTxt,fin(M.amountMae)?X(`Έλεγχος σε ιστορικό ανεξάρτητο δείγμα (${M.rain?.n?.test??M.shared?.rain?.n??0} ώρες), με επανάλυση ERA5, όχι επιτόπιο βροχόμετρο`,`Historical held-out check (${M.rain?.n?.test??M.shared?.rain?.n??0} hours), against ERA5 reanalysis, not a local gauge`):X(trainingStatus==='loading'?'Υπολογίζουμε την ιστορική ακρίβεια…':'Δεν έχει ολοκληρωθεί έλεγχος',trainingStatus==='loading'?'Calculating historical skill…':'Historical evaluation unavailable')),
  card('☁',X('ΠΩΣ ΘΑ ΕΙΝΑΙ Ο ΟΥΡΑΝΟΣ','SKY COVER'),fin(cloud)?`${num(cloud,0)}<i>%</i>`:'—',co,X('Μέση προβλεπόμενη νέφωση επόμενων 6 ωρών','Average forecast cloud cover, next 6 hours'))];
  const cloudFoot=fin(M.cloudMae)?X(`Εκπαίδευση νεφών: ιστορικό μέσο σφάλμα ${num(M.cloudMae,1)} ποσοστιαίες μονάδες (ERA5).`,`Cloud model: historical error ${num(M.cloudMae,1)} percentage points (ERA5).`):X('Η νέφωση εμφανίζεται από τα διαθέσιμα μοντέλα· η εκπαίδευσή της απαιτεί ιστορικά δεδομένα.','Cloud cover comes from available models; training requires historical samples.');
- return `<section class="section ri-section" aria-label="${X('Η βροχή με μια ματιά','Rain at a glance')}"><div class="sectionhead"><div><span class="label">MONO / RAIN INTELLIGENCE</span><h2 class="h2">${X('Ο καιρός σε 4 εικόνες','Weather in four icons')}</h2><p class="section-sub">${X('Μέτρηση, πρόγνωση και έλεγχος: τρία διαφορετικά πράγματα.','Observation, forecast, and verification are different.')}</p></div></div>${liveCard}${nearbySection}<div class="ri-grid">${cards.join('')}</div><p class="ri-foot">☁ ${cloudFoot}</p><p class="ri-foot">${shared?.shared?X('🌐 Κοινό ιστορικό μοντέλο διαθέσιμο σε κινητό και υπολογιστή. Τοπική εκπαίδευση ανά συσκευή.','🌐 Shared historical learning across devices. Local training stays per device.'):X('Τοπική εκπαίδευση ανά συσκευή · κοινά στοιχεία για υποστηριζόμενες πόλεις.','Local training per device · shared results for supported cities.')}</p></section>`;
+ return `<section class="section ri-section" aria-label="${X('Η βροχή με μια ματιά','Rain at a glance')}"><div class="sectionhead"><div><span class="label">MONO / RAIN INTELLIGENCE</span><h2 class="h2">${X('Ο καιρός σε 4 εικόνες','Weather in four icons')}</h2><p class="section-sub">${X('Μέτρηση, πρόγνωση και έλεγχος: τρία διαφορετικά πράγματα.','Observation, forecast, and verification are different.')}</p></div></div>${liveCard}${nearbySection}<div class="ri-grid">${cards.join('')}</div>${stationLearningCard(stationLearning,lang,view.zone||'Europe/Athens',now)}<p class="ri-foot">☁ ${cloudFoot}</p><p class="ri-foot">${shared?.shared?X('🌐 Κοινό ιστορικό μοντέλο διαθέσιμο σε κινητό και υπολογιστή. Τοπική εκπαίδευση ανά συσκευή.','🌐 Shared historical learning across devices. Local training stays per device.'):X('Τοπική εκπαίδευση ανά συσκευή · κοινά στοιχεία για υποστηριζόμενες πόλεις.','Local training per device · shared results for supported cities.')}</p></section>`;
 }
-root.MONORainIntelligence={render,observed,present,metrics};
-if(typeof module!=='undefined'&&module.exports)module.exports={render,observed,present,metrics};
+root.MONORainIntelligence={render,observed,present,metrics,stationAmount,stationLearningCard};
+if(typeof module!=='undefined'&&module.exports)module.exports={render,observed,present,metrics,stationAmount,stationLearningCard};
 })(typeof window!=='undefined'?window:globalThis);

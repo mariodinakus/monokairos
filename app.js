@@ -731,7 +731,7 @@ async function loadAll(force = false) {
   loadSpace(force);
   loadCosmic(force);
   const c = state.city, gen = ++state.gen;
-  if(state.sharedRainCity !== ckey(c)) state.sharedRain = null;
+  if(state.sharedRainCity !== ckey(c)) {state.sharedRain = null;state.stationRain = null;state.communityStations = null;}
   state.sharedRainCity = ckey(c);
   state.mainErr = false; render();
   try {
@@ -760,6 +760,12 @@ async function loadAll(force = false) {
   jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) state.rain15 = null; }));
   jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; state.obsReady = true; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; state.obsReady = true; schedule(); } }));
   if (location.protocol.startsWith('http')) jobs.push(fetchNetatmo(c).then(d => { if (gen === state.gen) { state.pws = d; schedule(); } }).catch(() => { if (gen === state.gen) state.pws = { off: true }; }));
+  if (location.protocol.startsWith('http')) {
+    const params={near:`${(+c.lon).toFixed(4)},${(+c.lat).toFixed(4)}`,maxDistance:12000,exposure:'outdoor',full:'true'};
+    jobs.push(getJSON(q('https://api.opensensemap.org/boxes',params),25000)
+      .then(d=>{if(gen===state.gen){state.communityStations=window.MONOCommunityStations?.parse(d,c)||[];schedule();}})
+      .catch(()=>{if(gen===state.gen){state.communityStations=null;schedule();}}));
+  }
   jobs.push(getJSON(longURL(c)).then(d => { if (gen === state.gen) { state.long = d; schedule(); } }).catch(() => {}));
   jobs.push(fetchHolidays(c).then(h => { if (gen === state.gen) { state.hol = h; schedule(); } }).catch(() => {}));
   if (!state.clim) { const cc = read(K.clim, {})[ckey(c)]; if (cc?.dayNormals) state.clim = { ...cc, loading: false }; }
@@ -771,6 +777,9 @@ async function loadAll(force = false) {
   jobs.push(getJSON(q('/api/rain-memory', {lat:(+c.lat).toFixed(3),lon:(+c.lon).toFixed(3)}), 30000)
     .then(d => { if(gen===state.gen) {state.sharedRain=d?.available?d:null; recompute(); schedule();} })
     .catch(() => { if(gen===state.gen) state.sharedRain=null; }));
+  jobs.push(getJSON(q('/api/rain-memory', {mode:'station',lat:(+c.lat).toFixed(3),lon:(+c.lon).toFixed(3)}), 55000)
+    .then(d=>{if(gen===state.gen){state.stationRain=d;recompute();schedule();}})
+    .catch(()=>{if(gen===state.gen){state.stationRain={available:false,reason:'station_data_unavailable'};schedule();}}));
   if (modelJobs.length) Promise.allSettled(modelJobs).then(() => { if (gen === state.gen) { recompute(); ensureTraining(c, gen); } });
   await Promise.allSettled([...jobs, ...modelJobs]);
   if (gen !== state.gen) return;
@@ -891,6 +900,7 @@ function recompute() {
     const pt = n ? M.predictVariable(tr?.temp, k, rowT) : { value: W.hourly.temperature_2m?.[i] ?? null, choice: 'none', methods: {} };
     const pw = Object.keys(vw).length ? M.predictVariable(tr?.wind, k, rowW, { nonNegative: true }) : { value: null };
     const pr = n ? M.predictRain(tr?.precip, k, vals('precipitation', i), H) : { prob: fin(W.hourly.precipitation_probability?.[i]) ? W.hourly.precipitation_probability[i] / 100 : null, amount: null };
+    const stationAmount=window.MONORainIntelligence?.stationAmount(state.stationRain,md.ecmwf_ifs025?.precipitation?.[i],md.ncep_gfs_seamless?.precipitation?.[i],t,now);
     const app = M.mean(Object.values(vals('apparent_temperature', i)));
     const gustRaw = M.mean(Object.values(vals('wind_gusts_10m', i))), windRaw = rowW.mean;
     let u = 0, v = 0, nd = 0;
@@ -901,7 +911,7 @@ function recompute() {
       wind: pw.value, gust: fin(gustRaw) && fin(windRaw) && windRaw > 0.5 && fin(pw.value) ? gustRaw * pw.value / windRaw : gustRaw,
       dir: nd ? (Math.atan2(u, v) * 180 / Math.PI + 360) % 360 : null,
       rh: M.mean(Object.values(vals('relative_humidity_2m', i))), cloud: fin(pc.value) ? M.clamp(pc.value + (!tr?.cloud?.leads?.[k] && fin(state.sharedRain?.cloud?.bias) ? state.sharedRain.cloud.bias : 0), 0, 100) : rowC.mean, cloudChoice: pc.choice, pres: M.mean(Object.values(vals('pressure_msl', i))),
-      pMono: pr.prob, rainChoice: pr.choice, amount: fin(pr.amount) && !tr?.precip?.leads?.[k] && fin(state.sharedRain?.rain?.scale) ? Math.max(0,pr.amount*state.sharedRain.rain.scale) : pr.amount, codes: Object.values(vals('weather_code', i)),
+      pMono: pr.prob, rainChoice: fin(stationAmount)?'station-calibrated':pr.choice, stationAdjusted:fin(stationAmount), amount: fin(stationAmount)?stationAmount:(fin(pr.amount) && !tr?.precip?.leads?.[k] && fin(state.sharedRain?.rain?.scale) ? Math.max(0,pr.amount*state.sharedRain.rain.scale) : pr.amount), codes: Object.values(vals('weather_code', i)),
       isDay: W.hourly.is_day?.[i] ?? 1, uv: W.hourly.uv_index?.[i], visMain: W.hourly.visibility?.[i],
       vi: { cape: vals('cape', i), prec: vals('precipitation', i), snowf: vals('snowfall', i), vis: vals('visibility', i), gust: vals('wind_gusts_10m', i), code: vals('weather_code', i) },
       models: Object.fromEntries(order.map(id => [id, { T: md[id].temperature_2m[i], P: md[id].precipitation[i], W: md[id].wind_speed_10m[i] }]))
@@ -934,7 +944,7 @@ function recompute() {
     r.lo = fin(r.temp) ? r.temp - 1.2816 * sigma : null; r.hi = fin(r.temp) ? r.temp + 1.2816 * sigma : null;
     r.ens = et; r.pEns = ep ? ep.pWet : null; r.mmLo = ep ? ep.q10 : null; r.mmHi = ep ? ep.q90 : null;
     r.pop = fin(r.pMono) && fin(r.pEns) ? 0.5 * r.pMono + 0.5 * r.pEns : fin(r.pMono) ? r.pMono : r.pEns;
-    if (fin(r.amount) && fin(r.pop) && r.pop < 0.15) r.amount = Math.min(r.amount, 0.1);
+    if (!r.stationAdjusted && fin(r.amount) && fin(r.pop) && r.pop < 0.15) r.amount = Math.min(r.amount, 0.1);
     const eStorm = M.ensembleProb(famP.filter(f => f.CAPE), (m, j, f) => { const p = m[i], c = f.CAPE[j]?.[i]; return fin(p) && fin(c) ? c >= 400 && p >= 0.5 : null; });
     const capeIds = Object.keys(r.vi.cape).filter(id => fin(r.vi.prec[id]));
     const dCape = capeIds.length ? capeIds.filter(id => r.vi.cape[id] >= 500 && r.vi.prec[id] >= 0.5).length / capeIds.length : null;
@@ -1403,7 +1413,7 @@ function rainPage() {
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const eps = rainEpisodes();
   const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain}) || '') + rainNowCard(false)
+  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain}) || '') + communityStationsCard() + rainNowCard(false)
     + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
        <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
@@ -2600,8 +2610,8 @@ function newsPage() {
 function stationsPage() {
   const V = state.view;
   const head = header(T('stTitle'), T('stSub'));
-  if (!V || !state.obs) return head + loadingCard();
-  if (!V.stations.length) return head + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
+  if (!V || !state.obs) return head + loadingCard() + communityStationsCard();
+  if (!V.stations.length) return head + communityStationsCard() + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
   const cards = V.stations.slice(0, 30).map(s => { const o = s.last, inUse = V.station?.id === s.id, gauge = window.MONORainIntelligence?.observed([s],null);
     return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div>${gauge ? `<div class="citycountry">🌧 ${num(gauge.mm,1)} mm · ${num(gauge.covered,0)}/24 h · ${esc(gauge.type)}</div>` : ''}</div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
       <div class="stvals"><span class="citytemp">${deg(o?.temp)}</span><div class="compact">${T('humidity')} ${num(M.rhFromDew(o?.temp, o?.dewp))}% · ${T('dew')} ${deg(o?.dewp)}<br>${T('wind')} ${num(o?.wspd)} km/h ${dirArrow(o?.wdir)}${fin(o?.wspd) ? ` · ${windBft(o.wspd)}` : ''}${fin(o?.wgst) ? ` · ${T('gust')} ${num(o.wgst)} km/h` : ''}<br>${num(o?.pres)} hPa${fin(o?.vis) ? ` · ${num(o.vis, o.vis < 10 ? 1 : 0)} km` : ''}</div></div>
@@ -2617,7 +2627,14 @@ function stationsPage() {
       <div class="panelhead" style="margin-top:18px"><b>${T(s.src === 'synop' ? 'rawSynop' : 'rawMetar')}</b></div>${s.list.slice(-8).reverse().map(o => `<p class="mono-raw">${esc(o.raw || '')}</p>`).join('')}</section>`;
   }
   const cnt = state.obs?.counts ? `<div class="chips"><span class="badge">METAR · ${state.obs.counts.metar}</span><span class="badge">SYNOP · ${state.obs.counts.synop}</span>${state.pws?.n ? `<span class="badge">Netatmo · ${state.pws.n}</span>` : ''}</div>` : '';
-  return head + cnt + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
+  return head + cnt + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
+}
+function communityStationsCard() {
+  const list=state.communityStations,el=state.lang==='el';
+  if(!Array.isArray(list)||!list.length)return '';
+  const row=s=>`<div class="ri-community-row"><div><b>${esc(s.name)}</b><small>${num(s.dist,1)} km · ${esc(ageText(s.t))}</small></div><strong>${deg(s.temp)}${fin(s.rh)?` · ${num(s.rh,0)}%`:''}</strong></div>`;
+  const first=list.slice(0,6).map(row).join(''),rest=list.slice(6).map(row).join('');
+  return `<section class="section card ri-community"><div class="panelhead"><div><b>📍 ${el?'Περισσότεροι κοντινοί αισθητήρες':'More nearby sensors'}</b><div class="section-sub">openSenseMap · ${list.length} ${el?'με πρόσφατη μέτρηση':'with recent readings'} · ≤12 km</div></div></div><p class="notice">${el?'Αισθητήρες κοινότητας: θερμοκρασία και υγρασία. Δεν χρησιμοποιούνται ως βροχόμετρα ούτε για τη διόρθωση της πρόγνωσης.':'Community sensors: temperature and humidity. They are not used as rain gauges or for forecast correction.'}</p>${first}${rest?`<details><summary>${el?'Δες περισσότερους':'Show more'} (${list.length-6})</summary>${rest}</details>`:''}</section>`;
 }
 function pwsCard() {
   const P = state.pws;
@@ -2864,7 +2881,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true); localizePlaces();

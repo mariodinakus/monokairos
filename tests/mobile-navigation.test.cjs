@@ -36,7 +36,7 @@ test('PWA updates with mobile navigation stylesheet',()=>{
   assert.match(sw,/mobile-nav\.css/);
   assert.match(sw,/quick-screens\.js/);
   assert.match(sw,/quick-screens\.css/);
-  assert.match(sw,/mono-weather-v4\.30/);
+  assert.match(sw,/mono-weather-v4\.31/);
 });
 test('mobile navigation code stays syntactically valid',()=>{
   try{require('node:child_process').execFileSync(process.execPath,['--check',path.join(__dirname,'..','app.js')]);}
