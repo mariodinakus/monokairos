@@ -1197,8 +1197,8 @@ function environmentPage() {
 function forecastOptions() { return {...skyOptions(),theme:state.theme,warnings:state.warn,country:countryName(state.city),news:state.news?.items||[]}; }
 function forecastPage() { return header(T('mapsTitle'),T('mapsSub'),btn('reload','↻ '+T('refresh'))) + MonoForecast.render(forecastOptions()); }
 function spacePage() {
-  const jumps = [['space-weather',state.lang === 'el' ? 'Ήλιος & πρόγνωση' : 'Sun & forecast'],['invisible-sky',state.lang === 'el' ? 'Ακτίνες γάμμα & σωματίδια' : 'Gamma rays & particles'],['local-sky',state.lang === 'el' ? 'Ο ουρανός εδώ & επόμενα φαινόμενα' : 'Local sky & upcoming events']];
-  return header(T('spaceTitle'), T('spaceSub'), btn('reload', '↻ ' + T('refresh'))) + `<div class="chips">${jumps.map(([target,label])=>`<button class="chip" data-action="envJump" data-target="${target}">${label}</button>`).join('')}</div>` + MonoSpaceWeather.render(state.space, { lang: state.lang, zone: state.view?.zone || 'UTC', lat: +state.city.lat, lon: +state.city.lon }) + MonoCosmic.render(state.space, state.cosmic, skyOptions()) + MonoSky.render(skyOptions());
+  const jumps = [['space-weather',state.lang === 'el' ? 'Ήλιος & πρόγνωση' : 'Sun & forecast'],['invisible-sky',state.lang === 'el' ? 'Ακτίνες γάμμα & σωματίδια' : 'Gamma rays & particles'],['local-sky',state.lang === 'el' ? 'Ο ουρανός εδώ & επόμενα φαινόμενα' : 'Local sky & upcoming events'],['sc-sun-earth',state.lang === 'el' ? 'Ηλιακό ταξίδι' : 'Solar journey'],['sc-orbit-live',state.lang === 'el' ? 'Δορυφόροι 3D' : '3D satellites'],['sc-sky-window',state.lang === 'el' ? 'Παρατήρηση απόψε' : 'Watch tonight']];
+  return header(T('spaceTitle'), T('spaceSub'), btn('reload', '↻ ' + T('refresh'))) + `<div class="chips">${jumps.map(([target,label])=>`<button class="chip" data-action="envJump" data-target="${target}">${label}</button>`).join('')}</div>` + MonoSpaceWeather.render(state.space, { lang: state.lang, zone: state.view?.zone || 'UTC', lat: +state.city.lat, lon: +state.city.lon }) + MonoCosmic.render(state.space, state.cosmic, skyOptions()) + MonoSky.render(skyOptions()) + (window.MONOSpaceControl?.render(state.space,skyOptions()) || '');
 }
 
 /* ------------------------------------------------------------------ page: hourly */
@@ -2943,6 +2943,7 @@ function render() {
   const y = window.scrollY;
   const openEnvDetails = [...document.querySelectorAll('.environment-section details[open]')].map(el => el.id);
   const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap')].map(el => [el.id, el.scrollLeft]);
+  if (document.getElementById('sc-globe')) window.MONOSpaceControl?.destroy();
   $('#content').innerHTML = (pages[state.page] || nowPage)();
   if(state.page==='guide'){
     const q=$('#qs-panel');let start=null;
@@ -2956,6 +2957,7 @@ function render() {
   envScroll.forEach(([id, left]) => { const el = document.getElementById(id); if (el) el.scrollLeft = left; });
   window.scrollTo(0, y);
   const r = $('#selHour'); if (r) r.addEventListener('input', e => { state.sel = +e.target.value; const yy = window.scrollY; render(); window.scrollTo(0, yy); $('#selHour')?.focus(); });
+  if (state.page === 'space') window.MONOSpaceControl?.mount(loadScript,skyOptions());
   if (state.page === 'maps') MonoForecast.mount(forecastOptions(),loadLeaflet);
   if (state.page === 'radar') mountRadar();
   if (state.page === 'globe' || state.page === 'earth') mountGlobe();
@@ -3028,9 +3030,10 @@ async function geocode(text) {
   } catch { if (g === searchGen) box.innerHTML = `<div class="searchoption muted">${T('noData')}</div>`; }
 }
 function onClick(e) {
-  const b = e.target.closest('[data-action]'); if (!b) return;
-  const a = b.dataset.action;
+  const b = e.target.closest('[data-action], [data-sc]'); if (!b) return;
+  const a = b.dataset.action || (b.dataset.sc ? 'sc:' + b.dataset.sc : '');
   if (a === 'goto') goto(b.dataset.page);
+  else if ((a === 'sc:now' || a === 'sc:sat') && window.MONOSpaceControl) window.MONOSpaceControl.action(b.dataset.sc,b);
   else if (a === 'mobileGroup') {
     const key=b.dataset.v;
     if(!NAV_GROUPS.some(g=>g.id===key))return;
@@ -3044,7 +3047,7 @@ function onClick(e) {
   else if (a === 'envJump') document.getElementById(b.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   else if (a === 'menu') { closeMobileNavigation(); $('.sidebar').classList.toggle('open'); }
   else if (a === 'navGroup') { const key=b.dataset.v; if(NAV_GROUPS.some(g=>g.id===key)){navOpen[key]=!navOpen[key];write(NAV_OPEN_KEY,navOpen);navRender();} }
-  else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); }
+  else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); if(state.page==='space')window.MONOSpaceControl?.load(true); }
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
   else if (a === 'retrain') ensureTraining(state.city, state.gen, true);
   else if (a === 'city') setCity(findCity(b.dataset.id));
@@ -3119,12 +3122,13 @@ function init() {
   }
   document.addEventListener('change',e=>{
     if(e.target.id==='lensRadius'&&window.MONOStormLens)window.MONOStormLens.setManualRadius(Number(e.target.value));
+    if(e.target.id==='sc-clock-range')window.MONOSpaceControl?.slider(Number(e.target.value));
   });
   document.addEventListener('change',e=>{if(e.target.id==='eYearRange'){window.MONOEarthGlobe.setYear(e.target.value);updateGlobeCtl();}});
   $('#navFilter')?.addEventListener('input',()=>navRender());
   $('#language').addEventListener('click', () => { state.lang = state.lang === 'el' ? 'en' : 'el'; persist(); killMap(); killGlobe(); render(); localizePlaces(); });
   $('#theme').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; persist(); killMap(); killGlobe(); render(); });
-  $('#refreshBtn').addEventListener('click', () => { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); });
+  $('#refreshBtn').addEventListener('click', () => { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); if(state.page==='space')window.MONOSpaceControl?.load(true); });
   $('#mobileMenu').addEventListener('click', e => { e.stopPropagation(); closeMobileNavigation(); $('.sidebar').classList.toggle('open'); });
   $('#geoBtn').addEventListener('click', () => locate(false));
   $('#search').addEventListener('input', e => { clearTimeout(searchT); searchT = setTimeout(() => geocode(e.target.value), 300); });
