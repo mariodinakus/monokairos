@@ -31,3 +31,11 @@
 @media(max-width:640px){.ri-learning{padding:14px}.ri-learning-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.ri-history-row{grid-template-columns:1fr 1fr}.ri-history-row strong{text-align:left;grid-column:1/-1}}
 @media(max-width:365px){.ri-grid{grid-template-columns:1fr}.ri-card{padding:15px}.ri-number{font-size:34px}}
 @media(prefers-reduced-motion:reduce){.ri-section *{transition:none!important}}
+
+/* Readable station-network forecast error explanations. */
+.ri-meaning-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+.ri-meaning-grid>div{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px 15px;
+ border-radius:13px;border:1px solid var(--line);background:var(--panel)}
+.ri-meaning-grid b{font-size:17px;font-weight:850;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.ri-meaning-grid small{font-size:11px;color:var(--sub);line-height:1.5}
+@media(max-width:540px){.ri-meaning-grid{grid-template-columns:1fr 1fr;gap:7px}.ri-meaning-grid>div{padding:10px}.ri-meaning-grid b{font-size:14px}.ri-meaning-grid small{font-size:10px}}
