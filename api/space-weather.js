@@ -8,6 +8,10 @@ const FEEDS = {
 let cached = null, pending = null;
 module.exports = async (req, res) => {
   if (!guard(req, res)) return;
+  // Reuse the existing function; a separate /api endpoint would exceed
+  // the Hobby plan's serverless-function count.
+  if (new URL(req.url, 'https://mono.local').searchParams.get('mode') === 'orbits')
+    return require('../lib/orbit-control.cjs')(req, res);
   if (cached && Date.now() - cached.at < 300000) { res.setHeader('Cache-Control','s-maxage=300, stale-while-revalidate=300'); return res.status(200).json(cached); }
   pending ||= Promise.all(Object.entries(FEEDS).map(async ([key, path]) => {
     try {
