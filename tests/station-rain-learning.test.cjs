@@ -54,3 +54,11 @@ test('learning card clearly identifies historical model forecasts instead of pre
  const html=Rain.stationLearningCard(data,'el','Europe/Athens',now);
  assert.match(html,/ECMWF\/GFS/);assert.match(html,/δεν ελέγχει τις παλιές ενδείξεις/);assert.match(html,/Λάθος συναγερμός/);
 });
+test('the nearby rainfall list does not label stations over 35 km away as nearby',()=>{
+ const view={rows:Array.from({length:25},(_,i)=>({t:Date.now()+(i+1)*H,amount:.5,cloud:60}))};
+ const st={id:'FAR',name:'Far away',dist:68,list:[{t:Date.now()-H,prcp:1,prcpH:1}]};
+ const html=Rain.render({view,stations:[st]});
+ const nearby=html.split('ri-near-title')[1].split('ri-grid')[0];
+ assert.doesNotMatch(nearby,/Far away/);
+ assert.match(nearby,/Δεν υπάρχει επιβεβαιωμένη ποσότητα/);
+});

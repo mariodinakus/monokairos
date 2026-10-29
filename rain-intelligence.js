@@ -128,7 +128,7 @@ function render({lang='el',view,train,stations,pws,trainingStatus,shared,station
 
  const nearGauges=[...(stations||[]).map(s=>observed([s],null,now)),
    ...(pws?.stations||[]).map(s=>observed([],{stations:[s]},now))]
-   .filter(g=>g&&fin(g.dist)&&g.dist<=120).sort((a,b)=>a.dist-b.dist).slice(0,6);
+   .filter(g=>g&&fin(g.dist)&&g.dist<=35).sort((a,b)=>a.dist-b.dist).slice(0,6);
  const nearCards=nearGauges.map(g=>'<button type="button" class="ri-station" data-action="goto" data-page="stations">'+
    '<span class="ri-station-icon" aria-hidden="true">📍</span><span class="ri-station-name">'+escape(g.name)+
    '<small>'+num(g.dist,1)+' km · '+escape(g.type)+' · '+num(g.covered,0)+'/24 h</small></span>'+
