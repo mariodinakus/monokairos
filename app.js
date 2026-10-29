@@ -405,6 +405,8 @@ Object.assign(L.en, {
 Object.assign(L.el,{guide:'Μια ματιά'});
 Object.assign(L.en,{guide:'At a glance'});
 Object.assign(L.el,{maps:'Χάρτες & τάσεις',mapsTitle:'Χάρτες & ό,τι έρχεται',mapsSub:'Δες την εξέλιξη των συστημάτων, τα σήματα κακοκαιρίας και τις τάσεις του μήνα.'});
+Object.assign(L.el,{gDetail:'Δορυφορικός HD',gSrcDetail:'Εικόνες εδάφους (Esri)',gTilesInfo:'Πλακίδια εικόνων · δυναμική λεπτομέρεια',gQuickHD:'Καθαρός χάρτης HD',gQuickWX:'Καιρός & ραντάρ',gTileNotice:'Η HD εικόνα εδάφους δεν είναι ζωντανή δορυφορική λήψη. Τα στρώματα καιρού εμφανίζονται χωριστά.'});
+Object.assign(L.en,{gDetail:'Satellite HD',gSrcDetail:'Ground imagery (Esri)',gTilesInfo:'Image tiles · adaptive detail',gQuickHD:'Sharp HD map',gQuickWX:'Weather & radar',gTileNotice:'The HD ground imagery is not a live satellite observation. Weather layers appear in a separate view.'});
 Object.assign(L.en,{maps:'Maps & outlook',mapsTitle:'Maps & what comes next',mapsSub:'Follow weather systems, severe-weather signals and monthly trends.'});
 Object.assign(L.el,{checkingStations:'Έλεγχος κοντινών σταθμών… Επιβεβαιώνεται η πηγή της θερμοκρασίας.'});
 Object.assign(L.en,{checkingStations:'Checking nearby stations… Confirming the temperature source.'});
@@ -426,7 +428,7 @@ const state = {
   page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
-  gBase: UI.gBase || 'sat', gLayers: { radar: true, rain: true, grid: true, temps: true, ...(UI.gLayers || {}) }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
+  gBase: UI.globeTilesV1 ? (UI.gBase || 'detail') : 'detail', gLayers: UI.globeTilesV1 ? { radar: false, rain: false, grid: false, temps: true, ...(UI.gLayers || {}) } : { radar: false, rain: false, grid: false, temps: UI.gLayers?.temps ?? true }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
@@ -2225,16 +2227,25 @@ function glossary() {
 // Desktop: 4096×2048; smaller screens: 2048×1024 to limit GPU memory.
 // If NASA GIBS cannot serve the larger image, the layer falls back to 2048×1024.
 // On top: a live Open-Meteo sample grid (every 10°), city chips, and a click-anywhere local weather probe.
-let globe = null, globeBusy = 0, globeRO = null;
+let globe = null, globeBusy = 0, globeRO = null, globeTilesActive = false;
 const GW = window.innerWidth >= 900 ? 4096 : 2048, GH = GW / 2;
 const GIBS = (layer, fmt = 'image/jpeg', extra = '', w = GW, h = GH) => `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=${layer}&CRS=EPSG:4326&BBOX=-90,-180,90,180&WIDTH=${w}&HEIGHT=${h}&FORMAT=${encodeURIComponent(fmt)}${extra}`;
-const G_BASES = { sat: 'gSat', marble: 'gMarble', sst: 'gSst' };
+const G_BASES = { detail: 'gDetail', sat: 'gSat', marble: 'gMarble', sst: 'gSst' };
+const GLOBE_TILES = (x, y, z) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+function setGlobeTiling(enabled) {
+  if (!globe || typeof globe.globeTileEngineUrl !== 'function') return false;
+  if (globeTilesActive === enabled) return true;
+  if (enabled && typeof globe.globeTileEngineMaxZoom === 'function') globe.globeTileEngineMaxZoom(innerWidth < 760 ? 12 : 14);
+  globe.globeTileEngineUrl(enabled ? GLOBE_TILES : null);
+  globeTilesActive = enabled;
+  return true;
+}
 const LZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } })();
 const lhm = t => dt(t, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, LZ);
 const ldate = t => dt(t, { day: 'numeric', month: 'short' }, LZ);
 const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 const isoMin = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
-function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode,radarForecastBase:state.radarForecastBase,radarClearMapV2:true }); }
+function persistUI() { write('mono32_ui', { gBase: state.gBase, globeTilesV1:true, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode,radarForecastBase:state.radarForecastBase,radarClearMapV2:true }); }
 function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
 function loadGlobeLayer(layer, fmt = 'image/jpeg', extra = '') {
   return loadImg(GIBS(layer, fmt, extra, GW, GH)).catch(error => {
@@ -2275,7 +2286,21 @@ async function rvRadar() {
 }
 async function paintGlobe() {
   if (!globe) return;
-  const job = ++globeBusy, base = state.gBase, Lr = state.gLayers, src = {};
+  const job = ++globeBusy;
+  // True zoom-dependent raster tiles: no 2K/4K global-image stretching.
+  if (state.gBase === 'detail') {
+    if (setGlobeTiling(true)) {
+      state.gSrc = { base: 'tiles', painted: Date.now() };
+      state.gStatus = 'ok';
+      updateGlobeCtl();
+      return;
+    }
+    // Very old globe.gl versions: retain a working NASA raster rather than a blank globe.
+    state.gBase = 'marble';
+    persistUI();
+  }
+  setGlobeTiling(false);
+  const base = state.gBase, Lr = state.gLayers, src = {};
   state.gStatus = 'loading'; updateGlobeCtl();
   const cv = document.createElement('canvas'); cv.width = GW; cv.height = GH; const ctx = cv.getContext('2d');
   try {
@@ -2391,8 +2416,8 @@ function probeCard() {
 function globeFresh() {
   const S = state.gSrc || {}, Lr = state.gLayers;
   const ag = t => `${lhm(t)} · ${esc(ageText(t))}`;
-  const baseName = { sat: 'gSrcSat', marble: 'gSrcMarble', sst: 'gSrcSst' }[state.gBase];
-  const baseVal = S.base === 'static' ? T('gStatic') : fin(S.base) ? `${ldate(S.base)} · ${T('gDaily')}` : state.gStatus === 'loading' ? '…' : T('gNA');
+  const baseName = { detail: 'gSrcDetail', sat: 'gSrcSat', marble: 'gSrcMarble', sst: 'gSrcSst' }[state.gBase];
+  const baseVal = S.base === 'tiles' ? T('gTilesInfo') : S.base === 'static' ? T('gStatic') : fin(S.base) ? `${ldate(S.base)} · ${T('gDaily')}` : state.gStatus === 'loading' ? '…' : T('gNA');
   const cityAt = Math.max(0, ...Object.values(state.cityLive).map(v => (v?.current ? v.at : 0)));
   const row = (k, v, live) => `<div class="kv"><span>${live ? '<i class="gl-live"></i>' : ''}${T(k)}</span><b>${v}</b></div>`;
   return `<div class="panelhead"><div><b>${T('gFresh')}</b><div class="section-sub">${T('gAuto')}</div></div><button class="outline-btn" data-action="gRefresh">${T('gRefresh')}</button></div>
@@ -2410,6 +2435,29 @@ function globeLegend() {
   if (v === 'cloud') return `<div class="glegend"><span>0%</span><i style="background:linear-gradient(90deg,rgba(240,244,250,.12),rgba(240,244,250,.97))"></i><span>100%</span></div>`;
   if (v === 'precip') return `<div class="glegend"><span>0,1</span><i style="background:linear-gradient(90deg,${RAIN_RGB.slice(1).join(',')})"></i><span>30+ mm/h</span></div>`;
   return `<div class="glegend"><span>−15°</span><i style="background:linear-gradient(90deg,${[-15, 0, 10, 18, 26, 34, 42].map(tempColor).join(',')})"></i><span>42°</span></div>`;
+}
+function globeQuick() {
+  const detail = state.gBase === 'detail';
+  return `<div class="earth-globe-quickbar" role="group" aria-label="${state.lang === 'el' ? 'Τύπος χάρτη' : 'Map view'}">
+    <button class="${detail ? 'selected' : ''}" data-action="gQuickDetail" aria-pressed="${detail}">${T('gQuickHD')}</button>
+    <button class="${!detail ? 'selected' : ''}" data-action="gQuickWeather" aria-pressed="${!detail}">${T('gQuickWX')}</button>
+  </div>`;
+}
+function globeAttribution() {
+  return state.gBase === 'detail'
+    ? `<span>${T('gTileNotice')}</span><small>Tiles © Esri, Maxar, Earthstar Geographics, GIS User Community</small>`
+    : `<span>NASA GIBS · RainViewer · Open-Meteo</span>`;
+}
+function selectGlobeMode(mode) {
+  state.gBase = mode;
+  if (mode === 'detail') {
+    state.gLayers.radar = false;
+    state.gLayers.rain = false;
+    state.gLayers.grid = false;
+  }
+  persistUI();
+  paintGlobe();
+  render();
 }
 function globeCtl() {
   const chip = (act, v, on, label) => `<button class="chip ${on ? 'active' : ''}" data-action="${act}" data-v="${v}">${label}</button>`;
@@ -2433,6 +2481,7 @@ function applyGlobeData() {
 function updateGlobeCtl() {
   const set = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
   set('#globeCtl', globeCtl()); set('#globeFresh', globeFresh()); set('#globeLegend', globeLegend()); set('#globeProbe', probeCard());
+  set('#globeQuick', globeQuick()); set('#globeAttribution', globeAttribution());
   if(window.MONOEarthGlobe){set('#earthGlobeCtl',window.MONOEarthGlobe.toolbar(state.lang));set('#earthGlobeSide',window.MONOEarthGlobe.info(state.lang));set('#earthGlobeTime',window.MONOEarthGlobe.timeline(state.lang));}
   applyGlobeData();
 }
@@ -2440,7 +2489,7 @@ function globePage() {
   return header(T('globeTitle'), T('globeSub')) + `<div class="earth-globe-cta"><button class="outline-btn" data-action="goto" data-page="earth">◈ ${T('earth')} · ENSO / NAO / MJO ↗</button></div>
     <section id="earthGlobeCtl"></section>
     <details class="earth-globe-details"><summary>${state.lang==='el'?'Δορυφόρος, καιρικά επίπεδα & περιστροφή':'Satellite, weather layers & rotation'}</summary><div id="globeCtl">${globeCtl()}</div></details>
-    <div class="earth-globe-split"><div class="card globecard earth-globecard"><div id="globe" class="globe"></div><div id="globeProbe" class="gprobe-wrap">${probeCard()}</div><div id="globeLegend">${globeLegend()}</div></div><aside id="earthGlobeSide" class="earth-globe-side"></aside></div>
+    <div class="earth-globe-split"><div class="card globecard earth-globecard"><div id="globe" class="globe"></div><div id="globeQuick">${globeQuick()}</div><div id="globeProbe" class="gprobe-wrap">${probeCard()}</div><div id="globeLegend">${globeLegend()}</div><div id="globeAttribution" class="earth-globe-attribution">${globeAttribution()}</div></div><aside id="earthGlobeSide" class="earth-globe-side"></aside></div>
     <section class="earth-timeline" id="earthGlobeTime"></section>
     <details class="earth-globe-details"><summary>${state.lang==='el'?'Χρόνοι ενημέρωσης πηγών':'Source update times'}</summary><section class="card" id="globeFresh">${globeFresh()}</section></details>`;
 }
@@ -2484,7 +2533,7 @@ function globeTick() {
   if (!state.grid || Date.now() - state.grid.at > 10 * 60e3) fetchGrid(true).then(() => updateGlobeCtl());
   else updateGlobeCtl();
 }
-function killGlobe() { globeRO?.disconnect(); globeRO = null; if (globe) { try { globe.pauseAnimation(); globe._destructor(); } catch {} globe = null; } }
+function killGlobe() { globeRO?.disconnect(); globeRO = null; ++globeBusy; if (globe) { try { globe.pauseAnimation(); globe._destructor(); } catch {} globe = null; } globeTilesActive = false; }
 
 /* ------------------------------------------------------------------ page: models */
 function modelsPage() {
@@ -2995,8 +3044,23 @@ function onClick(e) {
   else if (a === 'lensReload' && window.MONOStormLens) window.MONOStormLens.load(true);
   else if (a === 'eLayer' && window.MONOEarthGlobe) {window.MONOEarthGlobe.toggle(b.dataset.v);updateGlobeCtl();}
   else if (a === 'eOpenImpact' && window.MONOEarthGlobe) {const val=b.dataset.v||'',sep=val.indexOf(':'),factor=sep>=0?val.slice(0,sep):'enso',id=sep>=0?val.slice(sep+1):val;goto('earth');window.MONOEarthGlobe.openImpact(factor,id);}
-  else if (a === 'gBase') { state.gBase = b.dataset.v; persistUI(); paintGlobe(); render(); }
-  else if (a === 'gLayer') { const k = b.dataset.v; state.gLayers[k] = !state.gLayers[k]; persistUI(); if (k === 'radar' || k === 'rain') paintGlobe(); if (k === 'grid' && state.gLayers.grid) fetchGrid().then(() => updateGlobeCtl()); render(); }
+  else if (a === 'gBase') selectGlobeMode(b.dataset.v);
+  else if (a === 'gQuickDetail') selectGlobeMode('detail');
+  else if (a === 'gQuickWeather') {
+    state.gBase = 'sat';
+    state.gLayers.radar = true;
+    state.gLayers.rain = true;
+    persistUI(); paintGlobe(); render();
+  }
+  else if (a === 'gLayer') {
+    const k = b.dataset.v;
+    state.gLayers[k] = !state.gLayers[k];
+    if (state.gBase === 'detail' && (k === 'radar' || k === 'rain') && state.gLayers[k]) state.gBase = 'sat';
+    persistUI();
+    if (k === 'radar' || k === 'rain') paintGlobe();
+    if (k === 'grid' && state.gLayers.grid) fetchGrid().then(() => updateGlobeCtl());
+    render();
+  }
   else if (a === 'gSpin') { state.gSpin = !state.gSpin; if (globe) globe.controls().autoRotate = state.gSpin; render(); }
   else if (a === 'gGrid') { state.gGrid = b.dataset.v; persistUI(); if (!state.gLayers.grid) state.gLayers.grid = true; render(); }
   else if (a === 'gRefresh') refreshGlobe(true);
