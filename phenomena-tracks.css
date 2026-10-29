@@ -1,0 +1,25 @@
+/* MONO / forecast motion tracks: visible on satellite and street maps. */
+.pm-tracks-toggle{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;
+  padding:9px 12px;border:1px solid #c8d7e4;border-radius:11px;
+  color:var(--ink);background:var(--panel);font-size:12px;font-weight:800;cursor:pointer}
+.pm-tracks-toggle[aria-pressed="true"]{background:#083a5f;color:#fff;border-color:#083a5f;box-shadow:0 2px 9px #173d6630}
+.pm-tracks-toggle:focus-visible{outline:3px solid #38a9fa;outline-offset:2px}
+.pm-tracks-toggle .pm-path-sign{font-size:19px;font-weight:900;line-height:1}
+.pm-trajectory-status{display:flex;align-items:center;flex-wrap:wrap;gap:9px 14px;
+  padding:11px 18px;background:var(--panel);border-bottom:1px solid var(--line);
+  font-size:11px;color:var(--ink);line-height:1.45}
+.pm-trajectory-status strong{font-size:12px;font-weight:850}
+.pm-trajectory-status small{color:var(--sub);font-size:10px}
+.pm-trajectory-status .pm-motion-key{display:inline-flex;align-items:center;gap:6px;font-weight:750}
+.pm-motion-key i{display:inline-block;width:23px;border-top:3px dashed #e49b32;vertical-align:middle}
+.pm-motion-key.pm-motion-off{opacity:.65}
+.pm-track-arrow-marker{border:0!important;background:transparent!important;pointer-events:none!important}
+.pm-track-arrow{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:2px solid #fff;
+  border-radius:50%;background:#112d42;color:var(--pm-color,#ffbf56);font-size:23px;font-weight:900;
+  box-shadow:0 2px 12px #000b;transform:rotate(var(--pm-bearing,0deg))}
+@media(max-width:610px){
+ .pm-tracks-toggle{flex:1 0 auto;justify-content:center;padding:10px 9px;font-size:11px}
+ .pm-trajectory-status{padding:11px 12px;gap:5px 11px;font-size:10px}
+ .pm-trajectory-status strong{font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){.pm-track-arrow{transition:none!important}}
