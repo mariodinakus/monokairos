@@ -11,8 +11,9 @@ async function refresh([id,lat,lon]) {
     const q = new URLSearchParams({ mode:'station', lat, lon });
     const r = await fetch('https://monokairos.vercel.app/api/rain-memory?' + q, { signal: AbortSignal.timeout(55000) });
     const data = await r.json();
-    console.log(`${id}: ${r.status} ${data.available ? `${data.samples?.n || 0} verified periods${data.stale ? ' (stale)' : ''}` : data.reason || 'unavailable'}`);
-    return r.ok && !data.stale;
+    const n=data.network?.stations||0,periods=data.samples?.n||0,skill=data.learning?.ready?'validated':'collecting';
+    console.log(`${id}: HTTP ${r.status}, ${n} gauges, ${periods} verified periods, learning ${skill}${data.stale?' (stale)':''}${!data.available?' — '+(data.reason||'unavailable'):''}`);
+    return r.ok && data.available===true && !data.stale && n>0 && periods>0;
   } catch { console.log(`${id}: request failed`); return false; }
 }
 (async () => {
