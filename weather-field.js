@@ -100,11 +100,12 @@ function systems(grid,frame,limit=4){
   if(seen[i])continue;
   const type=classify(i);
   if(!type)continue;
-  const stack=[i];seen[i]=1;let size=0,peak=-1,best=i,sum=0;
+  const stack=[i];seen[i]=1;let size=0,peak=-1,best=i,sum=0,latSum=0,lonSum=0;
   while(stack.length){
    const j=stack.pop();size++;
    const score=type==='snow'?frame.snow[j]*3:frame.precip[j];
    sum+=score;
+   latSum+=grid.points[j].lat*score;lonSum+=grid.points[j].lon*score;
    if(score>peak){peak=score;best=j;}
    const x=j%grid.cols,y=Math.floor(j/grid.cols);
    for(const [nx,ny] of [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]){
@@ -116,7 +117,7 @@ function systems(grid,frame,limit=4){
   if(size<2&&peak<(type==='snow'?1.5:5))continue;
   const pt=grid.points[best];
   const value=type==='snow'?frame.snow[best]:frame.precip[best];
-  out.push({type,lat:pt.lat,lon:pt.lon,peak:value,size,weight:sum,score:peak+Math.min(5,size*.35)});
+  out.push({type,lat:pt.lat,lon:pt.lon,centerLat:sum>0?latSum/sum:pt.lat,centerLon:sum>0?lonSum/sum:pt.lon,peak:value,size,weight:sum,score:peak+Math.min(5,size*.35)});
  }
  return out.sort((a,b)=>b.score-a.score).slice(0,Math.max(0,limit));
 }
@@ -149,7 +150,7 @@ function createLayer(L){
   },
   getFrame:function(index){return this._getFrame(index);},
   getSample:function(lat,lon,index){return interpolate(this._grid,this._getFrame(index),lat,lon);},
-  getSystems:function(index){return systems(this._grid,this._getFrame(index));},
+  getSystems:function(index,limit=4){return systems(this._grid,this._getFrame(index),limit);},
   _getFrame:function(index){
    if(!this._grid||!this._times?.length)return null;
    const i=clamp(Math.round(index),0,this._times.length-1);
