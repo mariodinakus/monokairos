@@ -30,7 +30,8 @@ function computeTracks(getSystems,times,startIndex,{hours=8,limit=4}={}){
  const systemAt=i=>{
    if(!frames.has(i)){
      const s=getSystems(i);
-     frames.set(i,Array.isArray(s)?s.filter(p=>['rain','snow','storm'].includes(p.type)&&finite(p.lat)&&finite(p.lon)) : []);
+     frames.set(i,Array.isArray(s)?s.filter(p=>['rain','snow','storm'].includes(p.type)&&finite(p.lat)&&finite(p.lon))
+       .map(p=>({...p,lat:finite(p.centerLat)?p.centerLat:p.lat,lon:finite(p.centerLon)?p.centerLon:p.lon})) : []);
    }
    return frames.get(i);
  };
@@ -89,7 +90,8 @@ function render(L,group,field,index,times,bounds,lang='el'){
  map.getPane('pm-track-pane').style.zIndex='470';
  map.getPane('pm-track-pane').style.pointerEvents='none';
  const el=lang!=='en';
- const tracks=computeTracks(i=>field.getSystems(i),times,index);
+ const tracks=computeTracks(i=>field.getSystems(i,16),times,index,{limit:12})
+   .filter(track=>track.points.some(p=>!bounds||bounds.contains([p.lat,p.lon]))).slice(0,4);
  const colors={rain:'#ffb342',snow:'#58d8ff',storm:'#cf8aff'};
  for(const track of tracks){
    const visible=track.points.some(p=>!bounds||bounds.contains([p.lat,p.lon]));
