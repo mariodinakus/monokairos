@@ -153,7 +153,7 @@ async function load(force=false){
  cityKey=key;loading=true;
  const id=++seq;refreshPanel();
  try{
-  const r=await fetch('/api/space-control?'+new URLSearchParams({lat:options.lat,lon:options.lon}),{signal:AbortSignal.timeout(21000)});
+  const r=await fetch('/api/space-weather?'+new URLSearchParams({mode:'orbits',lat:options.lat,lon:options.lon}),{signal:AbortSignal.timeout(21000)});
   if(!r.ok)throw Error('orbit api');
   const d=await r.json();
   if(id!==seq)return;
