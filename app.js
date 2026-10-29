@@ -367,7 +367,7 @@ Object.assign(L.el, {
   gFresh:'Τελευταία ενημέρωση δεδομένων', gRefresh:'↻ Ανανέωση', gAuto:'αυτόματη ανανέωση κάθε 10′', gNA:'μη διαθέσιμο', gOff:'κλειστό', gDaily:'ημερήσια σύνθεση',
   gSrcSat:'Δορυφόρος VIIRS (NASA)', gSrcSst:'Θερμοκρασία θάλασσας (GHRSST)', gSrcMarble:'Blue Marble (NASA)', gSrcRadar:'Ραντάρ (RainViewer)', gSrcImerg:'Βροχή δορυφόρου (NASA IMERG)', gSrcGrid:'Πλέγμα καιρού (Open-Meteo)', gSrcCities:'Πόλεις (Open-Meteo)', gStatic:'στατική εικόνα',
   gClick:'Κάνε κλικ σε οποιοδήποτε σημείο της Γης για ζωντανό καιρό εκεί.', gProbeLoading:'Φόρτωση καιρού για το σημείο…', gOpenHere:'↗ Πρόγνωση εδώ', gNext6:'Βροχή επόμενες 6 ώρες', gWindL:'Άνεμος', gCloudL:'Νέφωση', gHumL:'Υγρασία',
-  gPointAt:'Σημείο', gNoRain6:'χωρίς βροχή', gNoteFoot:'Οι χρόνοι είναι στην ώρα της συσκευής σου. Ραντάρ: μόνο όπου υπάρχει κάλυψη ραντάρ. IMERG: εκτίμηση δορυφόρου με καθυστέρηση ~4–6 ωρών. Πλέγμα: τρέχουσα ανάλυση ανά 15°.'
+  gPointAt:'Σημείο', gNoRain6:'χωρίς βροχή', gNoteFoot:'Οι χρόνοι είναι στην ώρα της συσκευής σου. Ραντάρ: μόνο όπου υπάρχει κάλυψη ραντάρ. IMERG: εκτίμηση δορυφόρου με καθυστέρηση ~4–6 ωρών. Πλέγμα: παγκόσμια σημεία ανά 10°, όχι τοπικό ραντάρ.'
 });
 Object.assign(L.en, {
   rain:'Rain', rainTitle:'Rain forecast', rainSub:'When it starts, when it stops, how much will fall and how sure that is — hour by hour.',
@@ -399,7 +399,7 @@ Object.assign(L.en, {
   gFresh:'Data last updated', gRefresh:'↻ Refresh', gAuto:'auto-refresh every 10′', gNA:'not available', gOff:'off', gDaily:'daily composite',
   gSrcSat:'VIIRS satellite (NASA)', gSrcSst:'Sea temperature (GHRSST)', gSrcMarble:'Blue Marble (NASA)', gSrcRadar:'Radar (RainViewer)', gSrcImerg:'Satellite rainfall (NASA IMERG)', gSrcGrid:'Weather grid (Open-Meteo)', gSrcCities:'Cities (Open-Meteo)', gStatic:'static image',
   gClick:'Click anywhere on Earth for the live weather there.', gProbeLoading:'Loading weather for this point…', gOpenHere:'↗ Forecast here', gNext6:'Rain next 6 hours', gWindL:'Wind', gCloudL:'Cloud', gHumL:'Humidity',
-  gPointAt:'Point', gNoRain6:'no rain', gNoteFoot:'Times are in your device’s time zone. Radar: only where radar coverage exists. IMERG: satellite estimate with ~4–6 h latency. Grid: current analysis every 15°.'
+  gPointAt:'Point', gNoRain6:'no rain', gNoteFoot:'Times are in your device’s time zone. Radar: only where radar coverage exists. IMERG: satellite estimate with ~4–6 h latency. Grid: global sample points every 10°; not a local radar.'
 });
 
 Object.assign(L.el,{guide:'Μια ματιά'});
@@ -2220,13 +2220,13 @@ function glossary() {
   return `<section class="section card"><details class="gloss"><summary><b>${T('glossTitle')}</b><span class="compact">${T('glossSub')}</span></summary><dl>${T('glossList').map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></details></section>`;
 }
 
-/* ------------------------------------------------------------------ page: globe (v3.5 — live & interactive) */
-// Texture = real Earth-observation imagery composited in an equirectangular 2048×1024 canvas:
-//   NASA GIBS: Blue Marble, VIIRS NOAA-20 true colour (yesterday, full day), GHRSST sea temperature, IMERG 30-min rain (latest available slot)
-//   RainViewer radar composite (latest 10-min frame) — through the same-origin /proxy/rv rewrite (its tiles have no CORS).
-// On top: a live Open-Meteo grid (every 15°) as clickable points + rings where it rains now, city chips, and a click-anywhere probe.
+/* ------------------------------------------------------------------ page: globe (v3.6 — sharper texture + denser global grid) */
+// Earth-observation imagery is composited into an equirectangular texture.
+// Desktop: 4096×2048; smaller screens: 2048×1024 to limit GPU memory.
+// If NASA GIBS cannot serve the larger image, the layer falls back to 2048×1024.
+// On top: a live Open-Meteo sample grid (every 10°), city chips, and a click-anywhere local weather probe.
 let globe = null, globeBusy = 0, globeRO = null;
-const GW = 2048, GH = 1024;
+const GW = window.innerWidth >= 900 ? 4096 : 2048, GH = GW / 2;
 const GIBS = (layer, fmt = 'image/jpeg', extra = '', w = GW, h = GH) => `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=${layer}&CRS=EPSG:4326&BBOX=-90,-180,90,180&WIDTH=${w}&HEIGHT=${h}&FORMAT=${encodeURIComponent(fmt)}${extra}`;
 const G_BASES = { sat: 'gSat', marble: 'gMarble', sst: 'gSst' };
 const LZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } })();
@@ -2236,6 +2236,12 @@ const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 const isoMin = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
 function persistUI() { write('mono32_ui', { gBase: state.gBase, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode,radarForecastBase:state.radarForecastBase,radarClearMapV2:true }); }
 function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
+function loadGlobeLayer(layer, fmt = 'image/jpeg', extra = '') {
+  return loadImg(GIBS(layer, fmt, extra, GW, GH)).catch(error => {
+    if (GW <= 2048) throw error;
+    return loadImg(GIBS(layer, fmt, extra, 2048, 1024));
+  });
+}
 
 // Latest IMERG half-hour that already has data (latency is a few hours): probe tiny images backwards in time.
 let imergCache = null;
@@ -2275,30 +2281,39 @@ async function paintGlobe() {
   try {
     const yday = isoDay(Date.now() - 86400e3), sstDay = isoDay(Date.now() - 2 * 86400e3);
     const [bm, top, imT, rad] = await Promise.all([
-      loadImg(GIBS('BlueMarble_ShadedRelief_Bathymetry')),
-      base === 'sat' ? loadImg(GIBS('VIIRS_NOAA20_CorrectedReflectance_TrueColor', 'image/png', `&TRANSPARENT=TRUE&TIME=${yday}`)).catch(() => null)
-        : base === 'sst' ? loadImg(GIBS('GHRSST_L4_MUR_Sea_Surface_Temperature', 'image/png', `&TRANSPARENT=TRUE&TIME=${sstDay}`)).catch(() => null) : null,
+      loadGlobeLayer('BlueMarble_ShadedRelief_Bathymetry'),
+      base === 'sat' ? loadGlobeLayer('VIIRS_NOAA20_CorrectedReflectance_TrueColor', 'image/png', `&TRANSPARENT=TRUE&TIME=${yday}`).catch(() => null)
+        : base === 'sst' ? loadGlobeLayer('GHRSST_L4_MUR_Sea_Surface_Temperature', 'image/png', `&TRANSPARENT=TRUE&TIME=${sstDay}`).catch(() => null) : null,
       Lr.rain ? imergLatest().catch(() => null) : null,
       Lr.radar ? rvRadar().catch(() => null) : null
     ]);
     ctx.drawImage(bm, 0, 0, GW, GH);
     if (top) { ctx.drawImage(top, 0, 0, GW, GH); src.base = base === 'sat' ? Date.parse(yday + 'T12:00:00Z') : Date.parse(sstDay + 'T12:00:00Z'); }
     else src.base = base === 'marble' ? 'static' : null;
-    if (Lr.rain && imT) { try { const im = await loadImg(GIBS('IMERG_Precipitation_Rate_30min', 'image/png', `&TRANSPARENT=TRUE&TIME=${isoMin(imT)}`)); ctx.globalAlpha = 0.9; ctx.drawImage(im, 0, 0, GW, GH); ctx.globalAlpha = 1; src.imerg = imT; } catch { src.imerg = null; } }
+    if (Lr.rain && imT) { try { const im = await loadGlobeLayer('IMERG_Precipitation_Rate_30min', 'image/png', `&TRANSPARENT=TRUE&TIME=${isoMin(imT)}`); ctx.globalAlpha = 0.9; ctx.drawImage(im, 0, 0, GW, GH); ctx.globalAlpha = 1; src.imerg = imT; } catch { src.imerg = null; } }
     if (Lr.radar && rad) { ctx.globalAlpha = 0.95; ctx.drawImage(rad.canvas, 0, 0); ctx.globalAlpha = 1; src.radar = rad.time; }
     if (job !== globeBusy || !globe) return;
-    globe.globeImageUrl(cv.toDataURL('image/jpeg', 0.9));
+    globe.globeImageUrl(cv.toDataURL('image/jpeg', 0.94));
     state.gSrc = { ...src, painted: Date.now() }; state.gStatus = 'ok';
   } catch { if (job === globeBusy) { state.gStatus = 'error'; state.gNotes = [T('gFail')]; } }
   updateGlobeCtl();
 }
 
 /* live weather grid */
-const GRID = (() => { const p = []; for (let la = -60; la <= 75; la += 15) for (let lo = -180; lo < 180; lo += 15) p.push({ lat: la, lon: lo + ((la / 15) % 2 ? 7.5 : 0) }); return p; })();
+const GRID = (() => {
+  const p = [], lats = [];
+  for (let la = -60; la <= 70; la += 10) lats.push(la);
+  lats.push(75);
+  lats.forEach((la, row) => {
+    const offset = row % 2 ? 5 : 0;
+    for (let lo = -180; lo < 180; lo += 10) p.push({ lat: la, lon: lo + offset });
+  });
+  return p;
+})();
 async function fetchGrid(force = false) {
   const fresh = g => g && Date.now() - g.at < 10 * 60e3;
   if (!force && fresh(state.grid)) return state.grid;
-  if (!force && !state.grid) { const c = read('mono35_grid', null); if (fresh(c)) { state.grid = c; return c; } }
+  if (!force && !state.grid) { const c = read('mono36_grid_10deg', null); if (fresh(c)) { state.grid = c; return c; } }
   if (state.gridBusy) return state.grid;
   state.gridBusy = true; updateGlobeCtl();
   try {
@@ -2308,7 +2323,7 @@ async function fetchGrid(force = false) {
     const pts = []; let time = 0;
     res.forEach((d, bi) => (Array.isArray(d) ? d : [d]).forEach((o, j) => { const c = o?.current; if (!c || !fin(c.temperature_2m)) return; const p = batches[bi][j]; time = Math.max(time, c.time * 1000);
       pts.push({ lat: p.lat, lon: p.lon, t: c.temperature_2m, precip: c.precipitation, code: c.weather_code, cloud: c.cloud_cover, wind: c.wind_speed_10m, dir: c.wind_direction_10m, day: c.is_day }); }));
-    if (pts.length) { state.grid = { at: Date.now(), time, pts }; write('mono35_grid', state.grid); }
+    if (pts.length) { state.grid = { at: Date.now(), time, pts }; write('mono36_grid_10deg', state.grid); }
   } catch {}
   state.gridBusy = false;
   return state.grid;
