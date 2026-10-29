@@ -76,7 +76,7 @@ module.exports=async(req,res)=>{
     res.setHeader('Cache-Control','no-store');
     res.status(200).json({...publicData,station,cityDistance:Math.round(city.dist*10)/10,stale});
    };
-   if(cached?.version===2&&Date.now()-cached.checkedAt<2*3600e3){publish(cached);return;}
+   if(cached?.version===3&&Date.now()-cached.checkedAt<2*3600e3){publish(cached);return;}
    try{
     const next=await stationLearning.update(city.v,cached);
     if(!next.available){
