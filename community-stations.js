@@ -23,6 +23,35 @@ function parse(boxes,point,now=Date.now()){
    lat,lon,dist:Math.round(dist*10)/10,temp,rh,t};
  }).filter(Boolean).sort((a,b)=>a.dist-b.dist).slice(0,40);
 }
-root.MONOCommunityStations={parse};
-if(typeof module!=='undefined'&&module.exports)module.exports={parse};
+
+function parseRain(boxes,point,now=Date.now()){
+ if(!Array.isArray(boxes)||!Number.isFinite(point?.lat)||!Number.isFinite(point?.lon))return [];
+ const out=[];
+ for(const box of boxes){
+  const [lon,lat]=box?.currentLocation?.coordinates||[];
+  if(!Number.isFinite(lat)||!Number.isFinite(lon)||box.exposure==='indoor'||box.exposure==='mobile')continue;
+  const dist=km(point,{lat,lon});if(dist>12)continue;
+  for(const sensor of box.sensors||[]){
+   const title=String(sensor.title||'').toLowerCase();
+   if(!/rain|precip|niederschlag|regen|βροχ|υετ/.test(title))continue;
+   const unit=String(sensor.unit||'').toLowerCase().replace(/\s+/g,'');
+   const rate=/mm\/h|mm\/hr|mmh-1|l\/m(?:²|2)\/h/.test(unit);
+   const volume=/^mm$|^l\/m(?:²|2)$|^mm\/(?:24h|day)$/.test(unit);
+   if(!rate&&!volume)continue;
+   const m=sensor.lastMeasurement,t=Date.parse(m?.createdAt),v=Number(m?.value);
+   if(m?.value==null||String(m.value).trim()===''||!Number.isFinite(t)||t>now+300000||now-t>90*60000||
+      !Number.isFinite(v)||v<0||v>(rate?300:500))continue;
+   const period=rate?'rate':/24\s*h|24\s*hour|24\s*stund/.test(title+' '+unit)?'24h':
+     /today|heute|tages|daily|ημερ|σήμερα/.test(title)?'today':
+     /month|monat|μήν/.test(title)?'month':/hour|stund|ωρια/.test(title)?'hour':'unknown';
+   out.push({id:String(box._id||''),name:String(box.name||'openSenseMap').slice(0,120),
+     title:String(sensor.title||'').slice(0,90),lat,lon,dist:Math.round(dist*10)/10,
+     value:v,unit:rate?'mm/h':'mm',period,t});
+  }
+ }
+ return out.sort((a,b)=>a.dist-b.dist||b.t-a.t).slice(0,40);
+}
+
+root.MONOCommunityStations={parse,parseRain};
+if(typeof module!=='undefined'&&module.exports)module.exports={parse,parseRain};
 })(typeof window!=='undefined'?window:globalThis);
