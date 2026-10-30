@@ -2821,7 +2821,7 @@ function windyStationPanel(){
 }
 async function loadWindyOpen(id=null){
  if(state.page!=='stations'||!state.city||state.windyStatus==='loading')return;
- const generation=state.gen,c=state.city;
+ const cityKey=ckey(state.city),c=state.city;
  state.windyStatus='loading';
  state.windySelected=id;
  render();
@@ -2834,12 +2834,12 @@ async function loadWindyOpen(id=null){
   const response=await fetch('/api/synop?'+params.toString(),{cache:'no-store',credentials:'same-origin'});
   if(!response.ok)throw Error('windy view '+response.status);
   const html=await response.text();
-  if(generation!==state.gen||state.page!=='stations')return;
+  if(cityKey!==ckey(state.city)||state.page!=='stations')return;
   state.windyHtml=html;
   state.windyStatus='loaded';
   render();
  }catch(e){
-  if(generation!==state.gen)return;
+  if(cityKey!==ckey(state.city))return;
   state.windyHtml='';
   state.windyStatus='failed';
   render();
@@ -3336,8 +3336,8 @@ function init() {
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if ((window.innerWidth < 640) !== (lastW < 640) && state.page !== 'radar' && state.page !== 'globe') render(); lastW = window.innerWidth; }, 200); });
   if (!NAV.some(n => n[0] === state.page)) state.page = 'now';
   render();
-  if(state.page==='stations')loadWindyOpen();
   loadAll(true);
+  if(state.page==='stations')loadWindyOpen();
   loadCityLive();
   localizePlaces();
   loadNews();
