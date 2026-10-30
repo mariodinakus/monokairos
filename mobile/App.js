@@ -96,9 +96,9 @@ function MonoScreen() {
       // click #geoBtn: that would cause the redundant WebView OS prompt.
       const js = `window.MONOApplyNativeLocation?.(${JSON.stringify(Number(latitude.toFixed(3)))},${JSON.stringify(Number(longitude.toFixed(3)))},${JSON.stringify(Number.isFinite(accuracy)?accuracy:999)});true;`;
       web.current?.injectJavaScript(js);
-      await rememberAlertCoordinates(latitude,longitude);
+      const regionChanged = await rememberAlertCoordinates(latitude,longitude);
       lastLocationAt.current=Date.now();
-      await refreshForecastAlertsOnLaunch();
+      await refreshForecastAlertsOnLaunch({force:regionChanged});
       if (!automatic && Number.isFinite(accuracy) && accuracy>500)
         setHint('Η θέση είναι προσεγγιστική (±'+Math.round(accuracy)+' m).');
     } catch {
