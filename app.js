@@ -763,7 +763,8 @@ async function loadAll(force = false) {
   jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; state.obsReady = true; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; state.obsReady = true; schedule(); } }));
   if (location.protocol.startsWith('http')) jobs.push(fetchNetatmo(c).then(d => { if (gen === state.gen) { state.pws = d; schedule(); } }).catch(() => { if (gen === state.gen) state.pws = { off: true }; }));
   if (location.protocol.startsWith('http')) {
-    const params={near:`${(+c.lon).toFixed(4)},${(+c.lat).toFixed(4)}`,maxDistance:12000,exposure:'outdoor',full:'true'};
+    const senseKm=window.MONOCommunityStations?.radius(c)||12;
+    const params={near:`${(+c.lon).toFixed(4)},${(+c.lat).toFixed(4)}`,maxDistance:senseKm*1000,exposure:'outdoor',full:'true'};
     jobs.push(getJSON(q('https://api.opensensemap.org/boxes',params),25000)
       .then(d=>{if(gen===state.gen){state.communityStations=window.MONOCommunityStations?.parse(d,c)||[];state.communityRain=window.MONOCommunityStations?.parseRain(d,c)||[];schedule();}})
       .catch(()=>{if(gen===state.gen){state.communityStations=null;state.communityRain=null;schedule();}}));
@@ -1415,7 +1416,7 @@ function rainPage() {
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const eps = rainEpisodes();
   const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain}) || '') + communityRainCard() + communityStationsCard() + rainNowCard(false)
+  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain}) || '') + rainMeaningCard() + communityRainCard() + communityStationsCard() + rainNowCard(false)
     + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
        <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
@@ -2714,13 +2715,16 @@ function localRainGaugeDirectory() {
       Math.abs(c.lat - 40.6401) > 0.45 || Math.abs(c.lon - 22.9444) > 0.50) return '';
   const el = state.lang === 'el';
   const providers = [
-    ['meteo.gr / ΕΑΑ', 'https://www.meteo.gr/thessaloniki/',
+    ['Windy.com · χάρτης σταθμών', 'https://www.windy.com/?40.6401,22.9444,10',
+      el ? 'Πολλοί επιπλέον σταθμοί · άνοιξε το Windy και επίλεξε Σταθμοί (δεν εισάγονται αυτόματα στο MONO)' :
+           'More stations · open Windy and select Stations (not automatically imported into MONO)'],
+    ['meteo.gr / ΕΑΑ', 'https://w2.meteo.gr/thessaloniki/',
       el ? 'Κέντρο, ΔΕΘ, Καλαμαριά, Κορδελιό, Πυλαία, Φοίνικας, ΝΟΗΣΙΣ' :
            'Centre, TIF, Kalamaria, Kordelio, Pylaia, Foinikas, NOESIS'],
     ['Meteothes', 'https://meteothes.gr/',
       el ? 'Ανεξάρτητος σταθμός ιστορικού κέντρου · ημερήσια βροχή και ένταση' :
            'Independent historic-centre gauge · daily rain and rain rate'],
-    ['ΕΑΑ / Παρατηρητήριο Θεσσαλονίκης', 'https://www.meteo.gr/thessaloniki/',
+    ['ΕΑΑ / Χάρτης ελληνικών σταθμών', 'https://www.meteo.gr/Gmap.cfm',
       el ? 'Περιφερειακό δίκτυο και χάρτης αυτόματων σταθμών' :
            'Regional automatic weather-station network and map']
   ];
@@ -2746,12 +2750,53 @@ function localRainGaugeDirectory() {
     '</p>' + links + '</section>';
 }
 
+
+/* Rain in everyday terms. Real values and illustrative comparisons stay separate. */
+function rainMeaningCard(){
+ const el=state.lang==='el',f=v=>num(v, v<1?1:0);
+ const o=state.view&&window.MONORainIntelligence?.observed(state.view.stations,state.pws);
+ const real=o&&fin(o.mm)&&fin(o.dist)&&o.dist<=35&&o.name&&o.type!=='PWS-area';
+ const measured=real?'<div class="rl-real"><span>◎</span><div><b>'+
+   (el?'Στο διαθέσιμο βροχόμετρο':'At the available rain gauge')+'</b><p><strong>'+
+   f(o.mm)+' mm = '+f(o.mm)+' L/m²</strong> · '+esc(o.name)+' ('+num(o.dist,1)+' km) · '+
+   (el?'κάλυψη ':'coverage ')+num(o.covered,0)+'/24h. '+
+   (el?'Ισχύει μόνο στη θέση του σταθμού, όχι για όλη την πόλη.':'This applies to the station location, not the entire city.')+
+   '</p></div></div>':'';
+ const amounts=[.3,1,2,5,10,30];
+ const samples=amounts.map(mm=>'<div class="rl-sample"><div class="rl-sampletop"><strong>'+f(mm)+
+   ' mm</strong><span>'+f(mm)+' '+(el?'λίτρα/τ.μ.':'L/m²')+'</span></div>'+
+   '<div class="rl-bar"><span style="width:'+Math.max(1,100*mm/30)+'%"></span></div>'+
+   '<small>'+(el?'Σε μπαλκόνι 10 τ.μ.: ':'On 10 m²: ')+f(mm*10)+
+   (el?' λίτρα νερού':' L of water')+'</small></div>').join('');
+ return '<section class="section card rl-guide" aria-label="'+(el?'Τα mm βροχής με απλά λόγια':'Rainfall explained')+'">'+
+ '<span class="rl-kicker">MONO / '+(el?'ΜΕ ΑΠΛΑ ΛΟΓΙΑ':'PLAIN LANGUAGE')+'</span>'+
+ '<h2>'+(el?'Τι σημαίνουν τα mm βροχής;':'What do rain millimetres mean?')+'</h2>'+
+ '<p class="rl-intro">'+(el?'1 mm βροχής = 1 λίτρο νερού που έπεσε σε κάθε τετραγωνικό μέτρο. '+
+  'Άρα 0,3 mm = 300 ml ανά τ.μ. — λίγο περισσότερο από ένα συνηθισμένο ποτήρι νερό.':
+  '1 mm of rain equals 1 litre of water on every square metre. 0.3 mm equals 300 ml per m².')+
+ '</p>'+measured+
+ '<div class="rl-heading"><b>'+(el?'Δες τη διαφορά στην πράξη':'Compare the amounts')+
+ '</b><span>'+(el?'ΥΠΟΘΕΤΙΚΑ ΠΑΡΑΔΕΙΓΜΑΤΑ — ΟΧΙ ΖΩΝΤΑΝΕΣ ΜΕΤΡΗΣΕΙΣ':'ILLUSTRATIVE EXAMPLES — NOT LIVE READINGS')+'</span></div>'+
+ '<div class="rl-examples">'+samples+'</div>'+
+ '<div class="rl-explain"><div><span>mm</span><b>'+(el?'Πόσο νερό έπεσε':'How much fell')+
+ '</b><p>'+(el?'Συνολική ποσότητα για τη χρονική περίοδο που αναφέρει ο σταθμός.':
+ 'Total amount for the station’s specified time period.')+'</p></div>'+
+ '<div><span>mm/h</span><b>'+(el?'Πόσο δυνατά βρέχει':'How fast it falls')+'</b><p>'+
+ (el?'Δείκτης έντασης: 10 mm σε 15 λεπτά είναι πολύ πιο έντονη βροχή από 10 mm σε 10 ώρες.':
+ 'Intensity: 10 mm in 15 minutes is much heavier than 10 mm in 10 hours.')+'</p></div>'+
+ '<div><span>◎</span><b>'+(el?'Σε ποιο σημείο':'Where it fell')+'</b><p>'+
+ (el?'Ο σταθμός του αεροδρομίου δεν μετρά την Καλαμαριά ή τον Εύοσμο. Μπορεί να διαφέρει η βροχή.':
+ 'The airport gauge does not measure every neighbourhood. Rainfall can differ locally.')+'</p></div></div>'+
+ '<p class="rl-foot">'+(el?'Σημαντικό: δεν μπορούμε να χαρακτηρίσουμε μια ποσότητα «ασθενή» ή «καταρρακτώδη» χωρίς να ξέρουμε τη διάρκειά της.':
+ 'Important: an amount alone is not enough to classify the rain as light or torrential without knowing its duration.')+'</p></section>';
+}
+
 /* ------------------------------------------------------------------ page: stations */
 function stationsPage() {
   const V = state.view;
   const head = header(T('stTitle'), T('stSub'));
   if (!V || !state.obs) return head + localRainGaugeDirectory() + loadingCard() + communityStationsCard();
-  if (!V.stations.length) return head + localRainGaugeDirectory() + communityStationsCard() + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
+  if (!V.stations.length) return head + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
   const cards = V.stations.slice(0, 30).map(s => { const o = s.last, inUse = V.station?.id === s.id, gauge = window.MONORainIntelligence?.observed([s],null);
     return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div>${gauge ? `<div class="citycountry">🌧 ${num(gauge.mm,1)} mm · ${num(gauge.covered,0)}/24 h · ${esc(gauge.type)} · ${state.lang === 'el' ? 'μόνο στη θέση του σταθμού' : 'at this station only'}</div>` : ''}</div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
       <div class="stvals"><span class="citytemp">${deg(o?.temp)}</span><div class="compact">${T('humidity')} ${num(M.rhFromDew(o?.temp, o?.dewp))}% · ${T('dew')} ${deg(o?.dewp)}<br>${T('wind')} ${num(o?.wspd)} km/h ${dirArrow(o?.wdir)}${fin(o?.wspd) ? ` · ${windBft(o.wspd)}` : ''}${fin(o?.wgst) ? ` · ${T('gust')} ${num(o.wgst)} km/h` : ''}<br>${num(o?.pres)} hPa${fin(o?.vis) ? ` · ${num(o.vis, o.vis < 10 ? 1 : 0)} km` : ''}</div></div>
@@ -2767,7 +2812,7 @@ function stationsPage() {
       <div class="panelhead" style="margin-top:18px"><b>${T(s.src === 'synop' ? 'rawSynop' : 'rawMetar')}</b></div>${s.list.slice(-8).reverse().map(o => `<p class="mono-raw">${esc(o.raw || '')}</p>`).join('')}</section>`;
   }
   const cnt = state.obs?.counts ? `<div class="chips"><span class="badge">METAR · ${state.obs.counts.metar}</span><span class="badge">SYNOP · ${state.obs.counts.synop}</span>${state.pws?.n ? `<span class="badge">Netatmo · ${state.pws.n}</span>` : ''}</div>` : '';
-  return head + cnt + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
+  return head + cnt + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
 }
 
 function communityRainCard(){
@@ -2775,7 +2820,7 @@ function communityRainCard(){
  if(!Array.isArray(gauges))return '';
  const c=state.city||{},thess=c.cc==='GR'&&Math.abs((c.lat||0)-40.6401)<0.45&&Math.abs((c.lon||0)-22.9444)<0.5;
  if(!gauges.length)return thess&&state.page==='stations'?'<section class="section card"><div class="panelhead"><b>☔ openSenseMap</b></div><p class="notice">'+
-   (el?'Δεν βρέθηκαν πρόσφατες βροχομετρικές μετρήσεις εντός 12 km. Δεν εμφανίζουμε ανύπαρκτα mm.':'No recent rain-gauge observations within 12 km. No fabricated amounts.')+'</p></section>':'';
+   (el?'Δεν βρέθηκαν πρόσφατες βροχομετρικές μετρήσεις εντός '+(window.MONOCommunityStations?.radius(state.city)||12)+' km. Δεν εμφανίζουμε ανύπαρκτα mm.':'No recent rain-gauge observations within '+(window.MONOCommunityStations?.radius(state.city)||12)+' km. No fabricated amounts.')+'</p></section>':'';
  const periods={rate:el?'Ένταση, όχι σύνολο βροχής':'Rain rate, not total',
    '24h':el?'24ωρο, όπως δηλώθηκε':'24 h, as labeled',today:el?'Σήμερα, όπως δηλώθηκε':'Today, as labeled',
    month:el?'Μήνας, όπως δηλώθηκε':'Month, as labeled',hour:el?'Ώρα, όπως δηλώθηκε':'Hour, as labeled',
@@ -2786,7 +2831,7 @@ function communityRainCard(){
  return '<section class="section card"><div class="panelhead"><div><b>☔ '+
    (el?'Πραγματικοί τοπικοί αισθητήρες βροχής':'Actual nearby rain sensors')+
    '</b><div class="section-sub">openSenseMap · '+gauges.length+' '+(el?'πρόσφατες μετρήσεις':'recent readings')+
-   ' · ≤12 km</div></div></div><p class="notice">'+
+   ' · ≤'+(window.MONOCommunityStations?.radius(state.city)||12)+' km</div></div></div><p class="notice">'+
    (el?'Ανεξάρτητοι αισθητήρες κοινότητας, όχι επίσημο δίκτυο. Η τιμή ισχύει μόνο στη θέση του αισθητήρα. Η ένταση σε mm/h δεν είναι συνολική βροχή.':
       'Community sensors, not the official network. Values apply at each sensor. Rain rate in mm/h is not accumulated rainfall.')+
    '</p>'+rows+'</section>';
@@ -2797,7 +2842,7 @@ function communityStationsCard() {
   if(!Array.isArray(list)||!list.length)return '';
   const row=s=>`<div class="ri-community-row"><div><b>${esc(s.name)}</b><small>${num(s.dist,1)} km · ${esc(ageText(s.t))}</small></div><strong>${deg(s.temp)}${fin(s.rh)?` · ${num(s.rh,0)}%`:''}</strong></div>`;
   const first=list.slice(0,6).map(row).join(''),rest=list.slice(6).map(row).join('');
-  return `<section class="section card ri-community"><div class="panelhead"><div><b>📍 ${el?'Περισσότεροι κοντινοί αισθητήρες':'More nearby sensors'}</b><div class="section-sub">openSenseMap · ${list.length} ${el?'με πρόσφατη μέτρηση':'with recent readings'} · ≤12 km</div></div></div><p class="notice">${el?'Αισθητήρες κοινότητας: θερμοκρασία και υγρασία. Δεν χρησιμοποιούνται ως βροχόμετρα ούτε για τη διόρθωση της πρόγνωσης.':'Community sensors: temperature and humidity. They are not used as rain gauges or for forecast correction.'}</p>${first}${rest?`<details><summary>${el?'Δες περισσότερους':'Show more'} (${list.length-6})</summary>${rest}</details>`:''}</section>`;
+  return `<section class="section card ri-community"><div class="panelhead"><div><b>📍 ${el?'Περισσότεροι κοντινοί αισθητήρες':'More nearby sensors'}</b><div class="section-sub">openSenseMap · ${list.length} ${el?'με πρόσφατη μέτρηση':'with recent readings'} · ≤${window.MONOCommunityStations?.radius(state.city)||12} km</div></div></div><p class="notice">${el?'Αισθητήρες κοινότητας: θερμοκρασία και υγρασία. Δεν χρησιμοποιούνται ως βροχόμετρα ούτε για τη διόρθωση της πρόγνωσης.':'Community sensors: temperature and humidity. They are not used as rain gauges or for forecast correction.'}</p>${first}${rest?`<details><summary>${el?'Δες περισσότερους':'Show more'} (${list.length-6})</summary>${rest}</details>`:''}</section>`;
 }
 function pwsCard() {
   const P = state.pws;
