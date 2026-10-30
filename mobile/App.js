@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import MonoSplash from './MonoSplash';
 import NotificationSettings from './NotificationSettings';
-import { ActivityIndicator, BackHandler, Linking, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, BackHandler, Linking, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
-import { refreshForecastAlertsOnLaunch } from './LocalAlertService';
+import { refreshForecastAlertsOnLaunch, rememberAlertCoordinates } from './LocalAlertService';
 
 // Keep the current Vercel website and its APIs. This is a separate Expo client.
 const APP_URL = 'https://monokairos.vercel.app/';
@@ -31,6 +31,8 @@ function externalUrl(value) {
 function MonoScreen() {
   const web = useRef(null);
   const backAvailable = useRef(false);
+  const lastLocationAt = useRef(0);
+  const gpsWorking = useRef(false);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
@@ -58,30 +60,61 @@ function MonoScreen() {
     return () => listener.remove();
   }, [error, reload]);
 
-  const locate = useCallback(async () => {
-    if (gpsBusy) return;
-    setGpsBusy(true);
-    setHint('');
+  const locate = useCallback(async ({automatic = false} = {}) => {
+    if (gpsWorking.current) return;
+    gpsWorking.current = true;
+    if (!automatic) {setGpsBusy(true); setHint('');}
     try {
       if (!(await Location.hasServicesEnabledAsync())) {
-        setHint('Ενεργοποίησε την τοποθεσία στις ρυθμίσεις του κινητού.');
+        if (!automatic) setHint('Ενεργοποίησε την τοποθεσία στις ρυθμίσεις του κινητού.');
         return;
       }
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') {
-        setHint('Δεν δόθηκε άδεια GPS · αναζήτησε πόλη χειροκίνητα.');
+      let permission = await Location.getForegroundPermissionsAsync();
+      // The operating system may ask once. Subsequent launches never show
+      // an extra MONO confirmation or a WebView-specific GPS permission.
+      if (!permission.granted && (!automatic || permission.status === 'undetermined') && permission.canAskAgain) {
+        permission = await Location.requestForegroundPermissionsAsync();
+      }
+      if (!permission.granted) {
+        if (!automatic) setHint('Δώσε άδεια τοποθεσίας από τις ρυθμίσεις του κινητού.');
         return;
       }
-      // Use the original MONO locality resolver and forecast request.
-      // WebView may request a second geolocation permission on some devices.
-      web.current?.injectJavaScript("(function(){var b=document.getElementById('geoBtn');if(b)b.click();})();true;");
-      setHint('GPS ενεργό · επίτρεψε την πρόσβαση αν σου ζητηθεί ξανά.');
+      let position;
+      try {
+        position = await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});
+      } catch {
+        position = await Location.getLastKnownPositionAsync({maxAge:10*60*1000});
+      }
+      if (!position?.coords) {
+        if (!automatic) setHint('Δεν βρέθηκε πρόσφατη θέση GPS. Δοκίμασε ξανά.');
+        return;
+      }
+      const {latitude,longitude,accuracy}=position.coords;
+      if (!Number.isFinite(latitude)||!Number.isFinite(longitude) ||
+          Math.abs(latitude)>90||Math.abs(longitude)>180) return;
+      // Send the native fix directly into MONO's existing resolver. Do not
+      // click #geoBtn: that would cause the redundant WebView OS prompt.
+      const js = `window.MONOApplyNativeLocation?.(${JSON.stringify(Number(latitude.toFixed(3)))},${JSON.stringify(Number(longitude.toFixed(3)))},${JSON.stringify(Number.isFinite(accuracy)?accuracy:999)});true;`;
+      web.current?.injectJavaScript(js);
+      await rememberAlertCoordinates(latitude,longitude);
+      lastLocationAt.current=Date.now();
+      await refreshForecastAlertsOnLaunch();
+      if (!automatic && Number.isFinite(accuracy) && accuracy>500)
+        setHint('Η θέση είναι προσεγγιστική (±'+Math.round(accuracy)+' m).');
     } catch {
-      setHint('Το GPS δεν είναι διαθέσιμο αυτή τη στιγμή.');
+      if (!automatic) setHint('Το GPS δεν είναι διαθέσιμο αυτή τη στιγμή.');
     } finally {
-      setGpsBusy(false);
+      gpsWorking.current=false;
+      if (!automatic) setGpsBusy(false);
     }
-  }, [gpsBusy]);
+  }, []);
+  useEffect(()=>{
+    const subscription=AppState.addEventListener('change',next=>{
+      if(next==='active' && !loading && !error && Date.now()-lastLocationAt.current>15*60*1000)
+        locate({automatic:true}).catch(()=>{});
+    });
+    return()=>subscription.remove();
+  },[locate,loading,error]);
 
   const navigate = useCallback(request => {
     const target = request.url || '';
@@ -104,9 +137,9 @@ function MonoScreen() {
         <View style={s.actions}>
           <Pressable accessibilityRole="button" accessibilityLabel="Ρυθμίσεις ειδοποιήσεων" onPress={() => setSettingsVisible(true)}
             style={({pressed}) => [s.iconButton, pressed && s.pressed]}>
-            <Text style={[s.icon,{fontSize:21}]}>♧</Text>
+            <Text style={[s.icon,{fontSize:21}]}>🔔</Text>
           </Pressable>
-          <Pressable accessibilityLabel="Εντοπισμός θέσης GPS" accessibilityRole="button" disabled={gpsBusy || !!error} onPress={locate}
+          <Pressable accessibilityLabel="Εντοπισμός θέσης GPS" accessibilityRole="button" disabled={gpsBusy || !!error} onPress={() => locate()}
             style={({pressed}) => [s.iconButton, pressed && s.pressed]}>
             {gpsBusy ? <ActivityIndicator size="small" color={C.accent}/> : <Text style={s.icon}>◎</Text>}
           </Pressable>
@@ -131,7 +164,7 @@ function MonoScreen() {
           onNavigationStateChange={state => { backAvailable.current = !!state.canGoBack; }}
           onLoadStart={() => { setLoading(true); setProgress(0); }}
           onLoadProgress={({nativeEvent}) => setProgress(nativeEvent.progress || 0)}
-          onLoadEnd={() => { setLoading(false); setShowLaunch(false); }}
+          onLoadEnd={() => { setLoading(false); setShowLaunch(false); locate({automatic:true}).catch(()=>{}); }}
           onError={({nativeEvent}) => { setError(nativeEvent.description || 'Η σύνδεση απέτυχε.'); setLoading(false); }}
           onHttpError={({nativeEvent}) => {
             if (nativeEvent.statusCode >= 400 && nativeEvent.url === APP_URL) {
