@@ -733,7 +733,7 @@ async function loadAll(force = false) {
   loadSpace(force);
   loadCosmic(force);
   const c = state.city, gen = ++state.gen;
-  if(state.sharedRainCity !== ckey(c)) {state.sharedRain = null;state.stationRain = null;state.communityStations = null;state.communityRain = null;}
+  if(state.sharedRainCity !== ckey(c)) {state.sharedRain = null;state.stationRain = null;state.communityStations = null;state.communityRain = null;state.stationBoxes=null;}
   state.sharedRainCity = ckey(c);
   state.mainErr = false; render();
   try {
@@ -766,8 +766,8 @@ async function loadAll(force = false) {
     const senseKm=window.MONOCommunityStations?.radius(c)||12;
     const params={near:`${(+c.lon).toFixed(4)},${(+c.lat).toFixed(4)}`,maxDistance:senseKm*1000,exposure:'outdoor',full:'true'};
     jobs.push(getJSON(q('https://api.opensensemap.org/boxes',params),25000)
-      .then(d=>{if(gen===state.gen){state.communityStations=window.MONOCommunityStations?.parse(d,c)||[];state.communityRain=window.MONOCommunityStations?.parseRain(d,c)||[];schedule();}})
-      .catch(()=>{if(gen===state.gen){state.communityStations=null;state.communityRain=null;schedule();}}));
+      .then(d=>{if(gen===state.gen){state.communityStations=window.MONOCommunityStations?.parse(d,c)||[];state.communityRain=window.MONOCommunityStations?.parseRain(d,c)||[];state.stationBoxes=d; schedule();}})
+      .catch(()=>{if(gen===state.gen){state.communityStations=null;state.communityRain=null;state.stationBoxes=null;schedule();}}));
   }
   jobs.push(getJSON(longURL(c)).then(d => { if (gen === state.gen) { state.long = d; schedule(); } }).catch(() => {}));
   jobs.push(fetchHolidays(c).then(h => { if (gen === state.gen) { state.hol = h; schedule(); } }).catch(() => {}));
@@ -2791,12 +2791,21 @@ function rainMeaningCard(){
  'Important: an amount alone is not enough to classify the rain as light or torrential without knowing its duration.')+'</p></section>';
 }
 
+
+function stationNetworkCard(){
+ const c=state.city,source=state.obs?.stations||[],boxes=state.stationBoxes;
+ if(!window.MONOStationNetwork||!c)return '';
+ const radius=window.MONOCommunityStations?.radius(c)||12;
+ const rows=window.MONOStationNetwork.combine({boxes,stations:source,pws:state.pws,point:c,radiusKm:radius});
+ return window.MONOStationNetwork.render({rows,filter:state.stationNetFilter||'all',limit:state.stationNetLimit||35,lang:state.lang,radius,zone:state.view?.zone||null});
+}
+
 /* ------------------------------------------------------------------ page: stations */
 function stationsPage() {
   const V = state.view;
   const head = header(T('stTitle'), T('stSub'));
-  if (!V || !state.obs) return head + localRainGaugeDirectory() + loadingCard() + communityStationsCard();
-  if (!V.stations.length) return head + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
+  if (!V || !state.obs) return head + stationNetworkCard() + localRainGaugeDirectory() + loadingCard() + communityStationsCard();
+  if (!V.stations.length) return head + stationNetworkCard() + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
   const cards = V.stations.slice(0, 30).map(s => { const o = s.last, inUse = V.station?.id === s.id, gauge = window.MONORainIntelligence?.observed([s],null);
     return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div>${gauge ? `<div class="citycountry">🌧 ${num(gauge.mm,1)} mm · ${num(gauge.covered,0)}/24 h · ${esc(gauge.type)} · ${state.lang === 'el' ? 'μόνο στη θέση του σταθμού' : 'at this station only'}</div>` : ''}</div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
       <div class="stvals"><span class="citytemp">${deg(o?.temp)}</span><div class="compact">${T('humidity')} ${num(M.rhFromDew(o?.temp, o?.dewp))}% · ${T('dew')} ${deg(o?.dewp)}<br>${T('wind')} ${num(o?.wspd)} km/h ${dirArrow(o?.wdir)}${fin(o?.wspd) ? ` · ${windBft(o.wspd)}` : ''}${fin(o?.wgst) ? ` · ${T('gust')} ${num(o.wgst)} km/h` : ''}<br>${num(o?.pres)} hPa${fin(o?.vis) ? ` · ${num(o.vis, o.vis < 10 ? 1 : 0)} km` : ''}</div></div>
@@ -2812,7 +2821,7 @@ function stationsPage() {
       <div class="panelhead" style="margin-top:18px"><b>${T(s.src === 'synop' ? 'rawSynop' : 'rawMetar')}</b></div>${s.list.slice(-8).reverse().map(o => `<p class="mono-raw">${esc(o.raw || '')}</p>`).join('')}</section>`;
   }
   const cnt = state.obs?.counts ? `<div class="chips"><span class="badge">METAR · ${state.obs.counts.metar}</span><span class="badge">SYNOP · ${state.obs.counts.synop}</span>${state.pws?.n ? `<span class="badge">Netatmo · ${state.pws.n}</span>` : ''}</div>` : '';
-  return head + cnt + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
+  return head + cnt + stationNetworkCard() + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
 }
 
 function communityRainCard(){
@@ -3091,7 +3100,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35 });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true); localizePlaces();
@@ -3190,6 +3199,8 @@ function onClick(e) {
   else if (a === 'lead') { state.lead = +b.dataset.n; render(); }
   else if (a === 'region') { state.region = b.dataset.r; render(); loadCityLive(); }
   else if (a === 'station') { state.stationPick = b.dataset.id; recompute(); render(); }
+  else if (a === 'stationNetworkFilter') { state.stationNetFilter=b.dataset.v;state.stationNetLimit=35;render(); }
+  else if (a === 'stationNetworkMore') { state.stationNetLimit=Math.min(300,(state.stationNetLimit||35)+35);render(); }
   else if (a === 'newsTab') { state.newsTab = b.dataset.v; render(); }
   else if (a === 'reloadNews') { state.news = null; render(); loadNews(true); }
   else if (a === 'climMonth') { state.climMonth = +b.dataset.n; render(); }
