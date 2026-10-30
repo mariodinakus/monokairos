@@ -104,6 +104,7 @@ function decodeSynop(raw, t) {
 }
 
 module.exports = async (req, res) => {
+  if (req.query?.windy === 'open') return require('../lib/windy.cjs')(req, res);
   if (!guard(req, res)) return;
   try {
     const c = coordinates(req);
