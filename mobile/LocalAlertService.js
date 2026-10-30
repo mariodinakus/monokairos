@@ -43,6 +43,16 @@ export async function saveAlertPrefs(data){
  await AsyncStorage.setItem(PREF_KEY,JSON.stringify(clean));
  return clean;
 }
+// Store a coarse (~1 km) fix for forecasts, never raw GPS coordinates.
+export async function rememberAlertCoordinates(latitude,longitude){
+ if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||Math.abs(latitude)>90||Math.abs(longitude)>180)throw Error('Invalid GPS fix');
+ const next={lat:Number(latitude.toFixed(2)),lon:Number(longitude.toFixed(2)),at:Date.now()};
+ const raw=await AsyncStorage.getItem(COORD_KEY);
+ let previous=null;
+ try {previous=raw?JSON.parse(raw):null;}catch{}
+ await AsyncStorage.setItem(COORD_KEY,JSON.stringify(next));
+ return !previous||Math.abs(previous.lat-next.lat)>=.02||Math.abs(previous.lon-next.lon)>=.02;
+}
 export async function getAlertCoordinates({request=false}={}){
  let stored=await AsyncStorage.getItem(COORD_KEY);
  if(!request&&stored){
@@ -105,10 +115,10 @@ export async function syncForecastAlerts({requestPermissions=false,refreshLocati
  return {count:events.length-errors.length,mode:'local',at:now,
    warning:errors.length?String(errors.length)+' ειδοποιήσεις δεν προγραμματίστηκαν.':null};
 }
-export async function refreshForecastAlertsOnLaunch(){
+export async function refreshForecastAlertsOnLaunch({force=false}={}){
  const prefs=await loadAlertPrefs();
  if(!Object.values(prefs).some(Boolean))return;
  const last=Number(await AsyncStorage.getItem(SYNC_KEY)||0);
- if(Date.now()-last<2*3600e3)return;
+ if(!force&&Date.now()-last<2*3600e3)return;
  try{await syncForecastAlerts()}catch{ /* No alert permissions or offline: manual button shows error. */ }
 }
