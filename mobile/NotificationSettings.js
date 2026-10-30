@@ -6,8 +6,8 @@ import { DEFAULT_ALERTS, saveAlertPrefs, syncForecastAlerts, scheduledMonoAlerts
 
 const KEY = 'mono_mobile_alert_options_v1';
 const OPTIONS = [
-  {id:'rain', icon:'☂', name:'Βροχή',desc:'Πριν ξεκινήσει στη θέση σου'},
-  {id:'storm',icon:'ϟ',name:'Καταιγίδες & έντονα φαινόμενα',desc:'Προειδοποιήσεις με κατώφλια έντασης'},
+  {id:'rain', icon:'☂', name:'Βροχή που πλησιάζει',desc:'Προειδοποίηση περίπου 30 λεπτά πριν'},
+  {id:'storm',icon:'ϟ',name:'Επικίνδυνα καιρικά φαινόμενα',desc:'Εκτίμηση για καταιγίδες και πολύ δυνατή βροχή'},
   {id:'wind',icon:'≋',name:'Ισχυροί άνεμοι',desc:'Ριπές και μποφόρ'},
   {id:'daily',icon:'☀',name:'Πρωινή πρόγνωση',desc:'Μια ημερήσια σύνοψη'},
   {id:'air',icon:'◌',name:'Ατμοσφαιρική ποιότητα',desc:'Σκόνη, ρύπανση, γύρη'},
@@ -32,14 +32,27 @@ export default function NotificationSettings({visible,onClose}) {
   }).catch(()=>{}).finally(()=>{if(alive)setReady(true)});
   return()=>{alive=false}
  },[]);
- const setOption=useCallback((id,value)=>{
-  setPrefs(current=>{const next={...current,[id]:value};
-    saveAlertPrefs(next).then(async()=>{if(!Object.values(next).some(Boolean))await cancelMonoForecastAlerts();
-      else { try{await syncForecastAlerts()}catch{} }
-      refreshList();
-    }).catch(()=>{});
-    return next;});
- },[]);
+ const setOption=useCallback(async(id,value)=>{
+   if(busy)return;
+   const next={...prefs,[id]:value};
+   setPrefs(next);setMessage('');setBusy(true);
+   try {
+     await saveAlertPrefs(next);
+     if(!Object.values(next).some(Boolean)){
+       await cancelMonoForecastAlerts();
+       setMessage('Οι ειδοποιήσεις απενεργοποιήθηκαν.');
+     }else{
+       // The toggle is a direct user gesture: request OS permission only once,
+       // then immediately schedule weather warnings for this device.
+       const result=await syncForecastAlerts({requestPermissions:true,refreshLocation:true});
+       setMessage(result.count+' ειδοποιήσεις προγραμματίστηκαν για τις επόμενες 48 ώρες.'+
+         (result.warning?' '+result.warning:''));
+     }
+     await refreshList();
+   }catch(e){
+     setMessage('Οι ειδοποιήσεις δεν ενεργοποιήθηκαν: '+String(e?.message||e).slice(0,170));
+   }finally{setBusy(false);}
+ },[prefs,busy,refreshList]);
  const refreshForecast=async()=>{
    setForecastBusy(true);setMessage('');
    try{
@@ -72,8 +85,8 @@ export default function NotificationSettings({visible,onClose}) {
     <Text style={s.section}>ΕΙΔΗ ΕΙΔΟΠΟΙΗΣΕΩΝ</Text>
     <View style={s.card}>{OPTIONS.map((o,i)=><View key={o.id} style={[s.option,i>0&&s.border]}>
      <View style={s.icon}><Text style={s.iconText}>{o.icon}</Text></View><View style={s.words}><Text style={s.name}>{o.name}</Text><Text style={s.desc}>{o.desc}</Text></View>
-     <Switch accessibilityLabel={o.name} value={!!prefs[o.id]} disabled={!ready} onValueChange={v=>setOption(o.id,v)} trackColor={{false:'#d4d9e0',true:'#8bb8ed'}} thumbColor={prefs[o.id]?BLUE:'#f7f7f7'}/></View>)}</View>
-    <View style={s.info}><Text style={s.infoTitle}>Τοπικές ειδοποιήσεις πρόγνωσης</Text>
+     <Switch accessibilityLabel={o.name} value={!!prefs[o.id]} disabled={!ready||busy} onValueChange={v=>setOption(o.id,v)} trackColor={{false:'#d4d9e0',true:'#8bb8ed'}} thumbColor={prefs[o.id]?BLUE:'#f7f7f7'}/></View>)}</View>
+    <View style={s.info}><Text style={s.infoTitle}>Ειδοποιήσεις βροχής και κακοκαιρίας</Text>
       <Text style={s.infoText}>Με την άδειά σου, το MONO διαβάζει την πρόγνωση Open-Meteo για την περιοχή σου και προγραμματίζει ειδοποιήσεις έως 48 ώρες μπροστά. Θα εμφανίζονται και αν κλείσεις την εφαρμογή, αλλά δεν ενημερώνονται όσο παραμένει κλειστή.</Text></View>
     <Pressable accessibilityRole="button" disabled={forecastBusy||!ready} style={s.test} onPress={refreshForecast}>
       {forecastBusy?<ActivityIndicator color="#fff"/>:<Text style={s.testLabel}>ΕΝΕΡΓΟΠΟΙΗΣΗ / ΑΝΑΝΕΩΣΗ ΠΡΟΓΝΩΣΗΣ  ↗</Text>}
@@ -89,7 +102,7 @@ export default function NotificationSettings({visible,onClose}) {
       <Text style={s.warningText}>Για νέες προειδοποιήσεις ενώ η εφαρμογή παραμένει κλειστή, χρειάζονται Firebase FCM v1, EAS credentials, αποθήκευση συνδρομών και περιοδικός server ελέγχου. Αυτό δεν είναι ακόμη ενεργό.</Text></View>
     <Pressable disabled={busy} accessibilityRole="button" style={s.test} onPress={testLocal}>{busy?<ActivityIndicator color="#fff"/>:<Text style={s.testLabel}>ΔΟΚΙΜΗ ΤΟΠΙΚΗΣ ΕΙΔΟΠΟΙΗΣΗΣ  ↗</Text>}</Pressable>
     {!!message&&<Text style={s.result}>{message}</Text>}
-    <Text style={s.foot}>Οι προγραμματισμένες ειδοποιήσεις είναι εκτιμήσεις μοντέλου από τη στιγμή της ανανέωσης, όχι επίσημες προειδοποιήσεις της ΕΜΥ. Η δοκιμαστική ειδοποίηση δεν χρησιμοποιεί δεδομένα καιρού.</Text>
+    <Text style={s.foot}>Οι ειδοποιήσεις βασίζονται σε δεδομένα πρόγνωσης, όχι σε επίσημα δελτία της ΕΜΥ. Σε σοβαρή κακοκαιρία ακολούθησε τις αρμόδιες αρχές. Οι προγραμματισμένες ειδοποιήσεις δεν αλλάζουν όσο η εφαρμογή παραμένει κλειστή. Η δοκιμαστική ειδοποίηση δεν χρησιμοποιεί δεδομένα καιρού.</Text>
    </ScrollView>
   </View>
  </Modal>;
