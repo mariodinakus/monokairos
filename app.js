@@ -426,6 +426,7 @@ const state = {
   city: P.city || CITIES[0], firstRun: !P.city,
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
   page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
+  windyStatus: 'idle', windyHtml: '', windySelected: null,
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.globeTilesV1 ? (UI.gBase || 'detail') : 'detail', gLayers: UI.globeTilesV1 ? { radar: false, rain: false, grid: false, temps: true, ...(UI.gLayers || {}) } : { radar: false, rain: false, grid: false, temps: UI.gLayers?.temps ?? true }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
@@ -2800,12 +2801,57 @@ function stationNetworkCard(){
  return window.MONOStationNetwork.render({rows,filter:state.stationNetFilter||'all',limit:state.stationNetLimit||35,lang:state.lang,radius,zone:state.view?.zone||null});
 }
 
+
+/* Windy Open data — fetched only while the Stations page is actively viewed.
+ * Raw Windy JSON stays on the server; the response is display-only HTML. */
+function windyStationPanel(){
+ const el=state.lang==='el',s=state.windyStatus;
+ const body=s==='loading'?'<div class="wd-loading">'+(el?'Αναζητούμε κοντινούς σταθμούς Open…':'Looking for nearby Open stations…')+'</div>':
+  s==='failed'?'<p class="notice">'+(el?'Δεν απάντησε το Windy. Πάτησε Ανανέωση για να ξαναδοκιμάσεις.':'Windy is unavailable. Try refresh.')+'</p>':
+  state.windyHtml||'<p class="notice">'+(el?'Ο κατάλογος Windy φορτώνει όταν ανοίγεις τους σταθμούς.':'Windy loads when you open the Stations page.')+'</p>';
+ return '<section class="section card wd-panel" aria-label="Windy Open stations">'+
+  '<div class="panelhead"><div><span class="wd-eyebrow">WINDY / OPEN STATIONS · API v2</span><h2>'+
+  (el?'Σταθμοί Windy με πραγματικές μετρήσεις':'Windy stations with observed data')+
+  '</h2><div class="section-sub">'+(el?'Επιλέγεις σταθμό για να δεις τις μετρήσεις του — χωρίς προγνωστικές τιμές.':
+    'Choose a station to view its actual observations, not a forecast.')+
+  '</div></div><button type="button" class="outline-btn" data-action="windyRefresh">'+(el?'↻ Ανανέωση':'↻ Refresh')+'</button></div>'+
+  '<div class="wd-response" aria-live="polite">'+body+'</div>'+
+  '<small class="wd-info">'+(el?'Φορτώνουμε μόνο την περιοχή που βλέπεις, σύμφωνα με τους όρους του Windy. Δεν καταγράφουμε το κλειδί στην εφαρμογή.':
+    'Data is requested only for the displayed location. The API key remains on the server.')+'</small></section>';
+}
+async function loadWindyOpen(id=null){
+ if(state.page!=='stations'||!state.city||state.windyStatus==='loading')return;
+ const generation=state.gen,c=state.city;
+ state.windyStatus='loading';
+ state.windySelected=id;
+ render();
+ try{
+  const radius=window.MONOCommunityStations?.radius(c)||12;
+  const params=new URLSearchParams({windy:'open',lat:(+c.lat).toFixed(4),lon:(+c.lon).toFixed(4),
+   radius:String(Math.min(50,radius)),lang:state.lang});
+  if(id)params.set('id',id);
+  // The server sends rendered HTML, not raw station API measurements.
+  const response=await fetch('/api/synop?'+params.toString(),{cache:'no-store',credentials:'same-origin'});
+  if(!response.ok)throw Error('windy view '+response.status);
+  const html=await response.text();
+  if(generation!==state.gen||state.page!=='stations')return;
+  state.windyHtml=html;
+  state.windyStatus='loaded';
+  render();
+ }catch(e){
+  if(generation!==state.gen)return;
+  state.windyHtml='';
+  state.windyStatus='failed';
+  render();
+ }
+}
+
 /* ------------------------------------------------------------------ page: stations */
 function stationsPage() {
   const V = state.view;
   const head = header(T('stTitle'), T('stSub'));
-  if (!V || !state.obs) return head + stationNetworkCard() + localRainGaugeDirectory() + loadingCard() + communityStationsCard();
-  if (!V.stations.length) return head + stationNetworkCard() + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
+  if (!V || !state.obs) return head + windyStationPanel() + stationNetworkCard() + localRainGaugeDirectory() + loadingCard() + communityStationsCard();
+  if (!V.stations.length) return head + windyStationPanel() + stationNetworkCard() + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
   const cards = V.stations.slice(0, 30).map(s => { const o = s.last, inUse = V.station?.id === s.id, gauge = window.MONORainIntelligence?.observed([s],null);
     return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div>${gauge ? `<div class="citycountry">🌧 ${num(gauge.mm,1)} mm · ${num(gauge.covered,0)}/24 h · ${esc(gauge.type)} · ${state.lang === 'el' ? 'μόνο στη θέση του σταθμού' : 'at this station only'}</div>` : ''}</div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
       <div class="stvals"><span class="citytemp">${deg(o?.temp)}</span><div class="compact">${T('humidity')} ${num(M.rhFromDew(o?.temp, o?.dewp))}% · ${T('dew')} ${deg(o?.dewp)}<br>${T('wind')} ${num(o?.wspd)} km/h ${dirArrow(o?.wdir)}${fin(o?.wspd) ? ` · ${windBft(o.wspd)}` : ''}${fin(o?.wgst) ? ` · ${T('gust')} ${num(o.wgst)} km/h` : ''}<br>${num(o?.pres)} hPa${fin(o?.vis) ? ` · ${num(o.vis, o.vis < 10 ? 1 : 0)} km` : ''}</div></div>
@@ -2821,7 +2867,7 @@ function stationsPage() {
       <div class="panelhead" style="margin-top:18px"><b>${T(s.src === 'synop' ? 'rawSynop' : 'rawMetar')}</b></div>${s.list.slice(-8).reverse().map(o => `<p class="mono-raw">${esc(o.raw || '')}</p>`).join('')}</section>`;
   }
   const cnt = state.obs?.counts ? `<div class="chips"><span class="badge">METAR · ${state.obs.counts.metar}</span><span class="badge">SYNOP · ${state.obs.counts.synop}</span>${state.pws?.n ? `<span class="badge">Netatmo · ${state.pws.n}</span>` : ''}</div>` : '';
-  return head + cnt + stationNetworkCard() + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
+  return head + cnt + windyStationPanel() + stationNetworkCard() + rainMeaningCard() + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
 }
 
 function communityRainCard(){
@@ -3094,16 +3140,17 @@ function goto(p) {
   state.page = p; $('.sidebar').classList.remove('open');
   try { history.replaceState(null, '', '#' + p); } catch {}
   render(); window.scrollTo(0, 0);
+  if(p==='stations'&&state.windyStatus==='idle')loadWindyOpen();
   if (p === 'cities' || p === 'globe') loadCityLive();
   if (p === 'news') loadNews();
 }
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35 });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
-  window.scrollTo(0, 0); loadAll(true); localizePlaces();
+  window.scrollTo(0, 0); loadAll(true); if(state.page==='stations')loadWindyOpen(); localizePlaces();
 }
 const findCity = id => [...state.favorites, ...CITIES, state.city, ...(window.__results || [])].find(c => ckey(c) === id);
 let gpsRequestInFlight = false;
@@ -3201,6 +3248,8 @@ function onClick(e) {
   else if (a === 'station') { state.stationPick = b.dataset.id; recompute(); render(); }
   else if (a === 'stationNetworkFilter') { state.stationNetFilter=b.dataset.v;state.stationNetLimit=35;render(); }
   else if (a === 'stationNetworkMore') { state.stationNetLimit=Math.min(300,(state.stationNetLimit||35)+35);render(); }
+  else if (a === 'windyRefresh' || a === 'windyBack') { state.windyStatus='idle'; loadWindyOpen(); }
+  else if (a === 'windySelect') { const id=b.dataset.id||''; if(/^[a-z0-9_-]{4,48}$/i.test(id)){state.windyStatus='idle';loadWindyOpen(id);} }
   else if (a === 'newsTab') { state.newsTab = b.dataset.v; render(); }
   else if (a === 'reloadNews') { state.news = null; render(); loadNews(true); }
   else if (a === 'climMonth') { state.climMonth = +b.dataset.n; render(); }
@@ -3287,6 +3336,7 @@ function init() {
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if ((window.innerWidth < 640) !== (lastW < 640) && state.page !== 'radar' && state.page !== 'globe') render(); lastW = window.innerWidth; }, 200); });
   if (!NAV.some(n => n[0] === state.page)) state.page = 'now';
   render();
+  if(state.page==='stations')loadWindyOpen();
   loadAll(true);
   loadCityLive();
   localizePlaces();
