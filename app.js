@@ -2797,7 +2797,7 @@ function stationNetworkCard(){
  if(!window.MONOStationNetwork||!c)return '';
  const radius=window.MONOCommunityStations?.radius(c)||12;
  const rows=window.MONOStationNetwork.combine({boxes,stations:source,pws:state.pws,point:c,radiusKm:radius});
- return window.MONOStationNetwork.render({rows,filter:state.stationNetFilter||'all',limit:state.stationNetLimit||35,lang:state.lang,radius});
+ return window.MONOStationNetwork.render({rows,filter:state.stationNetFilter||'all',limit:state.stationNetLimit||35,lang:state.lang,radius,zone:state.view?.zone||null});
 }
 
 /* ------------------------------------------------------------------ page: stations */
