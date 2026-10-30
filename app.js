@@ -733,7 +733,7 @@ async function loadAll(force = false) {
   loadSpace(force);
   loadCosmic(force);
   const c = state.city, gen = ++state.gen;
-  if(state.sharedRainCity !== ckey(c)) {state.sharedRain = null;state.stationRain = null;state.communityStations = null;}
+  if(state.sharedRainCity !== ckey(c)) {state.sharedRain = null;state.stationRain = null;state.communityStations = null;state.communityRain = null;}
   state.sharedRainCity = ckey(c);
   state.mainErr = false; render();
   try {
@@ -765,8 +765,8 @@ async function loadAll(force = false) {
   if (location.protocol.startsWith('http')) {
     const params={near:`${(+c.lon).toFixed(4)},${(+c.lat).toFixed(4)}`,maxDistance:12000,exposure:'outdoor',full:'true'};
     jobs.push(getJSON(q('https://api.opensensemap.org/boxes',params),25000)
-      .then(d=>{if(gen===state.gen){state.communityStations=window.MONOCommunityStations?.parse(d,c)||[];schedule();}})
-      .catch(()=>{if(gen===state.gen){state.communityStations=null;schedule();}}));
+      .then(d=>{if(gen===state.gen){state.communityStations=window.MONOCommunityStations?.parse(d,c)||[];state.communityRain=window.MONOCommunityStations?.parseRain(d,c)||[];schedule();}})
+      .catch(()=>{if(gen===state.gen){state.communityStations=null;state.communityRain=null;schedule();}}));
   }
   jobs.push(getJSON(longURL(c)).then(d => { if (gen === state.gen) { state.long = d; schedule(); } }).catch(() => {}));
   jobs.push(fetchHolidays(c).then(h => { if (gen === state.gen) { state.hol = h; schedule(); } }).catch(() => {}));
@@ -1415,7 +1415,7 @@ function rainPage() {
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const eps = rainEpisodes();
   const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain}) || '') + communityStationsCard() + rainNowCard(false)
+  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain}) || '') + communityRainCard() + communityStationsCard() + rainNowCard(false)
     + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
        <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
@@ -2714,7 +2714,7 @@ function localRainGaugeDirectory() {
       Math.abs(c.lat - 40.6401) > 0.45 || Math.abs(c.lon - 22.9444) > 0.50) return '';
   const el = state.lang === 'el';
   const providers = [
-    ['meteo.gr / ΕΑΑ', 'https://meteo.gr/cf-stations.cfm?city_id=1',
+    ['meteo.gr / ΕΑΑ', 'https://www.meteo.gr/thessaloniki/',
       el ? 'Κέντρο, ΔΕΘ, Καλαμαριά, Κορδελιό, Πυλαία, Φοίνικας, ΝΟΗΣΙΣ' :
            'Centre, TIF, Kalamaria, Kordelio, Pylaia, Foinikas, NOESIS'],
     ['Meteothes', 'https://meteothes.gr/',
@@ -2767,8 +2767,31 @@ function stationsPage() {
       <div class="panelhead" style="margin-top:18px"><b>${T(s.src === 'synop' ? 'rawSynop' : 'rawMetar')}</b></div>${s.list.slice(-8).reverse().map(o => `<p class="mono-raw">${esc(o.raw || '')}</p>`).join('')}</section>`;
   }
   const cnt = state.obs?.counts ? `<div class="chips"><span class="badge">METAR · ${state.obs.counts.metar}</span><span class="badge">SYNOP · ${state.obs.counts.synop}</span>${state.pws?.n ? `<span class="badge">Netatmo · ${state.pws.n}</span>` : ''}</div>` : '';
-  return head + cnt + localRainGaugeDirectory() + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
+  return head + cnt + communityRainCard() + localRainGaugeDirectory() + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
 }
+
+function communityRainCard(){
+ const gauges=state.communityRain,el=state.lang==='el';
+ if(!Array.isArray(gauges))return '';
+ const c=state.city||{},thess=c.cc==='GR'&&Math.abs((c.lat||0)-40.6401)<0.45&&Math.abs((c.lon||0)-22.9444)<0.5;
+ if(!gauges.length)return thess&&state.page==='stations'?'<section class="section card"><div class="panelhead"><b>☔ openSenseMap</b></div><p class="notice">'+
+   (el?'Δεν βρέθηκαν πρόσφατες βροχομετρικές μετρήσεις εντός 12 km. Δεν εμφανίζουμε ανύπαρκτα mm.':'No recent rain-gauge observations within 12 km. No fabricated amounts.')+'</p></section>':'';
+ const periods={rate:el?'Ένταση, όχι σύνολο βροχής':'Rain rate, not total',
+   '24h':el?'24ωρο, όπως δηλώθηκε':'24 h, as labeled',today:el?'Σήμερα, όπως δηλώθηκε':'Today, as labeled',
+   month:el?'Μήνας, όπως δηλώθηκε':'Month, as labeled',hour:el?'Ώρα, όπως δηλώθηκε':'Hour, as labeled',
+   unknown:el?'Μη δηλωμένη περίοδος':'Period unspecified'};
+ const rows=gauges.slice(0,12).map(g=>'<div class="kv"><span><b>'+esc(g.name)+'</b><small style="display:block">'+
+   num(g.dist,1)+' km · '+esc(g.title)+' · '+esc(ageText(g.t))+'</small><small style="display:block">'+
+   esc(periods[g.period]||periods.unknown)+'</small></span><strong>'+num(g.value,1)+' '+esc(g.unit)+'</strong></div>').join('');
+ return '<section class="section card"><div class="panelhead"><div><b>☔ '+
+   (el?'Πραγματικοί τοπικοί αισθητήρες βροχής':'Actual nearby rain sensors')+
+   '</b><div class="section-sub">openSenseMap · '+gauges.length+' '+(el?'πρόσφατες μετρήσεις':'recent readings')+
+   ' · ≤12 km</div></div></div><p class="notice">'+
+   (el?'Ανεξάρτητοι αισθητήρες κοινότητας, όχι επίσημο δίκτυο. Η τιμή ισχύει μόνο στη θέση του αισθητήρα. Η ένταση σε mm/h δεν είναι συνολική βροχή.':
+      'Community sensors, not the official network. Values apply at each sensor. Rain rate in mm/h is not accumulated rainfall.')+
+   '</p>'+rows+'</section>';
+}
+
 function communityStationsCard() {
   const list=state.communityStations,el=state.lang==='el';
   if(!Array.isArray(list)||!list.length)return '';
@@ -3023,7 +3046,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true); localizePlaces();
