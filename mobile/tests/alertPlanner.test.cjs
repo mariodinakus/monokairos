@@ -40,3 +40,19 @@ test('never schedule alerts beyond 48h horizon',()=>{
  const v=planForecastAlerts({weather,prefs:{wind:true},now});
  assert.equal(v.length,0);
 });
+
+test('high intensity rainfall triggers potentially dangerous conditions alert, not duplicate rain',()=>{
+ const weather=weatherData();
+ weather.hourly.precipitation_probability[4]=95;
+ weather.hourly.precipitation[4]=14;
+ const v=planForecastAlerts({weather,prefs:{rain:true,storm:true},now});
+ assert.equal(v.length,1);
+ assert.equal(v[0].type,'storm');
+ assert.match(v[0].title,/Πιθανώς επικίνδυνα/);
+ assert.match(v[0].body,/όχι επίσημη προειδοποίηση/);
+});
+test('approaching moderate rain uses clear advance notice',()=>{
+ const v=planForecastAlerts({weather:weatherData({rain:true}),prefs:{rain:true,storm:true},now});
+ assert.equal(v.length,1);
+ assert.match(v[0].title,/30/);
+});
