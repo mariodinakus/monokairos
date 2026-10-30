@@ -4,6 +4,7 @@ const finite=Number.isFinite;
 const km=(a,b)=>{const r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r;
  const h=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2;
  return 12742*Math.asin(Math.min(1,Math.sqrt(h)));};
+function radius(point){return point?.cc==='GR'&&Math.abs(point.lat-40.6401)<0.45&&Math.abs(point.lon-22.9444)<0.5?30:12;}
 function parse(boxes,point,now=Date.now()){
  if(!Array.isArray(boxes)||!finite(point?.lat)||!finite(point?.lon))return [];
  return boxes.map(b=>{
@@ -18,10 +19,10 @@ function parse(boxes,point,now=Date.now()){
    else if(/humidity|luftfeucht|υγρασ/.test(title)&&s.unit==='%'&&v>=0&&v<=100)rh=v;
   }
   if(!finite(temp)||!t)return null;
-  const dist=km(point,{lat,lon});if(dist>12)return null;
+  const dist=km(point,{lat,lon});if(dist>radius(point))return null;
   return {id:/^[0-9a-f]{24}$/i.test(b._id||'')?b._id:null,name:String(b.name||'openSenseMap').slice(0,120),
    lat,lon,dist:Math.round(dist*10)/10,temp,rh,t};
- }).filter(Boolean).sort((a,b)=>a.dist-b.dist).slice(0,40);
+ }).filter(Boolean).sort((a,b)=>a.dist-b.dist).slice(0,80);
 }
 
 function parseRain(boxes,point,now=Date.now()){
@@ -30,7 +31,7 @@ function parseRain(boxes,point,now=Date.now()){
  for(const box of boxes){
   const [lon,lat]=box?.currentLocation?.coordinates||[];
   if(!Number.isFinite(lat)||!Number.isFinite(lon)||box.exposure==='indoor'||box.exposure==='mobile')continue;
-  const dist=km(point,{lat,lon});if(dist>12)continue;
+  const dist=km(point,{lat,lon});if(dist>radius(point))continue;
   for(const sensor of box.sensors||[]){
    const title=String(sensor.title||'').toLowerCase();
    if(!/rain|precip|niederschlag|regen|βροχ|υετ/.test(title))continue;
@@ -52,6 +53,6 @@ function parseRain(boxes,point,now=Date.now()){
  return out.sort((a,b)=>a.dist-b.dist||b.t-a.t).slice(0,40);
 }
 
-root.MONOCommunityStations={parse,parseRain};
-if(typeof module!=='undefined'&&module.exports)module.exports={parse,parseRain};
+root.MONOCommunityStations={parse,parseRain,radius};
+if(typeof module!=='undefined'&&module.exports)module.exports={parse,parseRain,radius};
 })(typeof window!=='undefined'?window:globalThis);
