@@ -2987,25 +2987,48 @@ function setCity(c) {
   window.scrollTo(0, 0); loadAll(true); localizePlaces();
 }
 const findCity = id => [...state.favorites, ...CITIES, state.city, ...(window.__results || [])].find(c => ckey(c) === id);
+let gpsRequestInFlight = false;
+async function applyGPSPosition(latitude, longitude, accuracy, silent = false) {
+  try {
+    const { lat, lon } = window.MONOGeo.roundCoordinates(Number(latitude), Number(longitude));
+    const approx = window.MONOGeo.isApproximateFix(Number(accuracy));
+    const nm = await reverseName(lat, lon);
+    const name = approx ? (state.lang === 'el' ? 'Προσεγγιστική θέση' : 'Approximate location') : (nm?.name || T('myLoc'));
+    // Do not repeatedly reload the entire forecast for the same rounded GPS fix.
+    if (state.city?.gps && ckey(state.city) === ckey({ lat, lon })) return true;
+    setCity({ name, nameEl: name, admin1: nm?.admin1, country: nm?.country, cc: nm?.cc || '', lat, lon, gps: true,
+      gpsApprox: approx, i18n: { [state.lang]: { name, admin1: nm?.admin1, country: nm?.country } } });
+    if (approx && !silent) toast(state.lang === 'el'
+      ? `GPS ±${Math.round(accuracy)} m: η περιοχή δεν είναι βέβαιη. Δοκίμασε ξανά έξω ή αναζήτησέ την.`
+      : `GPS ±${Math.round(accuracy)} m: area uncertain. Retry outdoors or search manually.`);
+    return true;
+  } catch { if (!silent) toast(T('geoError')); return false; }
+}
+// The native Expo shell supplies coordinates after OS permission; this avoids a
+// second WebView location prompt. Browser pages still use the browser's permission.
+window.MONOApplyNativeLocation = (lat, lon, accuracy) => applyGPSPosition(lat, lon, accuracy, true);
 function locate(silent = false) {
-  if (!silent && !window.confirm(state.lang === 'el' ? 'Το MONO θα χρησιμοποιήσει το GPS με στρογγυλοποίηση συντεταγμένων σε ~100 m (η πραγματική ακρίβεια εξαρτάται από τη συσκευή). Θα σταλεί σε Open-Meteo και στις πηγές καιρού/γεωκωδικοποίησης (BigDataCloud, IEM, NCEI) και στα API του MONO στη Vercel, όπως περιγράφεται στο Απόρρητο. Θέλεις να συνεχίσεις;' : 'MONO rounds GPS coordinates to ~100 m; actual accuracy depends on your device. They are sent to Open-Meteo, weather/geocoding sources (BigDataCloud, IEM, NCEI), and MONO APIs on Vercel as explained in Privacy. Continue?')) return Promise.resolve(false);
-  if (!navigator.geolocation) { if (!silent) toast(T('geoError')); return Promise.resolve(false); }
-  return new Promise(res => navigator.geolocation.getCurrentPosition(async p => {
-    try {
-      const { lat, lon } = window.MONOGeo.roundCoordinates(p.coords.latitude, p.coords.longitude);
-      const approx = window.MONOGeo.isApproximateFix(p.coords.accuracy);
-      const nm = await reverseName(lat, lon);
-      const name = approx ? (state.lang === 'el' ? 'Προσεγγιστική θέση' : 'Approximate location') : (nm?.name || T('myLoc'));
-      setCity({ name, nameEl: name, admin1: nm?.admin1, country: nm?.country, cc: nm?.cc || '', lat, lon, gps: true,
-        gpsApprox: approx, i18n: { [state.lang]: { name, admin1: nm?.admin1, country: nm?.country } } });
-      if (approx && !silent) toast(state.lang === 'el'
-        ? `GPS ±${Math.round(p.coords.accuracy)} m: η περιοχή δεν είναι βέβαιη. Δοκίμασε εκ νέου έξω ή αναζήτησέ την.`
-        : `GPS ±${Math.round(p.coords.accuracy)} m: area uncertain. Retry outdoors or search manually.`);
-      res(true);
-    } catch { if (!silent) toast(T('geoError')); res(false); }
-  }, () => { if (!silent) toast(T('geoError')); res(false); },
+  if (!navigator.geolocation || gpsRequestInFlight) {
+    if (!silent && !navigator.geolocation) toast(T('geoError'));
+    return Promise.resolve(false);
+  }
+  gpsRequestInFlight = true;
+  return new Promise(res => navigator.geolocation.getCurrentPosition(p => {
+    applyGPSPosition(p.coords.latitude, p.coords.longitude, p.coords.accuracy, silent)
+      .then(res).finally(() => { gpsRequestInFlight = false; });
+  }, () => { gpsRequestInFlight = false; if (!silent) toast(T('geoError')); res(false); },
   { enableHighAccuracy: true, timeout: 15000, maximumAge: 60e3 }));
 }
+async function refreshAllowedGPS() {
+  // A permission prompt must follow a deliberate user action; automatic reads
+  // are allowed only after the user granted GPS in browser settings.
+  if (!navigator.permissions?.query) return;
+  try {
+    const perm = await navigator.permissions.query({name:'geolocation'});
+    if (perm.state === 'granted' && (state.firstRun || state.city?.gps)) await locate(true);
+  } catch { /* Permissions API unavailable on this browser. */ }
+}
+
 function csv() {
   const V = state.view; if (!V) return;
   const head = ['local_time', 'utc', 'temp_c', 'p10_c', 'p90_c', 'rain_prob', 'rain_mm', 'storm_prob', 'snow_prob', 'fog_prob', 'gale_prob', 'wind_kmh', 'gust_kmh', 'dir_deg', 'rh_pct', 'cloud_pct', 'models_used', 'algorithm'];
@@ -3147,6 +3170,12 @@ function init() {
   loadCityLive();
   localizePlaces();
   loadNews();
+  refreshAllowedGPS();
+  let gpsRefreshAt = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !state.city?.gps || Date.now()-gpsRefreshAt < 15*60e3) return;
+    gpsRefreshAt = Date.now(); refreshAllowedGPS();
+  });
   setInterval(() => { if (document.visibilityState === 'visible') loadNews(); }, NEWS_TTL);
   setInterval(() => { if (document.visibilityState === 'visible') loadAll(false); }, REFRESH_LIVE);
   setInterval(() => { if (state.page === 'globe' || state.page === 'earth') globeTick(); if (document.visibilityState === 'visible' && state.view && state.page !== 'radar' && state.page !== 'globe') { recompute(); render(); } }, 60e3);
