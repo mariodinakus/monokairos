@@ -141,7 +141,7 @@ function combine({boxes,stations,pws,point,now=Date.now(),radiusKm=45}={}){
 const groupOf=k=>k==='rain'||k==='rainrate'||k==='rain1h'||k==='weather'?'rain':k==='wind'||k==='gust'||k==='direction'?'wind':
  k==='solar'||k==='uv'?'solar':k;
 function hasMetric(row,filter){return filter==='all'||Object.keys(row.metrics).some(k=>groupOf(k)===filter);}
-function render({rows=[],filter='all',limit=35,lang='el',radius=45}={}){
+function render({rows=[],filter='all',limit=35,lang='el',radius=45,zone=null}={}){
  const el=lang==='el',tr=names[el?'el':'en'];
  if(!options.includes(filter))filter='all';
  const filtered=rows.filter(x=>hasMetric(x,filter));
@@ -169,7 +169,7 @@ function render({rows=[],filter='all',limit=35,lang='el',radius=45}={}){
  };
  const cards=printed.map(r=>{
   const vals=Object.entries(r.metrics).filter(([k])=>filter==='all'||groupOf(k)===filter);
-  const date=new Date(r.at).toLocaleTimeString(el?'el-GR':'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Athens'});
+  const date=new Date(r.at).toLocaleTimeString(el?'el-GR':'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:zone||undefined});
   const link=r.link?'<a class="sn-source" href="'+safe(r.link)+'" target="_blank" rel="noopener noreferrer">'+
    (el?'Πρωτότυπος σταθμός ↗':'Original station ↗')+'</a>':'';
   return '<article class="sn-station"><div class="sn-stationhead"><div class="sn-stationname"><strong>'+
