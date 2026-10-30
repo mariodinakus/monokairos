@@ -23,20 +23,30 @@ function planForecastAlerts({weather,air,prefs,now=Date.now()}) {
    const mm=safeNumber(w.precipitation?.[i]);
    const gust=safeNumber(w.wind_gusts_10m?.[i]);
    const code=safeNumber(w.weather_code?.[i]);
-   if((p!==null&&p>=60)&&(mm!==null&&mm>=.6)){
+   const stormCode=[95,96,99].includes(code);
+   const intenseRain=mm!==null&&mm>=8;
+   const highRisk=code===99||(mm!==null&&mm>=12)||(stormCode&&gust!==null&&gust>=75);
+   if(stormCode||intenseRain){
+     const phenomenon=stormCode?'καταιγίδα':'έντονη βροχή';
+     const details=[
+       mm!==null&&mm>=1?rounded(mm)+' mm/ώρα':'',
+       gust!==null&&gust>=60?'ριπές '+Math.round(gust)+' km/h':''
+     ].filter(Boolean).join(' · ');
+     add('storm',stamp-40*60000,highRisk?'MONO · Πιθανώς επικίνδυνα φαινόμενα':'MONO · Έντονα φαινόμενα',
+       'Το μοντέλο προβλέπει '+phenomenon+' στην περιοχή σου'+(details?' ('+details+')':'')+
+       '. Εκτίμηση πρόγνωσης, όχι επίσημη προειδοποίηση ΕΜΥ.',12*HOUR);
+   }
+   // Avoid showing a low-severity "rain" notice just before a severe alert.
+   if(!stormCode&&!intenseRain&&(p!==null&&p>=60)&&(mm!==null&&mm>=.6)){
      const prevP=safeNumber(w.precipitation_probability?.[i-1])||0;
      const prevMm=safeNumber(w.precipitation?.[i-1])||0;
      if(i===0||prevP<40||prevMm<.3)
-      add('rain',stamp-30*60000,'MONO · Βροχή πλησιάζει',
-       'Πρόγνωση βροχής '+Math.round(p)+'% · '+rounded(mm)+' mm/ώρα. Πιθανή έναρξη περίπου σε 30 λεπτά.',5*HOUR);
-   }
-   if([95,96,99].includes(code)||(mm!==null&&mm>=8)){
-     add('storm',stamp-40*60000,'MONO · Έντονα φαινόμενα',
-       'Πρόγνωση καταιγίδας ή έντονης βροχής στην περιοχή σου. Δες την πρόγνωση πριν μετακινηθείς.',12*HOUR);
+       add('rain',stamp-30*60000,'MONO · Βροχή σε περίπου 30′',
+         'Πιθανότητα '+Math.round(p)+'% · ένταση '+rounded(mm)+' mm/ώρα. Πιθανή έναρξη στην περιοχή σου.',5*HOUR);
    }
    if(gust!==null&&gust>=62){
-     add('wind',stamp-40*60000,'MONO · Ισχυρές ριπές ανέμου',
-       'Πιθανές ριπές έως '+Math.round(gust)+' km/h. Πρόσεχε στις μετακινήσεις.',12*HOUR);
+     add('wind',stamp-40*60000,gust>=88?'MONO · Πολύ ισχυροί άνεμοι':'MONO · Ισχυροί άνεμοι',
+       'Προβλεπόμενες ριπές έως '+Math.round(gust)+' km/h στην περιοχή σου. Προσοχή στις μετακινήσεις.',12*HOUR);
    }
  }
  if(air?.hourly?.time && Array.isArray(air.hourly.time)){
