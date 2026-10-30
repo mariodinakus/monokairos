@@ -4,7 +4,7 @@ const finite=Number.isFinite;
 const km=(a,b)=>{const r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r;
  const h=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2;
  return 12742*Math.asin(Math.min(1,Math.sqrt(h)));};
-function radius(point){return point?.cc==='GR'&&Math.abs(point.lat-40.6401)<0.45&&Math.abs(point.lon-22.9444)<0.5?30:12;}
+function radius(point){return point?.cc==='GR'&&Math.abs(point.lat-40.6401)<0.45&&Math.abs(point.lon-22.9444)<0.5?45:12;}
 function parse(boxes,point,now=Date.now()){
  if(!Array.isArray(boxes)||!finite(point?.lat)||!finite(point?.lon))return [];
  return boxes.map(b=>{
