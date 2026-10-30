@@ -151,7 +151,7 @@ el: {
   newsLocal:'Για', newsLatest:'Τα πιο πρόσφατα', newsEmpty:'Καμία είδηση', newsEmptyCity:'Δεν υπάρχει πρόσφατο άρθρο που να αναφέρει την πόλη. Δες τις καρτέλες Ελλάδα και Κόσμος.', newsFail:'Οι πηγές ειδήσεων δεν απάντησαν. Δοκίμασε ξανά σε λίγο.', newsSources:'Πηγές',
   rawSynop:'Πρόσφατα μηνύματα SYNOP', pwsTitle:'Ερασιτεχνικοί σταθμοί (Netatmo)', pwsSub:'Σταθμοί σε σπίτια και μπαλκόνια, σε ακτίνα ~12 km', pwsNone:'Δεν βρέθηκαν ενεργοί σταθμοί κοντά.', pwsMedian:'Διάμεση θερμοκρασία', pwsRain:'Σταθμοί με βροχή την τελευταία ώρα', pwsNearest:'Οι πιο κοντινοί',
   pwsNote:'Δεν μπαίνουν στη διόρθωση του MONO: είναι πυκνοί αλλά συχνά στον ήλιο ή κοντά σε τοίχους. Η διάμεση τιμή όμως δείχνει καλά τη θερμοκρασία της γειτονιάς.',
-  stTitle:'Σταθμοί', stSub:'Ζωντανές μετρήσεις METAR (αεροδρόμια) και SYNOP (ΕΜΥ και εθνικές υπηρεσίες) από όλους τους σταθμούς της περιοχής.', stUse:'Χρήση για διόρθωση', stInUse:'Σε χρήση',
+  stTitle:'Σταθμοί', stSub:'Διαθέσιμες παρατηρήσεις METAR και SYNOP. Η βροχόπτωση ισχύει μόνο στη θέση του σταθμού, όχι σε ολόκληρη την πόλη.', stUse:'Χρήση για διόρθωση', stInUse:'Σε χρήση',
   stNone:'Δεν βρέθηκαν σταθμοί METAR ή SYNOP κοντά ή οι υπηρεσίες δεν απάντησαν.', stChart:'72 ώρες: σταθμός και MONO', rawMetar:'Πρόσφατα μηνύματα METAR',
   climTitle:'Κλίμα', climSub:'Ιστορικά δεδομένα πολλών ετών: μέσοι όροι, ρεκόρ, τάσεις και φαινόμενα ανά μήνα.',
   srcStation:'Σταθμός', srcEra:'ERA5 (αναανάλυση)', loadOlder:'Φόρτωση από το 1940', loadingYears:'Φόρτωση ετών', stFail:'Τα δεδομένα σταθμού δεν φορτώθηκαν· εμφανίζεται ERA5.', years:'έτη',
@@ -270,7 +270,7 @@ en: {
   newsLocal:'About', newsLatest:'Latest', newsEmpty:'No news', newsEmptyCity:'No recent article mentions this city. Try the Greece and World tabs.', newsFail:'The news sources did not respond. Try again shortly.', newsSources:'Sources',
   rawSynop:'Recent SYNOP reports', pwsTitle:'Personal stations (Netatmo)', pwsSub:'Home and balcony stations within ~12 km', pwsNone:'No active stations nearby.', pwsMedian:'Median temperature', pwsRain:'Stations with rain in the last hour', pwsNearest:'Nearest',
   pwsNote:'Not used for the MONO correction: they are dense but often sit in the sun or near walls. Their median is still a good read of the neighbourhood temperature.',
-  stTitle:'Stations', stSub:'Live METAR (airports) and SYNOP (national weather services) observations from every station in the area.', stUse:'Use for correction', stInUse:'In use',
+  stTitle:'Stations', stSub:'Available METAR and SYNOP observations. Rainfall represents only the reporting station, not an entire city.', stUse:'Use for correction', stInUse:'In use',
   stNone:'No METAR or SYNOP stations nearby, or the services did not respond.', stChart:'72 hours: station and MONO', rawMetar:'Recent METAR reports',
   climTitle:'Climate', climSub:'Many years of history: averages, records, trends and weather events by month.',
   srcStation:'Station', srcEra:'ERA5 (reanalysis)', loadOlder:'Load from 1940', loadingYears:'Loading years', stFail:'Station data did not load; showing ERA5.', years:'years',
@@ -2704,14 +2704,56 @@ function newsPage() {
   return head + chips + body + `<p class="notice">${T('newsSources')}: ${esc(srcs)} · ${T('updated')} ${hhmm(state.news.at)}</p>`;
 }
 
+
+/* Local rain gauges are linked as original-source measurements, not silently
+ * imported as METAR/SYNOP or blended into the MONO observed-rain total.
+ * Third-party availability, reporting periods and redistribution rules differ. */
+function localRainGaugeDirectory() {
+  const c = state.city || {};
+  if (c.cc !== 'GR' || !fin(c.lat) || !fin(c.lon) ||
+      Math.abs(c.lat - 40.6401) > 0.45 || Math.abs(c.lon - 22.9444) > 0.50) return '';
+  const el = state.lang === 'el';
+  const providers = [
+    ['meteo.gr / ΕΑΑ', 'https://meteo.gr/cf-stations.cfm?city_id=1',
+      el ? 'Κέντρο, ΔΕΘ, Καλαμαριά, Κορδελιό, Πυλαία, Φοίνικας, ΝΟΗΣΙΣ' :
+           'Centre, TIF, Kalamaria, Kordelio, Pylaia, Foinikas, NOESIS'],
+    ['Meteothes', 'https://meteothes.gr/',
+      el ? 'Ανεξάρτητος σταθμός ιστορικού κέντρου · ημερήσια βροχή και ένταση' :
+           'Independent historic-centre gauge · daily rain and rain rate'],
+    ['ΕΑΑ / Παρατηρητήριο Θεσσαλονίκης', 'https://www.meteo.gr/thessaloniki/',
+      el ? 'Περιφερειακό δίκτυο και χάρτης αυτόματων σταθμών' :
+           'Regional automatic weather-station network and map']
+  ];
+  const links = providers.map(([name, url, desc]) =>
+    '<div class="kv"><span><b>' + esc(name) + '</b><small style="display:block">' +
+    esc(desc) + '</small></span><a href="' + esc(url) +
+    '" target="_blank" rel="noopener noreferrer">' +
+    (el ? 'Μετρήσεις ↗' : 'Readings ↗') + '</a></div>').join('');
+  return '<section class="section card" aria-label="' +
+    (el ? 'Τοπικά βροχόμετρα Θεσσαλονίκης' : 'Thessaloniki local rain gauges') +
+    '"><div class="panelhead"><div><b>' +
+    (el ? '☔ Περισσότερα βροχόμετρα στη Θεσσαλονίκη' : '☔ More Thessaloniki rain gauges') +
+    '</b><div class="section-sub">' +
+    (el ? 'Τοπικοί σταθμοί πέρα από τα METAR/SYNOP του MONO' :
+          'Local stations beyond MONO’s METAR/SYNOP network') +
+    '</div></div></div><p class="notice">' +
+    (el ? 'Το ύψος βροχής στο αεροδρόμιο δεν είναι η συνολική βροχή της πόλης. ' +
+          'Οι σύνδεσμοι ανοίγουν τις πρωτότυπες μετρήσεις των τοπικών παρόχων. ' +
+          'Δεν ενσωματώνονται ακόμη αυτόματα στους υπολογισμούς του MONO.' :
+          'Airport rainfall is not the rainfall total for the city. ' +
+          'These links open the original local-provider readings. ' +
+          'They are not yet automatically ingested into MONO calculations.') +
+    '</p>' + links + '</section>';
+}
+
 /* ------------------------------------------------------------------ page: stations */
 function stationsPage() {
   const V = state.view;
   const head = header(T('stTitle'), T('stSub'));
-  if (!V || !state.obs) return head + loadingCard() + communityStationsCard();
-  if (!V.stations.length) return head + communityStationsCard() + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
+  if (!V || !state.obs) return head + localRainGaugeDirectory() + loadingCard() + communityStationsCard();
+  if (!V.stations.length) return head + localRainGaugeDirectory() + communityStationsCard() + `<div class="card placeholder"><b>${T('noData')}</b>${T('stNone')}</div>`;
   const cards = V.stations.slice(0, 30).map(s => { const o = s.last, inUse = V.station?.id === s.id, gauge = window.MONORainIntelligence?.observed([s],null);
-    return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div>${gauge ? `<div class="citycountry">🌧 ${num(gauge.mm,1)} mm · ${num(gauge.covered,0)}/24 h · ${esc(gauge.type)}</div>` : ''}</div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
+    return `<article class="card stcard ${inUse ? 'inuse' : ''}"><div class="citytop"><div><div class="cityname">${esc(s.id)} <span class="tag ${s.src === 'synop' ? 'synop' : 'metar'}">${s.src === 'synop' ? 'SYNOP' : 'METAR'}</span></div><div class="citycountry">${esc(s.name || '')}</div><div class="citycountry">${num(s.dist)} km${fin(s.elev) ? ` · ${num(s.elev)} m` : ''}</div>${gauge ? `<div class="citycountry">🌧 ${num(gauge.mm,1)} mm · ${num(gauge.covered,0)}/24 h · ${esc(gauge.type)} · ${state.lang === 'el' ? 'μόνο στη θέση του σταθμού' : 'at this station only'}</div>` : ''}</div>${o ? icon(metarCode(o) ?? 3, 1, 'cityicon') : ''}</div>
       <div class="stvals"><span class="citytemp">${deg(o?.temp)}</span><div class="compact">${T('humidity')} ${num(M.rhFromDew(o?.temp, o?.dewp))}% · ${T('dew')} ${deg(o?.dewp)}<br>${T('wind')} ${num(o?.wspd)} km/h ${dirArrow(o?.wdir)}${fin(o?.wspd) ? ` · ${windBft(o.wspd)}` : ''}${fin(o?.wgst) ? ` · ${T('gust')} ${num(o.wgst)} km/h` : ''}<br>${num(o?.pres)} hPa${fin(o?.vis) ? ` · ${num(o.vis, o.vis < 10 ? 1 : 0)} km` : ''}</div></div>
       <div class="compact">${o?.wx?.length ? esc(wxText(o)) + ' · ' : ''}${o ? esc(ageText(o.t)) : ''}</div>
       <div class="citybottom">${inUse ? `<span class="badge">✓ ${T('stInUse')}</span>` : `<button class="cityopen" data-action="station" data-id="${esc(s.id)}">${T('stUse')}</button>`}</div></article>`; }).join('');
@@ -2725,7 +2767,7 @@ function stationsPage() {
       <div class="panelhead" style="margin-top:18px"><b>${T(s.src === 'synop' ? 'rawSynop' : 'rawMetar')}</b></div>${s.list.slice(-8).reverse().map(o => `<p class="mono-raw">${esc(o.raw || '')}</p>`).join('')}</section>`;
   }
   const cnt = state.obs?.counts ? `<div class="chips"><span class="badge">METAR · ${state.obs.counts.metar}</span><span class="badge">SYNOP · ${state.obs.counts.synop}</span>${state.pws?.n ? `<span class="badge">Netatmo · ${state.pws.n}</span>` : ''}</div>` : '';
-  return head + cnt + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
+  return head + cnt + localRainGaugeDirectory() + communityStationsCard() + pwsCard() + `<div class="cities-grid">${cards}</div>` + detail;
 }
 function communityStationsCard() {
   const list=state.communityStations,el=state.lang==='el';
