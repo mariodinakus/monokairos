@@ -162,6 +162,28 @@ html[data-theme=dark]{--warm:#fb923c;--cold:#60a5fa;--w-yellow:#f2c94c;--w-orang
 .zoorow em.soft{background:var(--soft);color:var(--sub)}
 .zoorow.base{opacity:.6}.zoorow.base .wbar span{background:var(--muted)}
 .zoorow.me{background:var(--soft);margin:0 -10px;padding:11px 10px;border-radius:10px;border-top-color:transparent}
+.zoorow>.mi-zoo-mobile{display:none}
+/* Explanations and actual verification scores, following MONO's existing cards. */
+.mi-section{margin-bottom:24px}
+.mi-header{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}
+.mi-header h2{font-size:23px;letter-spacing:-.045em;margin:6px 0 4px;line-height:1.15}
+.mi-header p,.mi-choice{font-size:12px;color:var(--sub);line-height:1.55;margin:0}
+.mi-lead{background:var(--ink);color:var(--inv);border-radius:30px;padding:8px 12px;font-size:11px;font-weight:800;white-space:nowrap}
+.mi-choice{margin:16px 0}.mi-choice b{color:var(--ink)}
+.mi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.mi-tile{border:1px solid var(--line);background:var(--soft);border-radius:14px;padding:16px;min-width:0}
+.mi-top{display:flex;align-items:center;gap:8px;font-size:13px}.mi-top>span{font-size:20px}
+.mi-numbers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0 11px}
+.mi-numbers span,.mi-brier span{display:block;font-size:10px;letter-spacing:.05em;color:var(--sub);font-weight:750}
+.mi-numbers b{display:block;margin-top:5px;font-size:20px;letter-spacing:-.04em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.mi-numbers small{font-size:10px;color:var(--sub);letter-spacing:0}
+.mi-tile p,.mi-reference p,.mi-method p{font-size:11px;color:var(--sub);line-height:1.55;margin:8px 0 0}
+.mi-tile .mi-bias{color:var(--ink)}
+.mi-brier{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 12px;margin:15px 0 11px}.mi-brier strong{font-size:25px;letter-spacing:-.045em;font-variant-numeric:tabular-nums}.mi-brier small{color:var(--sub);font-size:10px}
+.mi-reference,.mi-method{border-top:1px solid var(--line);margin-top:16px;padding-top:14px}.mi-reference b,.mi-method b{font-size:12px}.mi-reference small,.mi-method small{display:block;color:var(--sub);font-size:10px;line-height:1.5;margin-top:6px}
+.mi-glossary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}
+.mi-glossary details{border:1px solid var(--line);border-radius:10px;padding:11px 12px}.mi-glossary summary{cursor:pointer;font-size:11px}.mi-glossary summary b{margin-right:7px}.mi-glossary summary span{color:var(--sub)}.mi-glossary p{color:var(--sub);font-size:11px;line-height:1.55;margin:10px 0 0}
+@media(max-width:610px){.mi-grid,.mi-glossary{grid-template-columns:1fr}.mi-numbers b{font-size:19px}.zoorow>.mi-zoo-mobile{display:block;grid-column:1/-1;text-align:left;font-size:10px;color:var(--sub);margin-top:-3px}}
 .kv.strong span,.kv.strong b{color:var(--ink);font-weight:800}
 /* environment */
 .environment-section h3{font-size:13px;margin:0;line-height:1.5}

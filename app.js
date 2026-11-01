@@ -8,7 +8,7 @@
 'use strict';
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
-const VERSION = '4.1';
+const VERSION = '4.2';
 const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
@@ -851,7 +851,7 @@ async function ensureTraining(c, gen, force = false) {
     const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
     const full = M.LEADS.flatMap(vars).join(','), noCloud = M.LEADS.flatMap(k => vars(k).slice(0,3)).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
     const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
-    const truthP = getJSON(q(ARCH, { ...base, hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover' }), 40000);
+    const truthP = getJSON(q(ARCH, { ...base, models: 'era5', hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover' }), 40000);
     const ms = MODELS.filter(m => active.includes(m.id));
     const runs = await Promise.allSettled(ms.map(m => { const used = state.models[m.id]?.used || m.id; return chain([used], id => q(PREV, { ...base, models: id, hourly: full })).catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: noCloud }))).catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: tOnly }))); }));
     const truth = await truthP;
@@ -2671,7 +2671,7 @@ function labPage() {
     const maxMae = Math.max(...names.map(m => t[m].mae));
     const zoo = names.map(m => { const isBase = m === 'clim' || m === 'persist', sk = fin(clim) && clim > 0 && !isBase ? 1 - t[m].mae / clim : null;
       return `<div class="zoorow ${m === ch ? 'me' : ''} ${isBase ? 'base' : ''}"><span><b>${esc(AN(m))}</b>${m === ch ? ` <em>${T('chosen')}</em>` : ''}${isBase ? ` <em class="soft">${T('baseline')}</em>` : ''}${m === 'combo' ? `<small>${Object.entries(LT.combo).map(([a, w]) => `${esc(AN(a))} ${Math.round(w * 100)}%`).join(' · ')}</small>` : ''}</span>
-        <div class="wbar"><span style="width:${(100 * t[m].mae / maxMae).toFixed(0)}%"></span></div><b>${num(t[m].mae, 2)}°</b><small class="hide-sm">${num(t[m].rmse, 2)}°</small><small class="hide-sm">${fin(sk) ? `${num(sk * 100)}%` : '—'}</small><small class="hide-sm">${LT.val[m] ? num(LT.val[m].mae, 2) + '°' : '—'}</small></div>`; }).join('');
+        <div class="wbar"><span style="width:${maxMae > 0 ? (100 * t[m].mae / maxMae).toFixed(0) : 0}%"></span></div><b>${num(t[m].mae, 2)}°</b><small class="hide-sm">${num(t[m].rmse, 2)}°</small><small class="hide-sm">${fin(sk) ? `${num(sk * 100)}%` : '—'}</small><small class="hide-sm">${LT.val[m] ? num(LT.val[m].mae, 2) + '°' : '—'}</small><small class="mi-zoo-mobile">MAE ${num(t[m].mae,2)}° · RMSE ${num(t[m].rmse,2)}° · n=${num(t[m].n)}</small></div>`; }).join('');
     const rows = V.rows.slice(V.iNow, V.iNow + 72);
     const zchart = chart({ rows, series: [...M.LIVE.filter(m => m !== ch).map(m => ({ vals: rows.map(r => r.methods?.[m] ?? null), cls: 'model' })), { vals: rows.map(r => r.methods?.[ch] ?? null), cls: 'mono' }] });
     const mos = LT.prod.mos?.models || {}, ids = Object.keys(mos).sort((a, b) => mos[b].weight - mos[a].weight);
@@ -2688,7 +2688,8 @@ function labPage() {
       <section class="section dual">${rain}${stationCard()}</section>`;
   }
   const steps = `<section class="section card"><div class="panelhead"><b>${T('steps')}</b></div><ol class="steps">${T('stepsList').map(([a, b]) => `<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol></section>`;
-  return head + chips + body + liveCard() + steps;
+  const insights = window.MONOModelInsights?.render({train:tr,view:V,stationLearning:state.stationRain,lead:k,lang:state.lang,algorithmName:AN}) || '';
+  return head + chips + insights + body + liveCard() + steps;
 }
 function stationCard() {
   const V = state.view, S = V.S;
