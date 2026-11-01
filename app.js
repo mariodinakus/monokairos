@@ -340,7 +340,7 @@ en: {
 Object.assign(L.el, {
   rain:'Βροχή', rainTitle:'Πρόγνωση βροχής', rainSub:'Πότε αρχίζει, πότε σταματά, πόση θα ρίξει και πόσο σίγουρο είναι — ώρα με την ώρα.',
   rNowLabel:'Αυτή τη στιγμή', rEpisodes:'Επεισόδια βροχής · 7 ημέρες', rEpisodesSub:'Κάθε συνεχόμενο διάστημα με βροχή, με αρχή, τέλος, σύνολο και κορύφωση.',
-  r15:'Επόμενες 6 ώρες ανά 15 λεπτά', r15Sub:'Λεπτομέρεια από μοντέλο υψηλής ανάλυσης (Open-Meteo, 15′). Κάθε στήλη = βροχή στο τέταρτο που τελειώνει εκείνη την ώρα.',
+  r15:'Επόμενες 6 ώρες ανά 15 λεπτά', r15Sub:'Πρόγνωση Open-Meteo. Κάθε στήλη αφορά το προηγούμενο τέταρτο. Σε ορισμένες περιοχές τα 15λεπτα προκύπτουν από ωριαία δεδομένα.',
   r15None:'Η λεπτομέρεια ανά 15 λεπτά δεν είναι διαθέσιμη για αυτό το σημείο.', r15Dry:'Καμία βροχή τις επόμενες 6 ώρες', rHourly:'Ώρα με την ώρα · 48 ώρες', rHourlySub:'Τα ξηρά διαστήματα συμπτύσσονται. mm/ώρα = λίτρα νερό ανά τετραγωνικό μέτρο σε μία ώρα.',
   rChart:'72 ώρες με μια ματιά', rChartSub:'Στήλες: αναμενόμενα mm ανά ώρα (ανοιχτό: το υγρό σενάριο 90%). Γραμμή: πιθανότητα βροχής.',
   rDaily:'Ανά ημέρα', rDailySub:'Σύνολο ημέρας, εύρος από τα μέλη των ensembles (10%–90%) και οι πιο βροχερές ώρες.',
@@ -351,8 +351,8 @@ Object.assign(L.el, {
   rPlain:['','λίγες σταγόνες, μόλις βρέχει το έδαφος','ελαφριά βροχή — μια ομπρέλα αρκεί','κανονική βροχή — χωρίς ομπρέλα βρέχεσαι γρήγορα','δυνατή βροχή — λιμνούλες και νερά στους δρόμους','πολύ δυνατή βροχή — νερά στους δρόμους, οδήγησε αργά','εξαιρετικά έντονη — μακριά από ρέματα και υπόγεια'],
   rTotalWords:[[1,'ελάχιστη — ίσα που βρέχει το έδαφος'],[5,'λίγη βροχή'],[15,'αξιόλογη βροχή — μουσκεύει καλά το έδαφος'],[40,'πολλή βροχή — πιθανά νερά στους δρόμους'],[1e9,'πάρα πολλή βροχή — κίνδυνος πλημμύρας']],
   rNowRaining:(w, end) => `Βρέχει τώρα (${w}).${end ? ` Αναμένεται να σταματήσει ${end}.` : ''}`,
-  rNowSoon:(inTxt, at, until) => `Δεν βρέχει τώρα. Η βροχή αρχίζει σε ${inTxt} (${at}) και κρατά μέχρι ${until}.`,
-  rNowLater:(at) => `Δεν βρέχει τώρα και δεν αναμένεται βροχή τις επόμενες 24 ώρες. Η επόμενη βροχή φαίνεται ${at}.`, rAtFmt:(d, h, k) => (k === 0 ? `σήμερα στις ${h}` : k === 1 ? `αύριο στις ${h}` : `την ${d} στις ${h}`),
+  rNowSoon:(inTxt, at, until) => `Η πρόγνωση δείχνει βροχή σε περίπου ${inTxt} (${at}) έως ${until}.`,
+  rNowLater:(at) => `Δεν προβλέπεται βροχή τις επόμενες 24 ώρες. Η επόμενη βροχή φαίνεται ${at}.`, rAtFmt:(d, h, k) => (k === 0 ? `σήμερα στις ${h}` : k === 1 ? `αύριο στις ${h}` : `την ${d} στις ${h}`),
   rNowNone:'Δεν βρέχει και δεν φαίνεται βροχή τις επόμενες 7 ημέρες.',
   rNowObs:(st, wx) => `Ο σταθμός ${st} μετρά: ${wx}.`,
   rIn:(h, m) => (h ? `${h} ${h === 1 ? 'ώρα' : 'ώρες'}${m ? ` και ${m}′` : ''}` : `${m}′`),
@@ -360,7 +360,7 @@ Object.assign(L.el, {
   rShapeSteady:(w, r) => `Θα είναι κυρίως ${w} (~${r} mm/ώρα).`,
   rShapePeak:(a, w, r) => `Η πιο έντονη ώρα είναι γύρω στις ${a}: ${w}, ~${r} mm/ώρα.`,
   rMmExplain:'1 mm βροχής = 1 λίτρο νερό σε κάθε τετραγωνικό μέτρο. Σε μπαλκόνι 2 m², 5 mm είναι 10 λίτρα νερό. Πάνω από 20 mm σε μια μέρα θεωρούνται πολλά.',
-  rUntil:(t) => t, rToday:'σήμερα', rTomorrow:'αύριο', rRefined:'ακριβής ώρα από 15λεπτα δεδομένα', rHourlyOnly:'ακρίβεια ώρας',
+  rUntil:(t) => t, rToday:'σήμερα', rTomorrow:'αύριο', rRefined:'εκτίμηση από δεδομένα 15λέπτου', rHourlyOnly:'ακρίβεια ώρας',
   rNoEpisodes:'Καμία βροχή στις επόμενες 7 ημέρες.', rWhatMm:'Τι σημαίνουν τα mm;', rUpdated:'Ενημέρωση',
   globeTitle:'Ζωντανή υδρόγειος', globeSub:'Πραγματικά δεδομένα: δορυφόρος NASA, ραντάρ RainViewer, βροχή IMERG και ζωντανό πλέγμα καιρού Open-Meteo. Γύρισέ τη, κάνε κλικ οπουδήποτε.',
   gRadar:'Ραντάρ βροχής', gGridL:'Πλέγμα καιρού', gTemps:'Πόλεις', gRain:'Βροχή IMERG', gVar:'Χρώμα πλέγματος', gV_temp:'Θερμοκρασία', gV_wind:'Άνεμος', gV_cloud:'Νέφωση', gV_precip:'Βροχή τώρα',
@@ -372,7 +372,7 @@ Object.assign(L.el, {
 Object.assign(L.en, {
   rain:'Rain', rainTitle:'Rain forecast', rainSub:'When it starts, when it stops, how much will fall and how sure that is — hour by hour.',
   rNowLabel:'Right now', rEpisodes:'Rain episodes · 7 days', rEpisodesSub:'Each continuous spell of rain, with start, end, total and peak.',
-  r15:'Next 6 hours in 15-minute steps', r15Sub:'Detail from a high-resolution model (Open-Meteo, 15′). Each column = rain in the quarter-hour ending at that time.',
+  r15:'Next 6 hours in 15-minute steps', r15Sub:'Open-Meteo forecast. Each column is the preceding quarter-hour; in some regions 15-minute data is interpolated from hourly data.',
   r15None:'15-minute detail is not available for this location.', r15Dry:'No rain in the next 6 hours', rHourly:'Hour by hour · 48 hours', rHourlySub:'Dry stretches are collapsed. mm/h = litres of water per square metre in one hour.',
   rChart:'72 hours at a glance', rChartSub:'Bars: expected mm per hour (light: the wet 90% scenario). Line: chance of rain.',
   rDaily:'By day', rDailySub:'Daily total, range from the ensemble members (10%–90%) and the wettest hours.',
@@ -383,8 +383,8 @@ Object.assign(L.en, {
   rPlain:['','a few drops, barely wets the ground','light rain — an umbrella is enough','proper rain — you get wet quickly without an umbrella','heavy rain — puddles and water on the roads','very heavy rain — water on roads, drive slowly','extreme — keep away from streams and basements'],
   rTotalWords:[[1,'very little — barely wets the ground'],[5,'a little rain'],[15,'a decent amount — soaks the ground'],[40,'a lot of rain — water on roads likely'],[1e9,'a huge amount — flood risk']],
   rNowRaining:(w, end) => `It is raining now (${w}).${end ? ` Expected to stop ${end}.` : ''}`, rAtFmt:(d, h, k) => (k === 0 ? `today at ${h}` : k === 1 ? `tomorrow at ${h}` : `on ${d} at ${h}`),
-  rNowSoon:(inTxt, at, until) => `Not raining now. Rain starts in ${inTxt} (${at}) and lasts until ${until}.`,
-  rNowLater:(at) => `Not raining now and no rain expected in the next 24 hours. The next rain looks like ${at}.`,
+  rNowSoon:(inTxt, at, until) => `Rain is forecast in approximately ${inTxt} (${at}) until ${until}.`,
+  rNowLater:(at) => `No rain is forecast in the next 24 hours. The next rain looks like ${at}.`,
   rNowNone:'Not raining, and no rain in sight for the next 7 days.',
   rNowObs:(st, wx) => `Station ${st} reports: ${wx}.`,
   rIn:(h, m) => (h ? `${h} ${h === 1 ? 'hour' : 'hours'}${m ? ` ${m}′` : ''}` : `${m}′`),
@@ -392,7 +392,7 @@ Object.assign(L.en, {
   rShapeSteady:(w, r) => `Mostly ${w} (~${r} mm/h).`,
   rShapePeak:(a, w, r) => `The most intense hour is around ${a}: ${w}, ~${r} mm/h.`,
   rMmExplain:'1 mm of rain = 1 litre of water on every square metre. 20 mm in a day counts as a lot.',
-  rUntil:(t) => t, rToday:'today', rTomorrow:'tomorrow', rRefined:'exact time from 15-minute data', rHourlyOnly:'hourly precision',
+  rUntil:(t) => t, rToday:'today', rTomorrow:'tomorrow', rRefined:'estimated from 15-minute data', rHourlyOnly:'hourly precision',
   rNoEpisodes:'No rain in the next 7 days.', rWhatMm:'What do the mm mean?', rUpdated:'Updated',
   globeTitle:'Live globe', globeSub:'Real data: NASA satellite, RainViewer radar, IMERG rainfall and a live Open-Meteo weather grid. Spin it, click anywhere.',
   gRadar:'Rain radar', gGridL:'Weather grid', gTemps:'Cities', gRain:'IMERG rain', gVar:'Grid colour', gV_temp:'Temperature', gV_wind:'Wind', gV_cloud:'Cloud', gV_precip:'Rain now',
@@ -509,9 +509,9 @@ const OM = 'https://api.open-meteo.com/v1/forecast', ENS = 'https://ensemble-api
 const ll = c => ({ latitude: (+c.lat).toFixed(4), longitude: (+c.lon).toFixed(4) });
 const mainURL = c => q(OM, { ...ll(c), timezone: 'auto', timeformat: 'unixtime', past_days: 3, forecast_days: 7,
   current: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,visibility,is_day',
-  hourly: 'temperature_2m,precipitation_probability,weather_code,is_day,uv_index,visibility', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
+  hourly: 'temperature_2m,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
 const modelURL = (c, id) => q(OM, { ...ll(c), models: id, hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
-const rain15URL = c => q(OM, { ...ll(c), minutely_15: 'precipitation,rain,snowfall,weather_code', forecast_minutely_15: 96, past_minutely_15: 4, timezone: 'auto', timeformat: 'unixtime' });
+const rain15URL = c => q(OM, { ...ll(c), minutely_15: 'precipitation,rain,showers,snowfall,weather_code', forecast_minutely_15: 96, past_minutely_15: 4, timezone: 'auto', timeformat: 'unixtime' });
 const ensURL = (c, id, vars) => q(ENS, { ...ll(c), models: id, hourly: vars, timeformat: 'unixtime', timezone: 'UTC', past_days: 1, forecast_days: 7 });
 
 /* ------------------------------------------------------------------ METAR */
@@ -760,7 +760,7 @@ async function loadAll(force = false) {
       .then(r => { if (gen === state.gen) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
       .catch(() => { if (gen === state.gen) { state.ens[e.id] = { error: true }; schedule(); } })));
   }
-  jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) state.rain15 = null; }));
+  jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, precipitation: d.minutely_15.precipitation, rain: d.minutely_15.rain, showers: d.minutely_15.showers, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) { state.rain15 = null; schedule(); } }));
   jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; state.obsReady = true; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; state.obsReady = true; schedule(); } }));
   if (location.protocol.startsWith('http')) jobs.push(fetchNetatmo(c).then(d => { if (gen === state.gen) { state.pws = d; schedule(); } }).catch(() => { if (gen === state.gen) state.pws = { off: true }; }));
   if (location.protocol.startsWith('http')) {
@@ -1117,11 +1117,17 @@ function nowPage() {
     ${mini(T('wind'), `${num(cur.wind)} <small>km/h</small> ${dirArrow(cur.dir)}${fin(cur.wind) ? `<span class="wind-beaufort" title="${state.lang === 'el' ? 'Κλίμακα Μποφόρ για μέση ταχύτητα ανέμου' : 'Beaufort scale for mean wind speed'}">${windBft(cur.wind)}</span>` : ''}`, fin(cur.gust) ? `${T('gust')} ${num(cur.gust)} km/h` : '&nbsp;', 'wind')}
     ${mini(T('humidity'), `${num(cur.rh)}%`, `${T('dew')} ${deg(cur.dew)} · ☁ ${ccTxt(rows[iN]?.cloud)}`, 'humidity')}
     ${mini(T('pressure'), `${num(cur.pres)} <small>hPa</small>`, fin(cur.vis) ? `${T('visibility')} ${num(cur.vis, cur.vis < 10 ? 1 : 0)} km` : '&nbsp;', 'pressure')}</div>`;
+  const hourlyRain = state.main?.hourly;
+  const nextHour = window.MONONextHour?.forecast({
+    fifteen: state.rain15,
+    hourly: hourlyRain?.time ? { t: hourlyRain.time.map(t => t * 1000), precipitation: hourlyRain.precipitation, rain: hourlyRain.rain, showers: hourlyRain.showers, at: state.fetchedAt } : null,
+    now: Date.now(), snapshot: state.snapshot
+  });
   const win = rows.slice(Math.max(0, iN - 24), iN + 49), past = r => r.t <= Date.now();
   const ch = chart({ rows: win, band: { lo: win.map(r => (past(r) ? null : r.lo)), hi: win.map(r => (past(r) ? null : r.hi)) },
     series: [{ vals: win.map(r => (past(r) ? r.tempModel : null)), cls: 'hind' }, { vals: win.map((r, j) => (!past(r) || (win[j + 1] && !past(win[j + 1])) ? r.temp : null)), cls: 'mono' }],
     points: win.map(r => r.obs), bars: win.map(r => (past(r) ? null : r.amount)), nowT: Date.now() });
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoForecast.compact(forecastOptions())}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
+  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || ''}${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoForecast.compact(forecastOptions())}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${esc(rainSentence())}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(rows.slice(iN, iN + 25), cur)}</section>
     <section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
@@ -1303,9 +1309,14 @@ function rainStatus(eps) {
     else if(report?.kind==='distant')lines.push(state.lang==='el'?'Δεν υπάρχει πρόσφατη κοντινή επιβεβαίωση· ο διαθέσιμος σταθμός είναι μακριά.':'No fresh close confirmation; the reporting station is distant.');
     else if(report?.kind==='unverified')lines.push(state.lang==='el'?'Δεν υπάρχει πρόσφατη αναφορά κοντινού σταθμού.':'No recent report from a nearby station.');
     if(e0 && e0.start-now<=24*3600e3){
-      const mins=Math.max(0,Math.round((e0.start-now)/60e3/15)*15);
-      lines.push(T('rNowSoon')(T('rIn')(Math.floor(mins/60),mins%60),rAt(e0.start),rAt(e0.end)));
-      big=T('rIn')(Math.floor(mins/60),mins%60);kind='soon';
+      if(e0.start<=now){
+        lines.push(state.lang==='el'?`Το μοντέλο δείχνει πιθανή βροχή αυτή την ώρα έως ${rAt(e0.end)}.`:`The model indicates possible rain now, until ${rAt(e0.end)}.`);
+        big=state.lang==='el'?'Πιθανή βροχή':'Possible rain';kind='soon';
+      }else{
+        const mins=Math.max(0,Math.round((e0.start-now)/60e3/15)*15);
+        lines.push(T('rNowSoon')(T('rIn')(Math.floor(mins/60),mins%60),rAt(e0.start),rAt(e0.end)));
+        big=T('rIn')(Math.floor(mins/60),mins%60);kind='soon';
+      }
     }else if(e0){lines.push(T('rNowLater')(rAt(e0.start)));big=T('rDry');kind='dry';}
     else{lines.push(state.lang==='el'?'Δεν αναμένεται αξιόλογη βροχή στο κοντινό διάστημα.':'No significant rainfall forecast shortly.');big=T('rDry');kind='dry';}
   }
@@ -1408,7 +1419,7 @@ function rainNowCard(compact) {
     <div class="rn-striplab"><span>${hhmm(next24[0]?.t - 3600e3)}</span><span>+12h</span><span>+24h</span></div>`;
   return `<section class="section card rn-now ${S.kind}"><div class="rn-nowgrid"><div><span class="label">☂ ${T('rNowLabel')}</span><div class="rn-big">${esc(S.big)}</div></div>
     <div class="rn-nowtext">${S.lines.map(x => `<p>${esc(x)}</p>`).join('')}
-      ${e0 ? `<div class="rn-chips"><span>${T('rProb')} <b>${pct(e0.pmax)}</b></span><span>${T('rTotal')} <b>${mm1(e0.mm)} mm</b></span><span>${T('rPeak')} <b>${mm1(e0.peakRate)} ${T('rMmH')}</b></span></div>` : ''}</div></div>
+      ${e0 ? `<div class="rn-chips"><span>${T('rProb')} <b>${pct(e0.pmax)}</b></span>${e0.rows.every(r=>fin(r.amount)) ? `<span>${T('rTotal')} <b>${mm1(e0.mm)} mm</b></span><span>${T('rPeak')} <b>${mm1(e0.peakRate)} ${T('rMmH')}</b></span>` : ''}</div>` : ''}</div></div>
     ${strip}${compact ? `<div class="rn-more">${btn('goto', '↗ ' + T('rOpen'), 'data-page="rain"')}</div>` : ''}</section>`;
 }
 function rainPage() {
