@@ -184,9 +184,9 @@
     const ts = rows.filter(r => fin(r.y)).map(r => r.t).sort((a, b) => a - b);
     return { a: ts[Math.floor(ts.length * 0.6)] ?? Infinity, b: ts[Math.floor(ts.length * 0.8)] ?? Infinity };
   }
-  function scoreMae(rows, f) { const e = []; for (const r of rows) { if (!fin(r.y)) continue; const p = f(r); if (fin(p)) e.push(Math.abs(p - r.y)); } return e.length ? { mae: mean(e), rmse: Math.sqrt(mean(e.map(x => x * x))), n: e.length } : null; }
+  function scoreMae(rows, f) { const e = []; for (const r of rows) { if (!fin(r.y)) continue; const p = f(r); if (fin(p)) e.push(p - r.y); } return e.length ? { mae: mean(e.map(Math.abs)), rmse: Math.sqrt(mean(e.map(x => x * x))), bias: mean(e), n: e.length } : null; }
   const clampNN = (v, o) => (o.nonNegative && fin(v) ? Math.max(0, v) : v);
-  const shrinkScores = s => Object.fromEntries(Object.entries(s).filter(([, v]) => v).map(([m, v]) => [m, { mae: r1(v.mae), rmse: r1(v.rmse), n: v.n }]));
+  const shrinkScores = s => Object.fromEntries(Object.entries(s).filter(([, v]) => v).map(([m, v]) => [m, { mae: r1(v.mae), rmse: r1(v.rmse), bias: r1(v.bias), n: v.n }]));
 
   function fitVariable(data, opts = {}) {
     const exclude = opts.exclude || new Set(), out = { leads: {} };
