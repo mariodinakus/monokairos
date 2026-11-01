@@ -385,6 +385,23 @@ html[data-theme=dark]{--r1:#46648c;--r2:#3f7fd8;--r3:#5b9cf0;--r4:#9cc6ff;--r5:#
 .nh-note{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--line);color:var(--sub);font-size:11px;line-height:1.5}
 @media(max-width:700px){.nh-layout{grid-template-columns:1fr 1fr;gap:18px}.nh-heading{grid-column:1/-1}.nh-water{padding-left:14px}.nh-note{font-size:11px}}
 @media(max-width:350px){.nh-layout{grid-template-columns:1fr}.nh-heading{grid-column:auto}.nh-water{border-left:0;padding-left:0}}
+/* Historic rainfall context for the selected month and location. */
+.mr-card{border-color:var(--line)}
+.mr-heading{display:flex;align-items:flex-start;gap:13px}
+.mr-icon{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border:1px solid var(--line);border-radius:14px;background:var(--soft);font-size:21px}
+.mr-heading h2{margin:5px 0 3px;font-size:19px;letter-spacing:-.035em;line-height:1.2}
+.mr-heading p,.mr-status{margin:0;color:var(--sub);font-size:12px;line-height:1.5}
+.mr-status{margin-top:18px}.mr-status+.outline-btn{margin-top:12px}
+.mr-metrics{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:15px;margin-top:22px}
+.mr-metrics>div{min-width:0;border-top:1px solid var(--line);padding-top:13px}
+.mr-metrics span{display:block;color:var(--muted);font-size:10px;font-weight:750;letter-spacing:.06em}
+.mr-metrics strong{display:block;margin-top:7px;font-size:clamp(24px,2.5vw,34px);line-height:1.1;letter-spacing:-.055em;font-variant-numeric:tabular-nums}
+.mr-metrics strong small{font-size:.42em;letter-spacing:0;color:var(--sub)}
+.mr-metrics p{margin:5px 0 0;color:var(--sub);font-size:11px;line-height:1.4}
+.mr-foot{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
+.mr-foot p{margin:0;color:var(--sub);font-size:11px;line-height:1.55}.mr-foot button{flex-shrink:0}
+@media(max-width:700px){.mr-metrics{grid-template-columns:1fr 1fr;gap:15px}.mr-metrics>div:last-child{grid-column:1/-1}.mr-foot{align-items:flex-start;flex-direction:column;gap:10px}}
+@media(max-width:350px){.mr-metrics{grid-template-columns:1fr}.mr-metrics>div:last-child{grid-column:auto}}
 .rn-now.wet{background:linear-gradient(135deg,var(--rainsoft),var(--panel) 70%)}
 .rn-nowgrid{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:22px;align-items:start}
 .rn-big{font-size:38px;font-weight:780;letter-spacing:-.06em;line-height:1.05;margin-top:8px;color:var(--rain)}
