@@ -9,7 +9,7 @@
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
 const VERSION = '4.1';
-const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate' };
+const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
 /* ------------------------------------------------------------------ catalogue */
@@ -413,7 +413,7 @@ Object.assign(L.en,{checkingStations:'Checking nearby stations… Confirming the
 
 /* ------------------------------------------------------------------ state */
 const $ = s => document.querySelector(s);
-const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate'].includes(k);
+const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain'].includes(k);
 const cacheAllowed = () => { try {return localStorage.getItem('mono_privacy_cache') === 'yes';} catch {return false;} };
 const read = (k, d) => { if (optionalCache(k) && !cacheAllowed()) return d; try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch { return d; } };
 const write = (k, v) => { if (optionalCache(k) && !cacheAllowed()) return false; try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
@@ -430,7 +430,7 @@ const state = {
   gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.globeTilesV1 ? (UI.gBase || 'detail') : 'detail', gLayers: UI.globeTilesV1 ? { radar: false, rain: false, grid: false, temps: true, ...(UI.gLayers || {}) } : { radar: false, rain: false, grid: false, temps: UI.gLayers?.temps ?? true }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
-  gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null
+  gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
 const AN = k => ALG_NAMES[state.lang][k] || k;
@@ -730,13 +730,46 @@ async function localizePlaces() {
 /* ------------------------------------------------------------------ loading */
 function align(srcTimes, arr, idx) { const out = new Array(idx.size).fill(null); if (!arr) return out; srcTimes.forEach((t, i) => { const j = idx.get(t * 1000); if (j !== undefined && arr[i] != null) out[j] = arr[i]; }); return out; }
 
+const monthlyRainMemo = new Map(), MONTHLY_RAIN_TTL = 90 * 86400e3;
+let monthlyRainSeq = 0;
+async function loadMonthlyRain(c, force = false) {
+  const key = ckey(c), previous = state.monthlyRain;
+  if (!force && previous?.key === key && ['loading', 'ready', 'error'].includes(previous.status)) return;
+  const seq = ++monthlyRainSeq;
+  if (!force) {
+    const cached = monthlyRainMemo.get(key) || read(K.monthlyRain, {})[key];
+    if (cached && Number.isFinite(cached.at) && Date.now() - cached.at >= 0 && Date.now() - cached.at < MONTHLY_RAIN_TTL && cached.normals) {
+      state.monthlyRain = { key, status:'ready', normals:cached.normals };
+      return;
+    }
+  }
+  state.monthlyRain = { key, status:'loading' };
+  try {
+    if (!window.MONOMonthlyRain) throw new Error('history component unavailable');
+    const normals = await window.MONOMonthlyRain.load(c);
+    if (seq !== monthlyRainSeq || ckey(state.city) !== key) return;
+    const cached = { at:Date.now(), normals };
+    monthlyRainMemo.set(key, cached);
+    while (monthlyRainMemo.size > 8) monthlyRainMemo.delete(monthlyRainMemo.keys().next().value);
+    if (cacheAllowed()) {
+      const all = read(K.monthlyRain, {}); all[key] = cached;
+      write(K.monthlyRain, Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 5)));
+    }
+    state.monthlyRain = { key, status:'ready', normals };
+  } catch {
+    if (seq !== monthlyRainSeq || ckey(state.city) !== key) return;
+    state.monthlyRain = { key, status:'error' };
+  }
+  schedule();
+}
+
 async function loadAll(force = false) {
   loadSpace(force);
   loadCosmic(force);
   const c = state.city, gen = ++state.gen;
   if(state.sharedRainCity !== ckey(c)) {state.sharedRain = null;state.stationRain = null;state.communityStations = null;state.communityRain = null;state.stationBoxes=null;}
   state.sharedRainCity = ckey(c);
-  state.mainErr = false; render();
+  state.mainErr = false; loadMonthlyRain(c); render();
   try {
     const d = await getJSON(mainURL(c));
     if (gen !== state.gen) return;
@@ -1127,7 +1160,7 @@ function nowPage() {
   const ch = chart({ rows: win, band: { lo: win.map(r => (past(r) ? null : r.lo)), hi: win.map(r => (past(r) ? null : r.hi)) },
     series: [{ vals: win.map(r => (past(r) ? r.tempModel : null)), cls: 'hind' }, { vals: win.map((r, j) => (!past(r) || (win[j + 1] && !past(win[j + 1])) ? r.temp : null)), cls: 'mono' }],
     points: win.map(r => r.obs), bars: win.map(r => (past(r) ? null : r.amount)), nowT: Date.now() });
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || ''}${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoForecast.compact(forecastOptions())}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
+  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || ''}${window.MONOMonthlyRain?.render(state.monthlyRain, {lang:state.lang,zone:V.zone,city:cityName(c)}) || ''}${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoForecast.compact(forecastOptions())}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${esc(rainSentence())}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(rows.slice(iN, iN + 25), cur)}</section>
     <section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
@@ -3158,7 +3191,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
   if (state.page === 'cities') state.page = 'now';
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true); if(state.page==='stations')loadWindyOpen(); localizePlaces();
@@ -3267,6 +3300,7 @@ function onClick(e) {
   else if (a === 'climSrc') { state.climSrc = b.dataset.v; render(); }
   else if (a === 'climOlder') loadClimate(1940);
   else if (a === 'climLoad') { loadClimate(1991); render(); }
+  else if (a === 'monthlyRainRetry') { loadMonthlyRain(state.city, true); render(); }
   else if (a === 'radarMode') radarSelectMode(b.dataset.v);
   else if (a === 'pmPlay') togglePhenomenaPlay();
   else if (a === 'pmTracks') {
@@ -3364,7 +3398,7 @@ function init() {
 }
 init();
 if (!cacheAllowed()) {
-  try { for (const k of ['mono31_train','mono31_snapshot','mono31_climate']) localStorage.removeItem(k); } catch {}
+  try { for (const k of ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain']) localStorage.removeItem(k); } catch {}
   if ('caches' in window) caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('mono-weather-')).map(k => caches.delete(k)))).catch(() => {});
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.filter(r => r.active?.scriptURL === new URL('sw.js',location.href).href).map(r => r.unregister()))).catch(() => {});
 }
