@@ -499,7 +499,7 @@ async function viaProxy(proxyPath, direct, ms = 20000) {
 }
 /* Open-Meteo rejects too many simultaneous requests from one browser: run model downloads a few at a time */
 function limiter(n) { let active = 0; const queue = []; const next = () => { if (active >= n || !queue.length) return; active++; const [fn, res, rej] = queue.shift(); fn().then(res, rej).finally(() => { active--; next(); }); }; return fn => new Promise((res, rej) => { queue.push([fn, res, rej]); next(); }); }
-const omSlot = limiter(6);
+const omSlot = limiter(3);
 async function chain(ids, make) {
   let last;
   for (const id of ids) { try { return { id, data: await getJSON(make(id)) }; } catch (e) { last = e; if (e.status && e.status >= 500) break; } }
@@ -737,30 +737,53 @@ function validPrimaryForecast(d) {
     Array.isArray(d.hourly?.time) && d.hourly.time.length &&
     Array.isArray(d.daily?.time) && d.daily.time.length);
 }
+// Two independent same-origin sources race first; the direct provider is a last fallback.
+// Failure details are displayed to the user instead of an unactionable generic error.
 async function fetchPrimaryForecast(c) {
-  const urls = [
-    mainURL(c).replace(OM, '/proxy/mono-forecast'),
-    mainURL(c)
-  ];
-  let lastError;
-  for (let i = 0; i < urls.length; i++) {
+  const errors = [];
+  const checked = async (label, url, timeout) => {
     try {
-      const d = await getJSON(urls[i], i === 0 ? 10000 : 14000);
-      if (!validPrimaryForecast(d)) throw new Error('Empty or malformed forecast response');
+      const d = await getJSON(url, timeout);
+      if (!validPrimaryForecast(d)) throw new Error('empty forecast');
       return d;
     } catch (err) {
-      lastError = err;
-      console.warn('[MONO] Primary forecast source ' + (i + 1) + ' failed:', err.message);
+      const msg = err?.name === 'AbortError' ? 'timeout'
+        : err?.status ? 'HTTP ' + err.status
+        : (err?.message || 'network error');
+      errors.push(label + ': ' + msg);
+      console.warn('[MONO] Forecast source ' + label + ' failed:', msg);
+      throw err;
     }
+  };
+  const proxy = mainURL(c).replace(OM, '/proxy/mono-forecast');
+  const server = q('/api/atmosphere', {
+    mode:'forecast', lat:(+c.lat).toFixed(4), lon:(+c.lon).toFixed(4)
+  });
+  try {
+    const value = await Promise.any([
+      checked('MONO API', server, 16000),
+      checked('Proxy', proxy, 14000)
+    ]);
+    state.forecastErrors = '';
+    return value;
+  } catch {
+    // The browser may block direct cross-origin traffic; failure is handled below.
   }
-  throw lastError || new Error('No primary forecast source available');
+  try {
+    const value = await checked('Open-Meteo', mainURL(c), 16000);
+    state.forecastErrors = '';
+    return value;
+  } catch (err) {
+    state.forecastErrors = errors.join(' · ');
+    throw err;
+  }
 }
 let primaryRetryCount = 0;
 function retryPrimaryForecast(gen) {
   if (primaryRetryCount >= 3) return;
-  const delay = [2500, 8000, 20000][primaryRetryCount++];
+  const delay = [3000, 10000, 25000][primaryRetryCount++];
   setTimeout(() => {
-    if (gen === state.gen && !state.main) loadAll(false);
+    if (gen === state.gen && (!state.main || state.snapshot)) loadAll(false);
   }, delay);
 }
 
@@ -800,10 +823,11 @@ async function loadMonthlyRain(c, force = false) {
 async function loadAll(force = false) {
   loadSpace(force);
   loadCosmic(force);
+  if (force) primaryRetryCount = 0;
   const c = state.city, gen = ++state.gen;
   if(state.sharedRainCity !== ckey(c)) {state.sharedRain = null;state.stationRain = null;state.communityStations = null;state.communityRain = null;state.stationBoxes=null;}
   state.sharedRainCity = ckey(c);
-  state.mainErr = false; loadMonthlyRain(c); render();
+  state.mainErr = false; state.forecastErrors = ''; loadMonthlyRain(c); render();
   try {
     // The primary forecast is essential for every page. Use a same-origin edge rewrite
     // route first; retry Open-Meteo directly when Vercel/upstream
@@ -815,11 +839,18 @@ async function loadAll(force = false) {
   } catch (err) {
     if (gen !== state.gen) return;
     console.warn('[MONO] Forecast unavailable; checking automatic recovery:', err.message);
-    if (!state.main) { const snap = read(K.snap, {})[ckey(c)]; if (snap) { state.view = snap.view; state.main = snap.main; state.snapshot = true; } else { state.mainErr = true; retryPrimaryForecast(gen); } }
+    if (!state.main) { const snap = read(K.snap, {})[ckey(c)]; if (snap) { state.view = snap.view; state.main = snap.main; state.snapshot = true; } else state.mainErr = true; }
+    retryPrimaryForecast(gen);
     state.obsReady = true; // A saved snapshot may be shown only with its saved-source label.
     render(); toast(T('loadFail')); return;
   }
+  // Show explicitly-labelled model data immediately; do not block the whole page
+  // while airport/SYNOP readings are still being verified in parallel.
+  state.obsReady = true;
   recompute(); render();
+  // Cache the essential successful forecast as soon as it arrives, only if the
+  // visitor explicitly opted into local caching. Optional models can take minutes.
+  saveSnapshot();
   const jobs = [], modelJobs = [];
   if (force || Date.now() - state.modelsAt > REFRESH_MODELS || !Object.keys(state.models).length) {
     state.modelsAt = Date.now();
@@ -828,7 +859,7 @@ async function loadAll(force = false) {
     modelJobs.push(...MODELS.filter(inBox).map(m => omSlot(() => chain([m.id, ...m.alt], id => modelURL(c, id)))
       .then(r => { if (gen === state.gen) { state.models[m.id] = { data: r.data, used: r.id }; schedule(); } })
       .catch(e => { if (gen === state.gen) { state.models[m.id] = /no data/i.test(e?.message || '') ? { outside: true } : { error: true }; schedule(); } })));
-    jobs.push(...ENSEMBLES.map(e => chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL)).catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE)))
+    jobs.push(...ENSEMBLES.map(e => omSlot(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL)).catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE))))
       .then(r => { if (gen === state.gen) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
       .catch(() => { if (gen === state.gen) { state.ens[e.id] = { error: true }; schedule(); } })));
   }
@@ -1157,7 +1188,7 @@ const favBtn = (c, short) => { const f = state.favorites.some(x => ckey(x) === c
 const header = (title, sub, actions = '') => `<div class="topline"><div><p class="eyebrow">MONO / ${esc(cityName(state.city))}</p><h1 class="display-title">${title}</h1><p class="subtitle">${sub}</p></div><div class="actions">${actions}</div></div>`;
 const mini = (label, value, note, asset) => `<div class="card mini"><div class="minihead"><span class="label">${label}</span>${asset ? `<img src="${iconSrc(asset)}" alt="">` : ''}</div><div><div class="minivalue">${value}</div><div class="mininote">${note}</div></div></div>`;
 const loadingCard = txt => `<div class="card placeholder"><b><span class="spin">◌</span> ${txt || T('loading')}</b></div>`;
-const errorCard = () => `<div class="card placeholder"><b>${T('noData')}</b>${T('loadFail')}<div class="spacer10"></div>${btn('reload', T('retry'))}</div>`;
+const errorCard = () => `<div class="card placeholder"><b>${T('noData')}</b>${T('loadFail')}<div class="spacer10"></div>${state.forecastErrors ? '<small style="display:block;overflow-wrap:anywhere;opacity:.8">' + esc(state.forecastErrors) + '</small>' : ''}<div class="spacer10"></div>${btn('reload', T('retry'))}</div>`;
 const probCls = p => (p >= 0.6 ? 'p-hi' : p >= 0.3 ? 'p-mid' : p >= 0.1 ? 'p-lo' : 'p-0');
 
 /* ------------------------------------------------------------------ page: now */
