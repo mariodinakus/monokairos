@@ -771,12 +771,10 @@ async function loadAll(force = false) {
   state.sharedRainCity = ckey(c);
   state.mainErr = false; loadMonthlyRain(c); render();
   try {
-    // The primary forecast is essential for every page. Use a cacheable
-    // same-origin route first; retry Open-Meteo directly when Vercel/upstream
+    // The primary forecast is essential for every page. Use a same-origin edge rewrite
+    // route first; retry Open-Meteo directly when Vercel/upstream
     // fails. Auxiliary data sources must never block the main forecast.
-    const d = await getJSON(q('/api/atmosphere', {
-      mode: 'forecast', lat: (+c.lat).toFixed(4), lon: (+c.lon).toFixed(4)
-    }), 14000).catch(proxyError => {
+    const d = await getJSON(mainURL(c).replace(OM, '/proxy/mono-forecast'), 14000).catch(proxyError => {
       console.warn('[MONO] Forecast proxy unavailable, trying direct source:', proxyError.message);
       return getJSON(mainURL(c), 18000);
     });
