@@ -3,6 +3,10 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/proxy/mono-forecast",
+      "destination": "https://api.open-meteo.com/v1/forecast"
+    },
+    {
       "source": "/proxy/awc/:path*",
       "destination": "https://aviationweather.gov/:path*"
     },
@@ -20,6 +24,15 @@
     }
   ],
   "headers": [
+    {
+      "source": "/proxy/mono-forecast",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=180, stale-while-revalidate=300"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

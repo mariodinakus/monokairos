@@ -730,6 +730,40 @@ async function localizePlaces() {
 /* ------------------------------------------------------------------ loading */
 function align(srcTimes, arr, idx) { const out = new Array(idx.size).fill(null); if (!arr) return out; srcTimes.forEach((t, i) => { const j = idx.get(t * 1000); if (j !== undefined && arr[i] != null) out[j] = arr[i]; }); return out; }
 
+/* A successful HTTP response can still contain invalid/empty JSON (CDN or proxy errors).
+ * Do not mark the primary forecast as loaded until all three critical sections exist. */
+function validPrimaryForecast(d) {
+  return !!(d && d.current && Number.isFinite(d.current.temperature_2m) &&
+    Array.isArray(d.hourly?.time) && d.hourly.time.length &&
+    Array.isArray(d.daily?.time) && d.daily.time.length);
+}
+async function fetchPrimaryForecast(c) {
+  const urls = [
+    mainURL(c).replace(OM, '/proxy/mono-forecast'),
+    mainURL(c)
+  ];
+  let lastError;
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      const d = await getJSON(urls[i], i === 0 ? 10000 : 14000);
+      if (!validPrimaryForecast(d)) throw new Error('Empty or malformed forecast response');
+      return d;
+    } catch (err) {
+      lastError = err;
+      console.warn('[MONO] Primary forecast source ' + (i + 1) + ' failed:', err.message);
+    }
+  }
+  throw lastError || new Error('No primary forecast source available');
+}
+let primaryRetryCount = 0;
+function retryPrimaryForecast(gen) {
+  if (primaryRetryCount >= 3) return;
+  const delay = [2500, 8000, 20000][primaryRetryCount++];
+  setTimeout(() => {
+    if (gen === state.gen && !state.main) loadAll(false);
+  }, delay);
+}
+
 const monthlyRainMemo = new Map(), MONTHLY_RAIN_TTL = 90 * 86400e3;
 let monthlyRainSeq = 0;
 async function loadMonthlyRain(c, force = false) {
@@ -771,20 +805,17 @@ async function loadAll(force = false) {
   state.sharedRainCity = ckey(c);
   state.mainErr = false; loadMonthlyRain(c); render();
   try {
-    // The primary forecast is essential for every page. Use a cacheable
-    // same-origin route first; retry Open-Meteo directly when Vercel/upstream
+    // The primary forecast is essential for every page. Use a same-origin edge rewrite
+    // route first; retry Open-Meteo directly when Vercel/upstream
     // fails. Auxiliary data sources must never block the main forecast.
-    const d = await getJSON(q('/api/atmosphere', {
-      mode: 'forecast', lat: (+c.lat).toFixed(4), lon: (+c.lon).toFixed(4)
-    }), 14000).catch(proxyError => {
-      console.warn('[MONO] Forecast proxy unavailable, trying direct source:', proxyError.message);
-      return getJSON(mainURL(c), 18000);
-    });
+    const d = await fetchPrimaryForecast(c);
     if (gen !== state.gen) return;
+    primaryRetryCount = 0;
     state.main = d; state.fetchedAt = Date.now(); state.snapshot = false;
-  } catch {
+  } catch (err) {
     if (gen !== state.gen) return;
-    if (!state.main) { const snap = read(K.snap, {})[ckey(c)]; if (snap) { state.view = snap.view; state.main = snap.main; state.snapshot = true; } else state.mainErr = true; }
+    console.warn('[MONO] Forecast unavailable; checking automatic recovery:', err.message);
+    if (!state.main) { const snap = read(K.snap, {})[ckey(c)]; if (snap) { state.view = snap.view; state.main = snap.main; state.snapshot = true; } else { state.mainErr = true; retryPrimaryForecast(gen); } }
     state.obsReady = true; // A saved snapshot may be shown only with its saved-source label.
     render(); toast(T('loadFail')); return;
   }
