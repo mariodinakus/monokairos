@@ -1,12 +1,26 @@
-const CACHE = 'mono-weather-v4.41';
+const CACHE = 'mono-weather-v4.45';
 const ASSETS = ['./', './index.html', './styles.css', './mono-plus.css', './clarity.css', './model.js', './climate.js', './earth-signals.js', './earth-signals.css', './earth-globe.js', './earth-globe.css', './storm-lens.js', './storm-lens.css', './mobile-nav.css', './rain-intelligence.css', './rain-intelligence.js', './community-stations.js', './station-network.js', './station-network.css', './quick-screens.css', './quick-screens.js', './phenomena-map.css', './phenomena-map.js', './weather-field.css', './weather-field.js', './trainer.js', './geo.js', './app.js', './environment.js', './atmosphere.js', './space-weather.js', './gravity-observatory.js', './gravity-observatory.css', './sky.js', './cosmic.js', './forecast-core.js', './forecast.js', './forecast-motion.js', './forecast.css', './vendor/astronomy.min.js', './icon.svg', './manifest.webmanifest', './app-icon-192.png', './app-icon-512.png',
   './next-hour.js', './monthly-rain.js', './model-insights.js', ...['sun','moon','partly-day','partly-night','cloud','overcast','fog','drizzle','rain','snow','storm','umbrella','wind','humidity','pressure','thermometer','uv','visibility','sunrise','sunset'].map(n => `./icons/${n}.svg`)];
-self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
+// Cache assets individually with limited concurrency: one missing optional file must
+// never prevent a new service worker from activating.
+self.addEventListener('install', e => e.waitUntil((async () => {
+  const cache = await caches.open(CACHE);
+  const queue = ASSETS.slice();
+  await Promise.all(Array.from({length: 4}, async () => {
+    while (queue.length) {
+      const path = queue.shift();
+      try { await cache.add(path); } catch (err) {
+        console.warn('[MONO SW] Optional asset could not be precached:', path, err?.message);
+      }
+    }
+  }));
+  await self.skipWaiting();
+})()));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 // Network first for the app shell; weather APIs are cross-origin and never cached here.
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (e.request.method !== 'GET' || u.origin !== self.location.origin || u.pathname.startsWith('/api/') || u.pathname.startsWith('/proxy/')) return;
   e.respondWith(fetch(e.request).then(r => { if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); } return r; })
-    .catch(() => caches.match(e.request).then(c => c || caches.match('./index.html'))));
+    .catch(() => caches.match(e.request).then(c => c || (e.request.mode === 'navigate' ? caches.match('./index.html') : Response.error()))));
 });
