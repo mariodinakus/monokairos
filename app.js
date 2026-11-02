@@ -499,10 +499,33 @@ async function viaProxy(proxyPath, direct, ms = 20000) {
 }
 /* Open-Meteo rejects too many simultaneous requests from one browser: run model downloads a few at a time */
 function limiter(n) { let active = 0; const queue = []; const next = () => { if (active >= n || !queue.length) return; active++; const [fn, res, rej] = queue.shift(); fn().then(res, rej).finally(() => { active--; next(); }); }; return fn => new Promise((res, rej) => { queue.push([fn, res, rej]); next(); }); }
+// Keep per-provider requests bounded to avoid rate-limit cascades.
 const omSlot = limiter(3);
+// Check forecast payloads: HTTP 200 alone is not proof that the model has usable values.
+async function getModelFeed(url) {
+  const checked = async target => {
+    const d = await getJSON(target, 25000);
+    if (!Array.isArray(d?.hourly?.time) || !Array.isArray(d?.hourly?.temperature_2m)
+      || !d.hourly.temperature_2m.some(Number.isFinite)) {
+      throw new Error('No usable model temperature data');
+    }
+    return d;
+  };
+  try { return await checked(url); }
+  catch (e) {
+    // A proxy failure must not permanently hide a model. Avoid a pointless direct
+    // retry for invalid model IDs or provider throttling.
+    if (!url.startsWith('/proxy/mono-') || (e.status && ![404, 500, 502, 503, 504].includes(e.status))) throw e;
+    const provider = url.startsWith('/proxy/mono-ensemble') ? 'https://ensemble-api.open-meteo.com/v1/ensemble' : 'https://api.open-meteo.com/v1/forecast';
+    return checked(provider + url.slice(url.indexOf('?')));
+  }
+}
 async function chain(ids, make) {
   let last;
-  for (const id of ids) { try { return { id, data: await getJSON(make(id)) }; } catch (e) { last = e; if (e.status && e.status >= 500) break; } }
+  for (const id of ids) {
+    try { return { id, data: await getModelFeed(make(id)) }; }
+    catch (e) { last = e; if (e.status === 429) break; }
+  }
   throw last || new Error('no id');
 }
 const OM = 'https://api.open-meteo.com/v1/forecast', ENS = 'https://ensemble-api.open-meteo.com/v1/ensemble', PREV = 'https://previous-runs-api.open-meteo.com/v1/forecast', ARCH = 'https://archive-api.open-meteo.com/v1/archive';
@@ -510,9 +533,9 @@ const ll = c => ({ latitude: (+c.lat).toFixed(4), longitude: (+c.lon).toFixed(4)
 const mainURL = c => q(OM, { ...ll(c), timezone: 'auto', timeformat: 'unixtime', past_days: 3, forecast_days: 7,
   current: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,visibility,is_day',
   hourly: 'temperature_2m,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
-const modelURL = (c, id) => q(OM, { ...ll(c), models: id, hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
+const modelURL = (c, id) => q('/proxy/mono-forecast', { ...ll(c), models: id, hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
 const rain15URL = c => q(OM, { ...ll(c), minutely_15: 'precipitation,rain,showers,snowfall,weather_code', forecast_minutely_15: 96, past_minutely_15: 4, timezone: 'auto', timeformat: 'unixtime' });
-const ensURL = (c, id, vars) => q(ENS, { ...ll(c), models: id, hourly: vars, timeformat: 'unixtime', timezone: 'UTC', past_days: 1, forecast_days: 7 });
+const ensURL = (c, id, vars) => q('/proxy/mono-ensemble', { ...ll(c), models: id, hourly: vars, timeformat: 'unixtime', timezone: 'UTC', past_days: 1, forecast_days: 7 });
 
 /* ------------------------------------------------------------------ METAR */
 function parseMetar(raw) {
@@ -858,10 +881,10 @@ async function loadAll(force = false) {
     MODELS.filter(m => !inBox(m)).forEach(m => { state.models[m.id] = { outside: true }; });
     modelJobs.push(...MODELS.filter(inBox).map(m => omSlot(() => chain([m.id, ...m.alt], id => modelURL(c, id)))
       .then(r => { if (gen === state.gen) { state.models[m.id] = { data: r.data, used: r.id }; schedule(); } })
-      .catch(e => { if (gen === state.gen) { state.models[m.id] = /no data/i.test(e?.message || '') ? { outside: true } : { error: true }; schedule(); } })));
+      .catch(e => { if (gen === state.gen) { state.models[m.id] = /no data|not available|outside/i.test(e?.message || '') ? { outside: true } : { error: true, reason: e?.status ? 'HTTP ' + e.status : (e?.message || 'network error') }; schedule(); } })));
     jobs.push(...ENSEMBLES.map(e => omSlot(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL)).catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE))))
       .then(r => { if (gen === state.gen) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
-      .catch(() => { if (gen === state.gen) { state.ens[e.id] = { error: true }; schedule(); } })));
+      .catch(err => { if (gen === state.gen) { state.ens[e.id] = { error: true, reason: err?.status ? 'HTTP ' + err.status : (err?.message || 'network error') }; schedule(); } })));
   }
   jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, precipitation: d.minutely_15.precipitation, rain: d.minutely_15.rain, showers: d.minutely_15.showers, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) { state.rain15 = null; schedule(); } }));
   jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; state.obsReady = true; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; state.obsReady = true; schedule(); } }));
@@ -2701,7 +2724,7 @@ function modelsPage() {
   const fmtV = v => (fin(v) ? (state.mvar === 'temp' ? deg(v) : num(v, state.mvar === 'rain' ? 1 : 0) + unitTxt) : '—');
   const tbl = MODELS.map(m => {
     const r = state.models[m.id], d = V.md[m.id];
-    const status = !r ? `<span class="muted">${T('loading')}</span>` : r.error ? `<span class="muted">${T('failed')}</span>` : d?.nocover ? `<span class="muted">${T('noCover')}</span>`
+    const status = !r ? `<span class="muted">${T('loading')}</span>` : r.error ? `<span class="muted" title="${esc(r.reason || '')}">${T('failed')}${r.reason ? ' · ' + esc(r.reason) : ''}</span>` : d?.nocover ? `<span class="muted">${T('noCover')}</span>`
       : V.dup[m.id] ? `<span class="muted">${T('dupOf')} ${esc(MODELS.find(x => x.id === V.dup[m.id])?.name)}</span>` : `<span class="dot"></span>${T('ok')}`;
     const w = Lk?.prod?.mos?.models?.[m.id]?.weight, hm = Lk?.perModel?.[m.id], lv = V.live[m.id];
     return `<tr class="${V.active.includes(m.id) ? '' : 'off'}"><td><b>${esc(m.name)}</b><div class="compact">${esc(m.org)}</div></td><td><span class="tag ${m.kind}">${T(m.kind)}</span></td><td class="num">${fmtV(at.models[m.id]?.[key])}</td>
@@ -2709,7 +2732,7 @@ function modelsPage() {
       <td class="num hide-sm">${hm ? `${num(hm.rawMae, 2)}° → ${num(hm.corMae, 2)}°` : '—'}</td><td class="num hide-sm">${lv ? `${num(lv.mae, 1)}° <small>(${sgn(lv.bias)})</small>` : '—'}</td><td class="hide-sm">${status}</td></tr>`;
   }).join('');
   const monoRow = `<tr class="monorow"><td><b>MONO</b><div class="compact">${esc(AN(Lk?.choice || 'untrained'))}</div></td><td><span class="tag mono">ML</span></td><td class="num"><b>${fmtV(mono[sel])}</b></td><td></td><td class="num hide-sm">${Lk ? `${num(Lk.test[Lk.choice]?.mae, 2)}°` : '—'}</td><td class="num hide-sm">${V.live.__mono ? `${num(V.live.__mono.mae, 1)}°` : '—'}</td><td class="hide-sm"></td></tr>`;
-  const ens = ENSEMBLES.map(e => { const r = state.ens[e.id], info = V.famInfo[e.id]; const st = !r ? T('loading') : r.error ? T('failed') : info?.nocover ? T('noCover') : `${info?.members ?? 0}`;
+  const ens = ENSEMBLES.map(e => { const r = state.ens[e.id], info = V.famInfo[e.id]; const st = !r ? T('loading') : r.error ? T('failed') + (r.reason ? ' · ' + esc(r.reason) : '') : info?.nocover ? T('noCover') : `${info?.members ?? 0}`;
     return `<tr class="${info?.members ? '' : 'off'}"><td><b>${esc(e.name)}</b><div class="compact">${esc(r?.used || e.id)}${info?.vars?.length ? ' · ' + info.vars.join(', ') : ''}</div></td><td class="num">${st}</td></tr>`; }).join('');
   return head + `<div class="chips">${[['temp', 'varTemp'], ['rain', 'varRain'], ['wind', 'varWind']].map(([v, l]) => `<button class="chip ${state.mvar === v ? 'active' : ''}" data-action="mvar" data-v="${v}">${T(l)}</button>`).join('')}</div>
     <div class="card">${ch}${legend([['mono', 'MONO'], ['model', T('legendModels')], ...(state.mvar === 'temp' ? [['band', 'Ensemble P10–P90']] : [])])}</div>

@@ -7,6 +7,10 @@
       "destination": "https://api.open-meteo.com/v1/forecast"
     },
     {
+      "source": "/proxy/mono-ensemble",
+      "destination": "https://ensemble-api.open-meteo.com/v1/ensemble"
+    },
+    {
       "source": "/proxy/awc/:path*",
       "destination": "https://aviationweather.gov/:path*"
     },
@@ -30,6 +34,15 @@
         {
           "key": "Cache-Control",
           "value": "public, s-maxage=180, stale-while-revalidate=300"
+        }
+      ]
+    },
+    {
+      "source": "/proxy/mono-ensemble",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=900, stale-while-revalidate=1800"
         }
       ]
     },
