@@ -77,10 +77,10 @@ jobs:
           echo "APK_FILE=$apk" >> "$GITHUB_ENV"
           ls -lh "$apk"
 
-      - name: Upload installable MONO v1.4.0 APK
+      - name: Upload installable MONO v1.5.0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: MONO-Kairos-Android-v1.4.0-APK
+          name: MONO-Kairos-Android-v1.5.0-APK
           path: ${{ env.APK_FILE }}
           if-no-files-found: error
           retention-days: 30
