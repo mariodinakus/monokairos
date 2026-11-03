@@ -226,3 +226,99 @@
     transition-duration: .01ms !important;
   }
 }
+
+/* Unified mobile app bar: one brand and one actions row, with a search row.
+   The React Native shell adds the bell inside .topActions rather than drawing
+   a second native header. Desktop language/theme buttons stay visible. */
+.mobile-utility-menu,
+.mobile-utility-items { display: contents; }
+.mobile-utility-menu > summary { display: none; }
+
+@media (max-width: 610px) {
+  .topbar {
+    grid-template-columns: 40px minmax(62px, 1fr) auto;
+    grid-template-rows: 40px 43px;
+    column-gap: 6px; row-gap: 8px;
+    min-height: 105px;
+    padding: 7px 10px 9px;
+    background: var(--panel);
+    box-shadow: 0 5px 18px rgba(0,0,0,.035);
+  }
+  .topbar .mobile-menu {
+    width: 40px; min-width: 40px; height: 39px;
+    border-radius: 12px; font-size: 19px;
+  }
+  .topbar .mobile-brand {
+    display: block; overflow: hidden; white-space: nowrap;
+    font-size: 14px; font-weight: 840; letter-spacing: -.065em;
+  }
+  .topbar .mobile-brand span {
+    margin-top: 0; font-size: 7px; letter-spacing: .14em;
+  }
+  .topbar .topActions {
+    gap: 3px; min-width: 0;
+  }
+  .topbar .topActions > .subtle-btn,
+  .topbar .topActions > .native-notification-btn,
+  .topbar .mobile-utility-menu > .mobile-more-btn {
+    box-sizing: border-box;
+    width: 36px; min-width: 36px; height: 38px; min-height: 38px;
+    padding: 0; display: grid; place-items: center;
+    font-size: 19px; border-radius: 12px;
+  }
+  .topbar .native-notification-btn svg {
+    display: block; width: 19px; height: 19px;
+  }
+  .topbar .mobile-utility-menu {
+    display: block; position: relative; flex: 0 0 auto;
+  }
+  .topbar .mobile-utility-menu > summary {
+    display: grid; list-style: none; cursor: pointer;
+    align-items: center; justify-content: center;
+    color: var(--ink); font-size: 23px; line-height: 1;
+    user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  .topbar .mobile-utility-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+  .topbar .mobile-utility-menu[open] > summary {
+    background: var(--soft);
+  }
+  .topbar .mobile-utility-items {
+    display: none;
+    position: absolute; z-index: 100; right: 0; top: calc(100% + 8px);
+    min-width: 144px; padding: 9px; gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 15px; background: var(--panel);
+    box-shadow: 0 14px 36px rgba(0,0,0,.17);
+  }
+  .topbar .mobile-utility-menu[open] > .mobile-utility-items {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topbar .mobile-utility-items .switch-btn,
+  .topbar .mobile-utility-items .subtle-btn {
+    min-width: 55px; height: 39px; min-height: 39px;
+    font-size: 11px; padding: 0 9px; border-radius: 10px;
+  }
+  .topbar .mobile-utility-items .subtle-btn { min-width: 39px; font-size: 19px; }
+  .topbar .search-area {
+    height: 43px; border-radius: 13px;
+    background: var(--bg);
+  }
+  .topbar .search-area input { font-size: 16px; }
+}
+
+@media (max-width: 370px) {
+  .topbar {
+    grid-template-columns: 37px minmax(60px, 1fr) auto;
+    column-gap: 5px; padding-inline: 8px;
+  }
+  .topbar .mobile-menu { min-width: 37px; width: 37px; }
+  .topbar .mobile-brand { display: block; font-size: 13px; }
+  .topbar .topActions > .subtle-btn,
+  .topbar .topActions > .native-notification-btn,
+  .topbar .mobile-utility-menu > .mobile-more-btn {
+    min-width: 33px; width: 33px; height: 37px; min-height: 37px;
+  }
+  .topbar .topActions { gap: 2px; }
+}
