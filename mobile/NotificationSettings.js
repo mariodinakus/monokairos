@@ -70,7 +70,7 @@ export default function NotificationSettings({visible,onClose}) {
    let p=await Notifications.getPermissionsAsync();
    if(!p.granted)p=await Notifications.requestPermissionsAsync();
    if(!p.granted){setMessage('Δεν δόθηκε άδεια ειδοποιήσεων. Ενεργοποίησέ τες στις ρυθμίσεις Android.');return;}
-   await Notifications.scheduleNotificationAsync({content:{title:'MONO WEATHER · ΔΟΚΙΜΗ',body:'Οι τοπικές ειδοποιήσεις λειτουργούν. Οι ζωντανές push χρειάζονται ενεργοποίηση FCM v1.',sound:'default',data:{route:'now'}},trigger:null});
+   await Notifications.scheduleNotificationAsync({content:{title:'MONO WEATHER · ΔΟΚΙΜΗ',body:'Οι τοπικές ειδοποιήσεις λειτουργούν. Οι ζωντανές push χρειάζονται ενεργοποίηση FCM v1.',sound:'default',data:{route:'now'}},trigger:Platform.OS==='android'?{channelId:'weather-alerts'}:null});
    setMessage('Η δοκιμαστική τοπική ειδοποίηση στάλθηκε. Αυτό ΔΕΝ επιβεβαιώνει ότι λειτουργούν οι απομακρυσμένες push.');
   } catch(e){setMessage('Η δοκιμή απέτυχε: '+String(e?.message||e).slice(0,130))}
   finally {setBusy(false);}
