@@ -1,0 +1,228 @@
+/* MONO Mobile Refinement — narrow-screen usability without changing desktop layouts.
+   The user-selected light/dark theme remains the source of all component colors. */
+
+@media (max-width: 930px) {
+  html, body { max-width: 100%; overflow-x: clip; }
+  .shell, .main, .content, #content { min-width: 0; max-width: 100%; }
+  .topbar {
+    position: sticky; top: 0; z-index: 85;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 5px 20px rgba(0,0,0,.035);
+  }
+  @supports (backdrop-filter: blur(16px)) {
+    .topbar { background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+  }
+  .mobile-brand { display: none; }
+  .topActions { flex-shrink: 0; }
+  .tabbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    padding: 7px 9px calc(7px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 32px rgba(0,0,0,.07);
+    z-index: 103;
+  }
+  @supports (backdrop-filter: blur(18px)) {
+    .tabbar { background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+  }
+  .tabbar .mobile-group-tab {
+    min-height: 58px; padding: 7px 3px 6px; border-radius: 15px;
+    color: var(--sub); min-width: 0; touch-action: manipulation;
+  }
+  .tabbar .mobile-group-tab.active {
+    color: var(--ink); background: var(--soft);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .tabbar .mobile-group-tab .mobile-tab-icon { font-size: 23px; line-height: 1.12; }
+  .tabbar .mobile-group-tab .mobile-tab-label {
+    font-size: clamp(10px, 2.75vw, 12px);
+    font-weight: 760; line-height: 1.18; letter-spacing: -.015em;
+    overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  }
+  .tabbar .mobile-group-tab:focus-visible,
+  .mobile-nav-link:focus-visible,
+  .mobile-nav-dismiss:focus-visible {
+    outline: 2px solid var(--ink); outline-offset: 2px;
+  }
+  .mobile-nav-sheet:not(.hidden) {
+    left: 10px; right: 10px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    max-height: min(68dvh, 560px);
+    padding: 18px 15px 22px;
+    border-radius: 24px 24px 17px 17px;
+    overscroll-behavior: contain;
+  }
+  .mobile-nav-sheet-title { font-size: 21px; }
+  .mobile-nav-link { min-height: 65px; padding: 12px; border-radius: 14px; }
+  .mobile-nav-link .mobile-nav-link-text { font-size: 13px; line-height: 1.35; }
+  .mobile-nav-dismiss { min-width: 42px; min-height: 42px; }
+  .main { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  .content { padding-bottom: calc(34px + env(safe-area-inset-bottom, 0px)); }
+  .card, .section, .hero-grid, .mini-grid, .dual, .env-grid { min-width: 0; }
+  .tablewrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  .metric-table { width: 100%; }
+  .metric-table td:first-child { min-width: 125px; }
+  .chart-svg, .mx-chart { max-width: 100%; height: auto; }
+  button, .chip, .pill-btn, .outline-btn, .mobile-nav-link { touch-action: manipulation; }
+}
+
+@media (max-width: 610px) {
+  .topbar {
+    display: grid; grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-rows: 45px 46px; align-items: center;
+    column-gap: 8px; row-gap: 7px;
+    height: auto; min-height: 112px;
+    padding: 8px 12px 10px;
+  }
+  .mobile-menu {
+    grid-column: 1; grid-row: 1;
+    display: grid; place-items: center;
+    width: 44px; height: 43px; min-width: 44px;
+    border-radius: 13px; font-size: 20px;
+  }
+  .mobile-brand {
+    grid-column: 2; grid-row: 1; display: block;
+    min-width: 0; white-space: nowrap;
+    color: var(--ink); font-size: 16px; letter-spacing: -.07em; font-weight: 850;
+  }
+  .mobile-brand span {
+    display: block; color: var(--sub);
+    font-size: 8px; font-weight: 750;
+    letter-spacing: .18em; margin-top: 1px;
+  }
+  .topActions {
+    grid-column: 3; grid-row: 1; display: flex;
+    align-items: center; justify-content: flex-end;
+    gap: 5px; min-width: 0;
+  }
+  .topActions .subtle-btn, .topActions .switch-btn {
+    height: 42px; min-height: 42px; min-width: 38px;
+    border-radius: 12px; padding: 0 7px;
+    font-size: 18px;
+  }
+  .topActions .switch-btn {
+    min-width: 52px; font-size: 10px; letter-spacing: -.015em;
+  }
+  .search-area {
+    grid-column: 1 / -1; grid-row: 2; display: flex;
+    width: 100%; max-width: none; min-width: 0;
+    height: 46px; padding: 0 13px; gap: 9px;
+    background: var(--bg); border-radius: 13px;
+  }
+  .search-area input {
+    font-size: 16px; min-width: 0; line-height: 1.3;
+  }
+  .search-area input::placeholder { color: var(--muted); opacity: 1; }
+  .search-area .search-icon { font-size: 22px; }
+  .search-results {
+    max-height: min(45dvh, 310px);
+    border-radius: 15px; box-shadow: 0 15px 36px rgba(0,0,0,.16);
+  }
+  .searchoption { min-height: 46px; font-size: 13px; }
+  input[type="search"], input[type="text"], textarea, select { font-size: 16px; }
+  .content { padding: 18px 13px 42px; }
+  .topline {
+    gap: 12px; margin-bottom: 16px;
+    align-items: flex-start;
+  }
+  .eyebrow { font-size: 10px; letter-spacing: .1em; margin-bottom: 7px; }
+  .display-title { font-size: clamp(27px, 7.7vw, 36px); letter-spacing: -.055em; line-height: 1.1; }
+  .subtitle { font-size: 12.5px; line-height: 1.5; margin-top: 8px; overflow-wrap: anywhere; }
+  .actions { gap: 7px; width: 100%; }
+  .pill-btn, .outline-btn, .solid-btn {
+    min-height: 40px; border-radius: 12px;
+    padding: 9px 12px; font-size: 12px;
+  }
+  .card { padding: 16px; border-radius: 17px; box-shadow: none; }
+  .hero-grid, .dual { grid-template-columns: minmax(0, 1fr); gap: 11px; }
+  .hero {
+    min-height: 275px; padding: 23px 22px;
+    border-radius: 20px;
+  }
+  .hero-place { font-size: 23px; line-height: 1.15; }
+  .hero-country { font-size: 12px; }
+  .hero .hero-icon { width: 73px !important; height: 73px !important; }
+  .temperature {
+    font-size: clamp(77px, 21vw, 104px);
+    line-height: .95; padding: 8px 0 17px;
+    letter-spacing: -.075em;
+  }
+  .temperature .temp-unit { font-size: clamp(27px, 7vw, 35px); padding-top: 10px; }
+  .hero-bottom { gap: 9px; align-items: flex-start; }
+  .hero-bottom .condition { font-size: 15px; }
+  .sourcemark { font-size: 10px; padding: 7px 10px; }
+  .mini-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
+  .mini { min-height: 137px; padding: 15px 13px; border-radius: 16px; }
+  .minihead img { width: 25px; height: 25px; }
+  .mini .label { font-size: 10px; letter-spacing: .045em; line-height: 1.35; }
+  .minivalue {
+    font-size: clamp(23px, 7vw, 32px); line-height: 1.15;
+    letter-spacing: -.04em; overflow-wrap: anywhere;
+  }
+  .mininote { font-size: 11px; line-height: 1.45; }
+  .minivalue .wind-beaufort { font-size: 10px; padding: 4px 6px; margin-left: 3px; }
+  .section { margin-top: 22px; }
+  .sectionhead { gap: 9px; margin-bottom: 12px; }
+  .h2 { font-size: 20px; letter-spacing: -.035em; line-height: 1.2; }
+  .section-sub { font-size: 11.5px; line-height: 1.5; }
+  .hourcard { flex-basis: 93px; min-height: 155px; padding: 12px 8px; border-radius: 14px; }
+  .hourcard img { width: 36px; height: 36px; }
+  .hourtemp { font-size: 23px; }
+  .scroll-hours, .mx-hours { scroll-snap-type: x proximity; }
+  .hourcard, .mx-hour { scroll-snap-align: start; }
+  .dailyrow {
+    grid-template-columns: minmax(54px, .8fr) 31px minmax(18px,1fr) minmax(68px,83px);
+    gap: 7px; min-width: 0; padding: 14px 1px;
+  }
+  .dailyrow strong { font-size: 12px; }
+  .dailyrow img { width: 30px; height: 30px; }
+  .dailytemps { gap: 5px; font-size: 12px; }
+  .tableline { gap: 6px; min-width: 0; }
+  .tablewrap { border-radius: 10px; }
+  .metric-table { min-width: 520px; font-size: 11px; }
+  .metric-table th, .metric-table td { padding: 11px 8px; line-height: 1.4; }
+  .metric-table td:first-child { min-width: 155px; font-weight: 650; }
+  .chips { gap: 7px; }
+  .chip { min-height: 40px; padding: 9px 11px; font-size: 12px; }
+  .qs-tabs button { min-height: 60px; }
+  .qs-tiles { gap: 9px; }
+  .qs-tile { padding: 14px 12px; border-radius: 15px; min-height: 155px; }
+  .qs-value { font-size: clamp(23px, 6.5vw, 30px); }
+  .qs-headline { gap: 12px; padding: 15px; }
+  .qs-headline-ico { width: 49px; height: 49px; font-size: 26px; border-radius: 14px; }
+  .guide-main-title { font-size: 24px; }
+  .radar-suite .map, .map, .globe {
+    height: min(57dvh, 520px); min-height: 340px;
+  }
+  .radar-map-overlay { max-width: calc(100% - 20px); }
+  .radar-legend { max-width: 51%; font-size: 10px; }
+  .footer { font-size: 10px; line-height: 1.7; overflow-wrap: anywhere; }
+  .mobile-nav-links { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+  .mobile-nav-link { min-height: 66px; }
+}
+
+@media (max-width: 370px) {
+  .topbar { grid-template-columns: 44px 1fr auto; column-gap: 6px; padding-inline: 9px; }
+  .mobile-brand { display: none; }
+  .topActions { gap: 4px; }
+  .topActions .subtle-btn, .topActions .switch-btn { min-width: 37px; padding-inline: 5px; }
+  .topActions .switch-btn { min-width: 49px; font-size: 9px; }
+  .content { padding-inline: 10px; }
+  .card { padding: 13px; }
+  .hero { padding: 19px 17px; }
+  .mini { padding: 13px 10px; }
+  .mobile-nav-sheet:not(.hidden) { left: 5px; right: 5px; padding-inline: 11px; }
+  .mobile-nav-links { grid-template-columns: minmax(0,1fr); }
+  .mobile-nav-link { min-height: 52px; }
+  .tabbar .mobile-group-tab .mobile-tab-label { font-size: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabbar *, .mobile-nav-sheet, .mobile-nav-scrim, .scroll-hours, .mx-hours {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
