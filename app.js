@@ -932,24 +932,31 @@ async function loadAll(force = false) {
   // Cache the essential successful forecast as soon as it arrives, only if the
   // visitor explicitly opted into local caching. Optional models can take minutes.
   saveSnapshot();
-  const jobs = [], modelJobs = [];
-  if (force || Date.now() - state.modelsAt > REFRESH_MODELS || !Object.keys(state.models).length) {
-    state.modelsAt = Date.now();
+  const jobs = [], modelJobs = [], ensembleJobs = [];
+  let modelToken = null;
+  // Prevent live forecast refreshes from invalidating still-running model data.
+  if (force || (!state.modelsLoading &&
+      (Date.now() - state.modelsAt > REFRESH_MODELS ||
+       !Object.keys(state.models).length || !Object.keys(state.ens).length))) {
+    modelToken = ++state.modelEpoch;
+    state.modelsLoading = true;
+    state.modelsStartedAt = Date.now();
     const inBox = m => !m.box || (c.lat >= m.box[0] && c.lat <= m.box[1] && c.lon >= m.box[2] && c.lon <= m.box[3]);
     MODELS.filter(m => !inBox(m)).forEach(m => { state.models[m.id] = { outside: true }; });
     const eligibleModels = MODELS.filter(inBox);
     // Batches of up to five models substantially reduce network pressure.
     for (let i = 0; i < eligibleModels.length; i += MODEL_BATCH_SIZE) {
       const group = eligibleModels.slice(i, i + MODEL_BATCH_SIZE);
-      modelJobs.push(omSlot(() => loadModelGroup(c, group, gen)));
+      modelJobs.push(omSlot(() => modelFeedCurrent(c, modelToken) ? loadModelGroup(c, group, modelToken) : Promise.resolve()));
     }
-    jobs.push(...ENSEMBLES.map(e => omSlot(() => {
-      if (gen !== state.gen) throw new Error('Stale ensemble request');
+    ensembleJobs.push(...ENSEMBLES.map(e => omSlot(() => {
+      if (!modelFeedCurrent(c, modelToken)) return Promise.resolve(null);
       return chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL))
         .catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE)));
     })
-      .then(r => { if (gen === state.gen) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
-      .catch(err => { if (gen === state.gen) { state.ens[e.id] = { error: true, reason: err?.status ? 'HTTP ' + err.status : (err?.message || 'network error') }; schedule(); } })));
+      .then(r => { if (r && modelFeedCurrent(c, modelToken)) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
+      .catch(err => { if (modelFeedCurrent(c, modelToken)) { state.ens[e.id] = { error: true, reason: err?.status ? 'HTTP ' + err.status : (err?.message || 'network error') }; schedule(); } })));
+    jobs.push(...ensembleJobs);
   }
   jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, precipitation: d.minutely_15.precipitation, rain: d.minutely_15.rain, showers: d.minutely_15.showers, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) { state.rain15 = null; schedule(); } }));
   jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; state.obsReady = true; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; state.obsReady = true; schedule(); } }));
@@ -975,7 +982,17 @@ async function loadAll(force = false) {
   jobs.push(getJSON(q('/api/rain-memory', {mode:'station',lat:(+c.lat).toFixed(3),lon:(+c.lon).toFixed(3)}), 55000)
     .then(d=>{if(gen===state.gen){state.stationRain=d;recompute();schedule();}})
     .catch(()=>{if(gen===state.gen){state.stationRain={available:false,reason:'station_data_unavailable'};schedule();}}));
-  if (modelJobs.length) Promise.allSettled(modelJobs).then(() => { if (gen === state.gen) { recompute(); ensureTraining(c, gen); } });
+  if (modelToken !== null) Promise.allSettled([...modelJobs, ...ensembleJobs]).then(() => {
+    if (!modelFeedCurrent(c, modelToken)) return;
+    state.modelsLoading = false;
+    const inBox = m => !m.box || (c.lat >= m.box[0] && c.lat <= m.box[1] && c.lon >= m.box[2] && c.lon <= m.box[3]);
+    const incomplete = MODELS.filter(inBox).some(m => !state.models[m.id] || state.models[m.id].error) ||
+      ENSEMBLES.some(e => !state.ens[e.id] || state.ens[e.id].error);
+    // A partial failure will be retried with the next ten-minute live refresh.
+    state.modelsAt = incomplete ? Date.now() - REFRESH_MODELS + REFRESH_LIVE : Date.now();
+    recompute(); render(); saveSnapshot();
+    ensureTraining(c, state.gen);
+  });
   await Promise.allSettled([...jobs, ...modelJobs]);
   if (gen !== state.gen) return;
   recompute(); render(); saveSnapshot();
