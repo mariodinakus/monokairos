@@ -10,7 +10,7 @@ test('phone viewport and layout refinement are in the PWA app shell', () => {
   const html = read('index.html');
   assert.match(html, /name="viewport"[^>]*viewport-fit=cover/);
   assert.match(html, /class="mobile-brand"/);
-  assert.match(html, /mobile-polish\.css\?v=1\.0/);
+  assert.match(html, /mobile-polish\.css\?v=1\.1/);
   const cssFiles = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(x => x[1]);
   assert.match(cssFiles.at(-1), /^mobile-polish\.css/);
 });
@@ -36,4 +36,18 @@ test('new PWA cache precaches the mobile stylesheet', () => {
   const sw = read('sw.js');
   assert.match(sw, /mono-weather-v\d+\.\d+/);
   assert.match(sw, /\.\/mobile-polish\.css/);
+});
+
+test('the mobile app bar has one brand row and keeps native bell and settings accessible', () => {
+  const app = read('app.js');
+  const css = read('mobile-polish.css');
+  const html = read('index.html');
+  assert.match(app, /function installMobileUtilityMenu\(/);
+  assert.match(app, /items\.append\(language, theme\)/);
+  assert.match(app, /installMobileUtilityMenu\(\);/);
+  assert.match(css, /\.mobile-utility-menu\[open\]/);
+  assert.match(css, /\.native-notification-btn/);
+  assert.match(css, /grid-template-rows:\s*40px 43px/);
+  assert.match(html, /class="mobile-brand"/);
+  assert.match(html, /class="search-area"/);
 });
