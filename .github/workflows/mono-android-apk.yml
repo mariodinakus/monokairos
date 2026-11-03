@@ -6,6 +6,11 @@ on:
     paths:
       - 'mobile/**'
       - '.github/workflows/mono-android-apk.yml'
+  pull_request:
+    branches: [expo-mobile]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mono-android-apk.yml'
   workflow_dispatch:
 
 permissions:
@@ -39,10 +44,16 @@ jobs:
 
       - name: Install Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install Expo app dependencies
         working-directory: mobile
         run: npm install --no-audit --no-fund
+
+      - name: Verify forecast alert planner and safety constraints
+        working-directory: mobile
+        run: npm run test:alerts
 
       - name: Generate native Android app
         working-directory: mobile
