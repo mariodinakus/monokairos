@@ -3548,7 +3548,32 @@ function onClick(e) {
   else if (a === 'gProbeOpen') { const P = state.probe; if (P) { const n = P.name || {}; const nm = n.name || `${num(P.lat, 2)}, ${num(P.lon, 2)}`; state.probe = null; setCity({ name: nm, nameEl: nm, admin1: n.admin1, country: n.country, cc: n.cc || '', lat: P.lat, lon: P.lon }); goto('now'); } }
   else if (a === 'csv') csv();
 }
+// Keep one cohesive mobile app bar. Secondary settings live in a small
+// accessible menu; desktop keeps its original inline language/theme actions.
+function installMobileUtilityMenu() {
+  const actions = document.querySelector('.topActions');
+  const language = document.getElementById('language');
+  const theme = document.getElementById('theme');
+  if (!actions || !language || !theme || actions.querySelector('.mobile-utility-menu')) return;
+  const menu = document.createElement('details');
+  menu.className = 'mobile-utility-menu';
+  const trigger = document.createElement('summary');
+  trigger.className = 'subtle-btn mobile-more-btn';
+  trigger.setAttribute('aria-label', 'Περισσότερες ρυθμίσεις / More settings');
+  trigger.setAttribute('title', 'Περισσότερες ρυθμίσεις');
+  trigger.textContent = '⋯';
+  const items = document.createElement('div');
+  items.className = 'mobile-utility-items';
+  items.append(language, theme);
+  menu.append(trigger, items);
+  actions.append(menu);
+  items.addEventListener('click', () => { menu.open = false; });
+  document.addEventListener('click', e => { if (!menu.contains(e.target)) menu.open = false; });
+  window.addEventListener('resize', () => { if (window.innerWidth > 610) menu.open = false; });
+}
+
 function init() {
+  installMobileUtilityMenu();
   document.addEventListener('click', onClick);
   window.MONOEarthGlobe.onRefresh=()=>{if((state.page==='earth'||state.page==='globe') && globe && $('#globe'))updateGlobeCtl();};
   if(window.MONOStormLens){
