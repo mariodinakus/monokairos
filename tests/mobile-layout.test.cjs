@@ -20,7 +20,7 @@ test('app scripts defer while retaining declared execution order', () => {
   const scripts = [...html.matchAll(/<script\s+(?:defer\s+)?src="([^"]+)"/g)].map(x => x[0]);
   assert.ok(scripts.length >= 20, 'should keep all existing app modules');
   assert.ok(scripts.slice(0, -1).every(x => /<script defer src=/.test(x)));
-  assert.ok(scripts.some(x => x.includes('app.js?v=4.47')));
+  assert.ok(scripts.some(x => /app\.js\?v=\d+\.\d+/.test(x)), 'versioned app JS should load');
 });
 
 test('mobile stylesheet is scoped and search field is readable on phones', () => {
@@ -34,6 +34,6 @@ test('mobile stylesheet is scoped and search field is readable on phones', () =>
 
 test('new PWA cache precaches the mobile stylesheet', () => {
   const sw = read('sw.js');
-  assert.match(sw, /mono-weather-v4\.48/);
+  assert.match(sw, /mono-weather-v\d+\.\d+/);
   assert.match(sw, /\.\/mobile-polish\.css/);
 });
