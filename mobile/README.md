@@ -51,3 +51,13 @@ Opt in from the notification-settings icon. The app fetches the current Open-Met
 
 ## Splash v1.3 — matched to MONO website
 Native Android splash and full-window, real-progress React Native loading screen use #f7f7f5 background, charcoal M. logo, grey MONO WEATHER/LIVE label, soft contours and grey-to-black loading bar. No blue artwork, fake status bar or hard-coded loading progress. Web app and forecast features remain unchanged.
+
+## Android WebView cache recovery — v1.4.0
+
+The earlier Android v1.3.0 client used `cacheEnabled` for the WebView.
+During Vercel edge routing migrations the server briefly delivered HTML as `text/plain`.
+Android WebView could cache and show raw `<!doctype html>` instead of rendering the UI.
+
+The v1.4.0 client navigates to a versioned `index.html` URL, uses `cacheEnabled={false}` and Android `LOAD_NO_CACHE`, and detects unexpected plaintext HTML responses with at most two recovery navigations. It does not clear the user's cookies, saved location, or notification preferences. 
+
+**Existing APK installations do not update automatically from a GitHub commit.** Build a new APK with the EAS preview profile and install it over the old app (same Android package and signing credentials). Until then: Android Settings → Apps → MONO Kairos → Storage → Clear cache → Force stop → Open. If this fails, open the live web site in Chrome to check whether the outage is WebView-specific. Clearing app *storage/data* can reset local preferences, so avoid it unless necessary.

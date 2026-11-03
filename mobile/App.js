@@ -10,6 +10,20 @@ import { refreshForecastAlertsOnLaunch, rememberAlertCoordinates } from './Local
 // Keep the current Vercel website and its APIs. This is a separate Expo client.
 const APP_URL = 'https://monokairos.vercel.app/';
 const APP_ORIGIN = new URL(APP_URL).origin;
+const WEBVIEW_BUILD = '1.4.0';
+// Detect a response that WebView has rendered as plain text rather than HTML.
+// This happened after a temporary edge rewrite returned an old HTML page with
+// a text/plain content type; HTTP 200 alone did not signal an error.
+const CHECK_HTML_RESPONSE = `(function () {
+  try {
+    var type = (document.contentType || '').toLowerCase();
+    var content = (document.body && document.body.innerText || '').trimStart();
+    if ((type.indexOf('text/plain') >= 0 || /^<!doctype\\s+html/i.test(content) || /^<html\\b/i.test(content)) &&
+        (content.indexOf('<!doctype') >= 0 || content.indexOf('<html') >= 0)) {
+      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type:'mono-bad-html-mime' }));
+    }
+  } catch (e) { /* The document may have been replaced during navigation. */ }
+})(); true;`;
 const C = {
   background: '#f7f7f5', surface: '#ffffff', text: '#181a1c',
   muted: '#697078', border: '#e3e5e5', accent: '#276bcb', danger: '#af3445',
@@ -33,6 +47,7 @@ function MonoScreen() {
   const backAvailable = useRef(false);
   const lastLocationAt = useRef(0);
   const gpsWorking = useRef(false);
+  const documentRecoveryCount = useRef(0);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
@@ -41,11 +56,29 @@ function MonoScreen() {
   const [reloadKey, setReloadKey] = useState(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [showLaunch, setShowLaunch] = useState(true);
+  // Each explicit refresh uses a fresh navigation address. This avoids a cached
+  // stale root document without deleting saved location or notification settings.
+  const currentUrl = APP_URL + 'index.html?mono_native=' + WEBVIEW_BUILD + '&reload=' + reloadKey;
   useEffect(()=>{refreshForecastAlertsOnLaunch().catch(()=>{});},[]);
 
   const reload = useCallback(() => {
+    documentRecoveryCount.current = 0;
     setError(''); setLoading(true); setProgress(0); setShowLaunch(true); backAvailable.current = false;
     setReloadKey(k => k + 1);
+  }, []);
+
+  const onWebMessage = useCallback(({nativeEvent}) => {
+    let message;
+    try { message = JSON.parse(nativeEvent?.data || ''); } catch { return; }
+    if (message?.type !== 'mono-bad-html-mime') return;
+    // Retry on a different URL. Never loop indefinitely if the server remains broken.
+    if (documentRecoveryCount.current < 2) {
+      documentRecoveryCount.current += 1;
+      setLoading(true); setProgress(0); setReloadKey(k => k + 1);
+    } else {
+      setError('Το MONO έλαβε HTML ως απλό κείμενο. Άνοιξε την εφαρμογή ξανά ή καθάρισε την cache από τις ρυθμίσεις Android.');
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -156,7 +189,7 @@ function MonoScreen() {
         {!error && <WebView
           key={reloadKey}
           ref={web}
-          source={{uri: APP_URL}}
+          source={{uri: currentUrl}}
           style={s.web}
           originWhitelist={['https://*']}
           onShouldStartLoadWithRequest={navigate}
@@ -164,10 +197,16 @@ function MonoScreen() {
           onNavigationStateChange={state => { backAvailable.current = !!state.canGoBack; }}
           onLoadStart={() => { setLoading(true); setProgress(0); }}
           onLoadProgress={({nativeEvent}) => setProgress(nativeEvent.progress || 0)}
-          onLoadEnd={() => { setLoading(false); setShowLaunch(false); locate({automatic:true}).catch(()=>{}); }}
+          onLoadEnd={() => {
+            web.current?.injectJavaScript(CHECK_HTML_RESPONSE);
+            setLoading(false); setShowLaunch(false);
+            locate({automatic:true}).catch(()=>{});
+          }}
+          onMessage={onWebMessage}
           onError={({nativeEvent}) => { setError(nativeEvent.description || 'Η σύνδεση απέτυχε.'); setLoading(false); }}
           onHttpError={({nativeEvent}) => {
-            if (nativeEvent.statusCode >= 400 && nativeEvent.url === APP_URL) {
+            if (nativeEvent.statusCode >= 400 && internalUrl(nativeEvent.url) &&
+                ['/', '/index.html'].includes(new URL(nativeEvent.url).pathname)) {
               setError('Ο διακομιστής επέστρεψε HTTP ' + nativeEvent.statusCode);
               setLoading(false);
             }
@@ -176,7 +215,8 @@ function MonoScreen() {
           thirdPartyCookiesEnabled={false} allowsBackForwardNavigationGestures
           allowsInlineMediaPlayback mediaPlaybackRequiresUserAction
           setSupportMultipleWindows={false} mixedContentMode="never"
-          javaScriptCanOpenWindowsAutomatically={false} cacheEnabled
+          javaScriptCanOpenWindowsAutomatically={false} cacheEnabled={false}
+          cacheMode="LOAD_NO_CACHE"
           pullToRefreshEnabled={Platform.OS === 'ios'} overScrollMode="never"
           startInLoadingState={false} contentMode="mobile"
           onContentProcessDidTerminate={reload} onRenderProcessGone={reload}
