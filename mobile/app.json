@@ -3,7 +3,7 @@
     "name": "MONO Kairos",
     "slug": "mono-kairos-mobile",
     "scheme": "monokairos",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -26,7 +26,7 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#f7f7f5"
       },
-      "versionCode": 5
+      "versionCode": 6
     },
     "plugins": [
       [
