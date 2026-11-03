@@ -501,6 +501,8 @@ async function viaProxy(proxyPath, direct, ms = 20000) {
 function limiter(n) { let active = 0; const queue = []; const next = () => { if (active >= n || !queue.length) return; active++; const [fn, res, rej] = queue.shift(); fn().then(res, rej).finally(() => { active--; next(); }); }; return fn => new Promise((res, rej) => { queue.push([fn, res, rej]); next(); }); }
 // Keep per-provider requests bounded to avoid rate-limit cascades.
 const omSlot = limiter(3);
+const trainingSlot = limiter(2);
+const MODEL_BATCH_SIZE = 5;
 // Check forecast payloads: HTTP 200 alone is not proof that the model has usable values.
 async function getModelFeed(url) {
   const checked = async target => {
@@ -534,6 +536,7 @@ const mainURL = c => q(OM, { ...ll(c), timezone: 'auto', timeformat: 'unixtime',
   current: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,visibility,is_day',
   hourly: 'temperature_2m,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
 const modelURL = (c, id) => q('/proxy/mono-forecast', { ...ll(c), models: id, hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
+const modelBatchURL = (c, group) => q('/proxy/mono-forecast', { ...ll(c), models: group.map(m => m.id).join(','), hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
 const rain15URL = c => q(OM, { ...ll(c), minutely_15: 'precipitation,rain,showers,snowfall,weather_code', forecast_minutely_15: 96, past_minutely_15: 4, timezone: 'auto', timeformat: 'unixtime' });
 const ensURL = (c, id, vars) => q('/proxy/mono-ensemble', { ...ll(c), models: id, hourly: vars, timeformat: 'unixtime', timezone: 'UTC', past_days: 1, forecast_days: 7 });
 
@@ -801,6 +804,59 @@ async function fetchPrimaryForecast(c) {
     throw err;
   }
 }
+// Fetch several models in a single request. Open-Meteo uses `temperature_2m_<modelId>`
+ // keys for multi-model responses; split back into the exact single-model shape used
+ // by MONO-ML, so charts and statistical calculations remain unchanged.
+async function loadModelGroup(c, group, gen) {
+  if (gen !== state.gen || !group.length) return;
+  if (group.length === 1) {
+    const m = group[0];
+    try {
+      const r = await chain([m.id, ...m.alt], id => modelURL(c, id));
+      if (gen === state.gen) {
+        state.models[m.id] = { data: r.data, used: r.id };
+        schedule();
+      }
+    } catch (e) {
+      if (gen === state.gen) {
+        state.models[m.id] = /no data|not available|outside/i.test(e?.message || '')
+          ? { outside: true }
+          : { error: true, reason: e?.status ? 'HTTP ' + e.status : (e?.message || 'network error') };
+        schedule();
+      }
+    }
+    return;
+  }
+  try {
+    const d = await getJSON(modelBatchURL(c, group), 35000);
+    if (gen !== state.gen) return;
+    if (!Array.isArray(d?.hourly?.time) || !d.hourly.time.length)
+      throw new Error('Invalid batched forecast response');
+    const missing = [];
+    for (const m of group) {
+      const hourly = { time: d.hourly.time };
+      for (const variable of HV.split(',')) {
+        const values = d.hourly[variable + '_' + m.id];
+        if (Array.isArray(values)) hourly[variable] = values;
+      }
+      if (!Array.isArray(hourly.temperature_2m) || !hourly.temperature_2m.some(Number.isFinite)) {
+        missing.push(m);
+        continue;
+      }
+      state.models[m.id] = { data: { timezone: d.timezone, hourly }, used: m.id };
+    }
+    schedule();
+    // One unavailable regional model should not erase the whole batch.
+    for (const m of missing) await loadModelGroup(c, [m], gen);
+  } catch (err) {
+    if (gen !== state.gen) return;
+    // A 400 from a regional model may reject the whole group. Bisect it,
+    // preserving successes and isolating the genuinely unavailable model.
+    const middle = Math.ceil(group.length / 2);
+    await loadModelGroup(c, group.slice(0, middle), gen);
+    await loadModelGroup(c, group.slice(middle), gen);
+  }
+}
 let primaryRetryCount = 0;
 function retryPrimaryForecast(gen) {
   if (primaryRetryCount >= 3) return;
@@ -879,10 +935,17 @@ async function loadAll(force = false) {
     state.modelsAt = Date.now();
     const inBox = m => !m.box || (c.lat >= m.box[0] && c.lat <= m.box[1] && c.lon >= m.box[2] && c.lon <= m.box[3]);
     MODELS.filter(m => !inBox(m)).forEach(m => { state.models[m.id] = { outside: true }; });
-    modelJobs.push(...MODELS.filter(inBox).map(m => omSlot(() => chain([m.id, ...m.alt], id => modelURL(c, id)))
-      .then(r => { if (gen === state.gen) { state.models[m.id] = { data: r.data, used: r.id }; schedule(); } })
-      .catch(e => { if (gen === state.gen) { state.models[m.id] = /no data|not available|outside/i.test(e?.message || '') ? { outside: true } : { error: true, reason: e?.status ? 'HTTP ' + e.status : (e?.message || 'network error') }; schedule(); } })));
-    jobs.push(...ENSEMBLES.map(e => omSlot(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL)).catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE))))
+    const eligibleModels = MODELS.filter(inBox);
+    // Batches of up to five models substantially reduce network pressure.
+    for (let i = 0; i < eligibleModels.length; i += MODEL_BATCH_SIZE) {
+      const group = eligibleModels.slice(i, i + MODEL_BATCH_SIZE);
+      modelJobs.push(omSlot(() => loadModelGroup(c, group, gen)));
+    }
+    jobs.push(...ENSEMBLES.map(e => omSlot(() => {
+      if (gen !== state.gen) throw new Error('Stale ensemble request');
+      return chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL))
+        .catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE)));
+    })
       .then(r => { if (gen === state.gen) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
       .catch(err => { if (gen === state.gen) { state.ens[e.id] = { error: true, reason: err?.status ? 'HTTP ' + err.status : (err?.message || 'network error') }; schedule(); } })));
   }
@@ -934,6 +997,11 @@ function runTraining(payload) {
   });
 }
 async function ensureTraining(c, gen, force = false) {
+  if (!force && state.trainStatus === 'loading') return;
+  if (!force && state.train && state.train.v === VERSION && Date.now() - state.train.at < TRAIN_TTL) {
+    state.trainStatus = 'done';
+    return;
+  }
   const all = read(K.train, {}), hit = all[ckey(c)];
   if (!force && hit && Date.now() - hit.at < TRAIN_TTL && hit.v === VERSION) { state.train = hit; state.trainStatus = 'done'; schedule(); return; }
   const active = state.view?.active || [];
@@ -946,7 +1014,13 @@ async function ensureTraining(c, gen, force = false) {
     const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
     const truthP = getJSON(q(ARCH, { ...base, models: 'era5', hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover' }), 40000);
     const ms = MODELS.filter(m => active.includes(m.id));
-    const runs = await Promise.allSettled(ms.map(m => { const used = state.models[m.id]?.used || m.id; return chain([used], id => q(PREV, { ...base, models: id, hourly: full })).catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: noCloud }))).catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: tOnly }))); }));
+    const runs = await Promise.allSettled(ms.map(m => trainingSlot(() => {
+      if (gen !== state.gen) throw new Error('Stale training request');
+      const used = state.models[m.id]?.used || m.id;
+      return chain([used], id => q(PREV, { ...base, models: id, hourly: full }))
+        .catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: noCloud })))
+        .catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: tOnly })));
+    })));
     const truth = await truthP;
     if (gen !== state.gen) return;
     const times = truth.hourly.time.map(s => s * 1000), idx = new Map(times.map((t, i) => [t, i]));
