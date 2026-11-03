@@ -3567,9 +3567,15 @@ function installMobileUtilityMenu() {
   items.append(language, theme);
   menu.append(trigger, items);
   actions.append(menu);
-  items.addEventListener('click', () => { menu.open = false; });
-  document.addEventListener('click', e => { if (!menu.contains(e.target)) menu.open = false; });
-  window.addEventListener('resize', () => { if (window.innerWidth > 610) menu.open = false; });
+  let desktop = window.innerWidth > 610;
+  menu.open = desktop;
+  items.addEventListener('click', () => { if (window.innerWidth <= 610) menu.open = false; });
+  document.addEventListener('click', e => { if (window.innerWidth <= 610 && !menu.contains(e.target)) menu.open = false; });
+  window.addEventListener('resize', () => {
+    const nextDesktop = window.innerWidth > 610;
+    if (nextDesktop !== desktop) menu.open = nextDesktop;
+    desktop = nextDesktop;
+  });
 }
 
 function init() {
