@@ -2806,6 +2806,16 @@ function modelsPage() {
   const V = state.view;
   const head = header(T('modelsTitle'), T('modelsSub'), btn('reloadModels', '↻ ' + T('refresh')));
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
+  // Visible on mobile: the detailed status column is hidden on narrow screens.
+  const ready = MODELS.filter(m => V.md[m.id] && !V.md[m.id].nocover).length;
+  const loading = MODELS.filter(m => !state.models[m.id]).length;
+  const failed = MODELS.filter(m => state.models[m.id]?.error).length;
+  const ensemblesReady = ENSEMBLES.filter(e => V.famInfo[e.id]?.members).length;
+  const counts = state.lang === 'el'
+    ? `Μοντέλα με δεδομένα: ${ready} · Σε αναμονή: ${loading} · Σφάλματα: ${failed} · Ensembles: ${ensemblesReady}/${ENSEMBLES.length}`
+    : `Models with data: ${ready} · Loading: ${loading} · Errors: ${failed} · Ensembles: ${ensemblesReady}/${ENSEMBLES.length}`;
+  const progress = '<p class="notice" role="status" style="overflow-wrap:anywhere">' + esc(counts) +
+    (state.modelsLoading ? (state.lang === 'el' ? ' · Ανάκτηση σε εξέλιξη…' : ' · Loading in progress…') : '') + '</p>';
   const rows = V.rows.slice(V.iNow, V.iNow + 168), sel = Math.min(state.sel, rows.length - 1), at = rows[sel];
   const key = { temp: 'T', rain: 'P', wind: 'W' }[state.mvar];
   const series = V.order.filter(id => !V.dup[id]).map(id => ({ vals: rows.map(r => r.models[id]?.[key]), cls: 'model' }));
@@ -2827,7 +2837,7 @@ function modelsPage() {
   const monoRow = `<tr class="monorow"><td><b>MONO</b><div class="compact">${esc(AN(Lk?.choice || 'untrained'))}</div></td><td><span class="tag mono">ML</span></td><td class="num"><b>${fmtV(mono[sel])}</b></td><td></td><td class="num hide-sm">${Lk ? `${num(Lk.test[Lk.choice]?.mae, 2)}°` : '—'}</td><td class="num hide-sm">${V.live.__mono ? `${num(V.live.__mono.mae, 1)}°` : '—'}</td><td class="hide-sm"></td></tr>`;
   const ens = ENSEMBLES.map(e => { const r = state.ens[e.id], info = V.famInfo[e.id]; const st = !r ? T('loading') : r.error ? T('failed') + (r.reason ? ' · ' + esc(r.reason) : '') : info?.nocover ? T('noCover') : `${info?.members ?? 0}`;
     return `<tr class="${info?.members ? '' : 'off'}"><td><b>${esc(e.name)}</b><div class="compact">${esc(r?.used || e.id)}${info?.vars?.length ? ' · ' + info.vars.join(', ') : ''}</div></td><td class="num">${st}</td></tr>`; }).join('');
-  return head + `<div class="chips">${[['temp', 'varTemp'], ['rain', 'varRain'], ['wind', 'varWind']].map(([v, l]) => `<button class="chip ${state.mvar === v ? 'active' : ''}" data-action="mvar" data-v="${v}">${T(l)}</button>`).join('')}</div>
+  return head + progress + `<div class="chips">${[['temp', 'varTemp'], ['rain', 'varRain'], ['wind', 'varWind']].map(([v, l]) => `<button class="chip ${state.mvar === v ? 'active' : ''}" data-action="mvar" data-v="${v}">${T(l)}</button>`).join('')}</div>
     <div class="card">${ch}${legend([['mono', 'MONO'], ['model', T('legendModels')], ...(state.mvar === 'temp' ? [['band', 'Ensemble P10–P90']] : [])])}</div>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${esc(dt(at.t, { weekday: 'long', day: 'numeric', month: 'short' }))} · ${hhmm(at.t)}</h2><div class="section-sub">${T('leadDay')} ${T('d')}+${k}</div></div><input type="range" id="selHour" min="0" max="${rows.length - 1}" value="${sel}" aria-label="${T('time')}"></div>
       <div class="card tablecard"><div class="tablewrap"><table class="metric-table"><thead><tr><th>${T('model')}</th><th>${T('type')}</th><th>${T('valueAt')}</th><th>${T('weight')}</th><th class="hide-sm">${T('skill')}</th><th class="hide-sm">${T('live72')}</th><th class="hide-sm">${T('status')}</th></tr></thead><tbody>${monoRow}${tbl}</tbody></table></div></div></section>
