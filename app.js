@@ -427,7 +427,7 @@ const state = {
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
   page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   windyStatus: 'idle', windyHtml: '', windySelected: null,
-  gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
+  gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.globeTilesV1 ? (UI.gBase || 'detail') : 'detail', gLayers: UI.globeTilesV1 ? { radar: false, rain: false, grid: false, temps: true, ...(UI.gLayers || {}) } : { radar: false, rain: false, grid: false, temps: UI.gLayers?.temps ?? true }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null
@@ -804,21 +804,23 @@ async function fetchPrimaryForecast(c) {
     throw err;
   }
 }
+// Model batches are independent of the 10-minute main forecast refresh.
+const modelFeedCurrent = (c, token) => token === state.modelEpoch && ckey(c) === ckey(state.city);
 // Fetch several models in a single request. Open-Meteo uses `temperature_2m_<modelId>`
  // keys for multi-model responses; split back into the exact single-model shape used
  // by MONO-ML, so charts and statistical calculations remain unchanged.
-async function loadModelGroup(c, group, gen) {
-  if (gen !== state.gen || !group.length) return;
+async function loadModelGroup(c, group, token) {
+  if (!modelFeedCurrent(c, token) || !group.length) return;
   if (group.length === 1) {
     const m = group[0];
     try {
       const r = await chain([m.id, ...m.alt], id => modelURL(c, id));
-      if (gen === state.gen) {
+      if (modelFeedCurrent(c, token)) {
         state.models[m.id] = { data: r.data, used: r.id };
         schedule();
       }
     } catch (e) {
-      if (gen === state.gen) {
+      if (modelFeedCurrent(c, token)) {
         state.models[m.id] = /no data|not available|outside/i.test(e?.message || '')
           ? { outside: true }
           : { error: true, reason: e?.status ? 'HTTP ' + e.status : (e?.message || 'network error') };
@@ -829,7 +831,7 @@ async function loadModelGroup(c, group, gen) {
   }
   try {
     const d = await getJSON(modelBatchURL(c, group), 35000);
-    if (gen !== state.gen) return;
+    if (!modelFeedCurrent(c, token)) return;
     if (!Array.isArray(d?.hourly?.time) || !d.hourly.time.length)
       throw new Error('Invalid batched forecast response');
     const missing = [];
@@ -847,14 +849,14 @@ async function loadModelGroup(c, group, gen) {
     }
     schedule();
     // One unavailable regional model should not erase the whole batch.
-    for (const m of missing) await loadModelGroup(c, [m], gen);
+    for (const m of missing) await loadModelGroup(c, [m], token);
   } catch (err) {
-    if (gen !== state.gen) return;
+    if (!modelFeedCurrent(c, token)) return;
     // A 400 from a regional model may reject the whole group. Bisect it,
     // preserving successes and isolating the genuinely unavailable model.
     const middle = Math.ceil(group.length / 2);
-    await loadModelGroup(c, group.slice(0, middle), gen);
-    await loadModelGroup(c, group.slice(middle), gen);
+    await loadModelGroup(c, group.slice(0, middle), token);
+    await loadModelGroup(c, group.slice(middle), token);
   }
 }
 let primaryRetryCount = 0;
