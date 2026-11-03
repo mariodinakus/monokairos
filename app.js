@@ -427,7 +427,7 @@ const state = {
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
   page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   windyStatus: 'idle', windyHtml: '', windySelected: null,
-  gen: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
+  gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.globeTilesV1 ? (UI.gBase || 'detail') : 'detail', gLayers: UI.globeTilesV1 ? { radar: false, rain: false, grid: false, temps: true, ...(UI.gLayers || {}) } : { radar: false, rain: false, grid: false, temps: UI.gLayers?.temps ?? true }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null
@@ -804,21 +804,23 @@ async function fetchPrimaryForecast(c) {
     throw err;
   }
 }
+// Model batches are independent of the 10-minute main forecast refresh.
+const modelFeedCurrent = (c, token) => token === state.modelEpoch && ckey(c) === ckey(state.city);
 // Fetch several models in a single request. Open-Meteo uses `temperature_2m_<modelId>`
  // keys for multi-model responses; split back into the exact single-model shape used
  // by MONO-ML, so charts and statistical calculations remain unchanged.
-async function loadModelGroup(c, group, gen) {
-  if (gen !== state.gen || !group.length) return;
+async function loadModelGroup(c, group, token) {
+  if (!modelFeedCurrent(c, token) || !group.length) return;
   if (group.length === 1) {
     const m = group[0];
     try {
       const r = await chain([m.id, ...m.alt], id => modelURL(c, id));
-      if (gen === state.gen) {
+      if (modelFeedCurrent(c, token)) {
         state.models[m.id] = { data: r.data, used: r.id };
         schedule();
       }
     } catch (e) {
-      if (gen === state.gen) {
+      if (modelFeedCurrent(c, token)) {
         state.models[m.id] = /no data|not available|outside/i.test(e?.message || '')
           ? { outside: true }
           : { error: true, reason: e?.status ? 'HTTP ' + e.status : (e?.message || 'network error') };
@@ -829,7 +831,7 @@ async function loadModelGroup(c, group, gen) {
   }
   try {
     const d = await getJSON(modelBatchURL(c, group), 35000);
-    if (gen !== state.gen) return;
+    if (!modelFeedCurrent(c, token)) return;
     if (!Array.isArray(d?.hourly?.time) || !d.hourly.time.length)
       throw new Error('Invalid batched forecast response');
     const missing = [];
@@ -847,14 +849,14 @@ async function loadModelGroup(c, group, gen) {
     }
     schedule();
     // One unavailable regional model should not erase the whole batch.
-    for (const m of missing) await loadModelGroup(c, [m], gen);
+    for (const m of missing) await loadModelGroup(c, [m], token);
   } catch (err) {
-    if (gen !== state.gen) return;
+    if (!modelFeedCurrent(c, token)) return;
     // A 400 from a regional model may reject the whole group. Bisect it,
     // preserving successes and isolating the genuinely unavailable model.
     const middle = Math.ceil(group.length / 2);
-    await loadModelGroup(c, group.slice(0, middle), gen);
-    await loadModelGroup(c, group.slice(middle), gen);
+    await loadModelGroup(c, group.slice(0, middle), token);
+    await loadModelGroup(c, group.slice(middle), token);
   }
 }
 let primaryRetryCount = 0;
@@ -930,24 +932,31 @@ async function loadAll(force = false) {
   // Cache the essential successful forecast as soon as it arrives, only if the
   // visitor explicitly opted into local caching. Optional models can take minutes.
   saveSnapshot();
-  const jobs = [], modelJobs = [];
-  if (force || Date.now() - state.modelsAt > REFRESH_MODELS || !Object.keys(state.models).length) {
-    state.modelsAt = Date.now();
+  const jobs = [], modelJobs = [], ensembleJobs = [];
+  let modelToken = null;
+  // Prevent live forecast refreshes from invalidating still-running model data.
+  if (force || (!state.modelsLoading &&
+      (Date.now() - state.modelsAt > REFRESH_MODELS ||
+       !Object.keys(state.models).length || !Object.keys(state.ens).length))) {
+    modelToken = ++state.modelEpoch;
+    state.modelsLoading = true;
+    state.modelsStartedAt = Date.now();
     const inBox = m => !m.box || (c.lat >= m.box[0] && c.lat <= m.box[1] && c.lon >= m.box[2] && c.lon <= m.box[3]);
     MODELS.filter(m => !inBox(m)).forEach(m => { state.models[m.id] = { outside: true }; });
     const eligibleModels = MODELS.filter(inBox);
     // Batches of up to five models substantially reduce network pressure.
     for (let i = 0; i < eligibleModels.length; i += MODEL_BATCH_SIZE) {
       const group = eligibleModels.slice(i, i + MODEL_BATCH_SIZE);
-      modelJobs.push(omSlot(() => loadModelGroup(c, group, gen)));
+      modelJobs.push(omSlot(() => modelFeedCurrent(c, modelToken) ? loadModelGroup(c, group, modelToken) : Promise.resolve()));
     }
-    jobs.push(...ENSEMBLES.map(e => omSlot(() => {
-      if (gen !== state.gen) throw new Error('Stale ensemble request');
+    ensembleJobs.push(...ENSEMBLES.map(e => omSlot(() => {
+      if (!modelFeedCurrent(c, modelToken)) return Promise.resolve(null);
       return chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL))
         .catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE)));
     })
-      .then(r => { if (gen === state.gen) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
-      .catch(err => { if (gen === state.gen) { state.ens[e.id] = { error: true, reason: err?.status ? 'HTTP ' + err.status : (err?.message || 'network error') }; schedule(); } })));
+      .then(r => { if (r && modelFeedCurrent(c, modelToken)) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
+      .catch(err => { if (modelFeedCurrent(c, modelToken)) { state.ens[e.id] = { error: true, reason: err?.status ? 'HTTP ' + err.status : (err?.message || 'network error') }; schedule(); } })));
+    jobs.push(...ensembleJobs);
   }
   jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, precipitation: d.minutely_15.precipitation, rain: d.minutely_15.rain, showers: d.minutely_15.showers, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) { state.rain15 = null; schedule(); } }));
   jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; state.obsReady = true; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; state.obsReady = true; schedule(); } }));
@@ -973,7 +982,17 @@ async function loadAll(force = false) {
   jobs.push(getJSON(q('/api/rain-memory', {mode:'station',lat:(+c.lat).toFixed(3),lon:(+c.lon).toFixed(3)}), 55000)
     .then(d=>{if(gen===state.gen){state.stationRain=d;recompute();schedule();}})
     .catch(()=>{if(gen===state.gen){state.stationRain={available:false,reason:'station_data_unavailable'};schedule();}}));
-  if (modelJobs.length) Promise.allSettled(modelJobs).then(() => { if (gen === state.gen) { recompute(); ensureTraining(c, gen); } });
+  if (modelToken !== null) Promise.allSettled([...modelJobs, ...ensembleJobs]).then(() => {
+    if (!modelFeedCurrent(c, modelToken)) return;
+    state.modelsLoading = false;
+    const inBox = m => !m.box || (c.lat >= m.box[0] && c.lat <= m.box[1] && c.lon >= m.box[2] && c.lon <= m.box[3]);
+    const incomplete = MODELS.filter(inBox).some(m => !state.models[m.id] || state.models[m.id].error) ||
+      ENSEMBLES.some(e => !state.ens[e.id] || state.ens[e.id].error);
+    // A partial failure will be retried with the next ten-minute live refresh.
+    state.modelsAt = incomplete ? Date.now() - REFRESH_MODELS + REFRESH_LIVE : Date.now();
+    recompute(); render(); saveSnapshot();
+    ensureTraining(c, state.gen);
+  });
   await Promise.allSettled([...jobs, ...modelJobs]);
   if (gen !== state.gen) return;
   recompute(); render(); saveSnapshot();
@@ -2787,6 +2806,16 @@ function modelsPage() {
   const V = state.view;
   const head = header(T('modelsTitle'), T('modelsSub'), btn('reloadModels', '↻ ' + T('refresh')));
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
+  // Visible on mobile: the detailed status column is hidden on narrow screens.
+  const ready = MODELS.filter(m => V.md[m.id] && !V.md[m.id].nocover).length;
+  const loading = MODELS.filter(m => !state.models[m.id]).length;
+  const failed = MODELS.filter(m => state.models[m.id]?.error).length;
+  const ensemblesReady = ENSEMBLES.filter(e => V.famInfo[e.id]?.members).length;
+  const counts = state.lang === 'el'
+    ? `Μοντέλα με δεδομένα: ${ready} · Σε αναμονή: ${loading} · Σφάλματα: ${failed} · Ensembles: ${ensemblesReady}/${ENSEMBLES.length}`
+    : `Models with data: ${ready} · Loading: ${loading} · Errors: ${failed} · Ensembles: ${ensemblesReady}/${ENSEMBLES.length}`;
+  const progress = '<p class="notice" role="status" style="overflow-wrap:anywhere">' + esc(counts) +
+    (state.modelsLoading ? (state.lang === 'el' ? ' · Ανάκτηση σε εξέλιξη…' : ' · Loading in progress…') : '') + '</p>';
   const rows = V.rows.slice(V.iNow, V.iNow + 168), sel = Math.min(state.sel, rows.length - 1), at = rows[sel];
   const key = { temp: 'T', rain: 'P', wind: 'W' }[state.mvar];
   const series = V.order.filter(id => !V.dup[id]).map(id => ({ vals: rows.map(r => r.models[id]?.[key]), cls: 'model' }));
@@ -2808,7 +2837,7 @@ function modelsPage() {
   const monoRow = `<tr class="monorow"><td><b>MONO</b><div class="compact">${esc(AN(Lk?.choice || 'untrained'))}</div></td><td><span class="tag mono">ML</span></td><td class="num"><b>${fmtV(mono[sel])}</b></td><td></td><td class="num hide-sm">${Lk ? `${num(Lk.test[Lk.choice]?.mae, 2)}°` : '—'}</td><td class="num hide-sm">${V.live.__mono ? `${num(V.live.__mono.mae, 1)}°` : '—'}</td><td class="hide-sm"></td></tr>`;
   const ens = ENSEMBLES.map(e => { const r = state.ens[e.id], info = V.famInfo[e.id]; const st = !r ? T('loading') : r.error ? T('failed') + (r.reason ? ' · ' + esc(r.reason) : '') : info?.nocover ? T('noCover') : `${info?.members ?? 0}`;
     return `<tr class="${info?.members ? '' : 'off'}"><td><b>${esc(e.name)}</b><div class="compact">${esc(r?.used || e.id)}${info?.vars?.length ? ' · ' + info.vars.join(', ') : ''}</div></td><td class="num">${st}</td></tr>`; }).join('');
-  return head + `<div class="chips">${[['temp', 'varTemp'], ['rain', 'varRain'], ['wind', 'varWind']].map(([v, l]) => `<button class="chip ${state.mvar === v ? 'active' : ''}" data-action="mvar" data-v="${v}">${T(l)}</button>`).join('')}</div>
+  return head + progress + `<div class="chips">${[['temp', 'varTemp'], ['rain', 'varRain'], ['wind', 'varWind']].map(([v, l]) => `<button class="chip ${state.mvar === v ? 'active' : ''}" data-action="mvar" data-v="${v}">${T(l)}</button>`).join('')}</div>
     <div class="card">${ch}${legend([['mono', 'MONO'], ['model', T('legendModels')], ...(state.mvar === 'temp' ? [['band', 'Ensemble P10–P90']] : [])])}</div>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${esc(dt(at.t, { weekday: 'long', day: 'numeric', month: 'short' }))} · ${hhmm(at.t)}</h2><div class="section-sub">${T('leadDay')} ${T('d')}+${k}</div></div><input type="range" id="selHour" min="0" max="${rows.length - 1}" value="${sel}" aria-label="${T('time')}"></div>
       <div class="card tablecard"><div class="tablewrap"><table class="metric-table"><thead><tr><th>${T('model')}</th><th>${T('type')}</th><th>${T('valueAt')}</th><th>${T('weight')}</th><th class="hide-sm">${T('skill')}</th><th class="hide-sm">${T('live72')}</th><th class="hide-sm">${T('status')}</th></tr></thead><tbody>${monoRow}${tbl}</tbody></table></div></div></section>
