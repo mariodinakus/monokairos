@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import MonoSplash from './MonoSplash';
 import NotificationSettings from './NotificationSettings';
-import { ActivityIndicator, AppState, BackHandler, Linking, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { AppState, BackHandler, Linking, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -10,7 +10,7 @@ import { refreshForecastAlertsOnLaunch, rememberAlertCoordinates } from './Local
 // Keep the current Vercel website and its APIs. This is a separate Expo client.
 const APP_URL = 'https://monokairos.vercel.app/';
 const APP_ORIGIN = new URL(APP_URL).origin;
-const WEBVIEW_BUILD = '1.4.0';
+const WEBVIEW_BUILD = '1.5.0';
 // Detect a response that WebView has rendered as plain text rather than HTML.
 // This happened after a temporary edge rewrite returned an old HTML page with
 // a text/plain content type; HTTP 200 alone did not signal an error.
@@ -23,6 +23,41 @@ const CHECK_HTML_RESPONSE = `(function () {
       window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type:'mono-bad-html-mime' }));
     }
   } catch (e) { /* The document may have been replaced during navigation. */ }
+})(); true;`;
+
+// The website owns the single header. Add only native-specific affordances:
+// the bell opens the existing React Native notifications modal, and GPS uses
+// Expo Location instead of prompting for WebView geolocation permissions.
+const INSTALL_NATIVE_HEADER = `(function () {
+  try {
+    if (!window.ReactNativeWebView) return;
+    var actions = document.querySelector('.topActions');
+    if (!actions) return;
+    document.documentElement.classList.add('mono-native-shell');
+    var post = function (type) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:type}));
+    };
+    if (!document.getElementById('monoAndroidAlerts')) {
+      var bell = document.createElement('button');
+      bell.type = 'button';
+      bell.id = 'monoAndroidAlerts';
+      bell.className = 'subtle-btn native-notification-btn';
+      bell.setAttribute('aria-label','Ρυθμίσεις ειδοποιήσεων');
+      bell.setAttribute('title','Ειδοποιήσεις');
+      bell.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>';
+      bell.addEventListener('click',function(e) { e.preventDefault(); post('mono-open-native-alerts'); });
+      actions.insertBefore(bell,actions.firstChild);
+    }
+    var gps = document.getElementById('geoBtn');
+    if (gps && !gps.dataset.monoNativeGps) {
+      gps.dataset.monoNativeGps = '1';
+      gps.addEventListener('click',function(e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        post('mono-native-gps');
+      },true);
+    }
+  } catch(e) { /* Do not block the MONO web page on native bridge failure. */ }
 })(); true;`;
 const C = {
   background: '#f7f7f5', surface: '#ffffff', text: '#181a1c',
@@ -48,6 +83,7 @@ function MonoScreen() {
   const lastLocationAt = useRef(0);
   const gpsWorking = useRef(false);
   const documentRecoveryCount = useRef(0);
+  const nativeLocateRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
@@ -70,6 +106,8 @@ function MonoScreen() {
   const onWebMessage = useCallback(({nativeEvent}) => {
     let message;
     try { message = JSON.parse(nativeEvent?.data || ''); } catch { return; }
+    if (message?.type === 'mono-open-native-alerts') { setSettingsVisible(true); return; }
+    if (message?.type === 'mono-native-gps') { nativeLocateRef.current?.(); return; }
     if (message?.type !== 'mono-bad-html-mime') return;
     // Retry on a different URL. Never loop indefinitely if the server remains broken.
     if (documentRecoveryCount.current < 2) {
@@ -141,6 +179,7 @@ function MonoScreen() {
       if (!automatic) setGpsBusy(false);
     }
   }, []);
+  useEffect(() => { nativeLocateRef.current = () => locate({automatic:false}); return () => { nativeLocateRef.current = null; }; }, [locate]);
   useEffect(()=>{
     const subscription=AppState.addEventListener('change',next=>{
       if(next==='active' && !loading && !error && Date.now()-lastLocationAt.current>15*60*1000)
@@ -159,29 +198,6 @@ function MonoScreen() {
   return (
     <SafeAreaView style={s.root} edges={['top','bottom','left','right']}>
       <StatusBar barStyle="dark-content" backgroundColor={C.background} />
-      <View style={s.header}>
-        <View style={s.identity}>
-          <View style={s.logo}><Text style={s.logoText}>M.</Text></View>
-          <View>
-            <Text style={s.title}>MONO <Text style={s.titleLight}>WEATHER</Text></Text>
-            <Text style={s.subtitle}>LIVE</Text>
-          </View>
-        </View>
-        <View style={s.actions}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Ρυθμίσεις ειδοποιήσεων" onPress={() => setSettingsVisible(true)}
-            style={({pressed}) => [s.iconButton, pressed && s.pressed]}>
-            <Text style={[s.icon,{fontSize:21}]}>🔔</Text>
-          </Pressable>
-          <Pressable accessibilityLabel="Εντοπισμός θέσης GPS" accessibilityRole="button" disabled={gpsBusy || !!error} onPress={() => locate()}
-            style={({pressed}) => [s.iconButton, pressed && s.pressed]}>
-            {gpsBusy ? <ActivityIndicator size="small" color={C.accent}/> : <Text style={s.icon}>◎</Text>}
-          </Pressable>
-          <Pressable accessibilityLabel="Ανανέωση καιρού" accessibilityRole="button" onPress={reload}
-            style={({pressed}) => [s.iconButton, pressed && s.pressed]}>
-            <Text style={s.icon}>↻</Text>
-          </Pressable>
-        </View>
-      </View>
       {!!hint && <Pressable style={s.hint} accessibilityRole="button" onPress={() => setHint('')}>
         <Text style={s.hintText}>{hint}  ×</Text>
       </Pressable>}
@@ -199,6 +215,7 @@ function MonoScreen() {
           onLoadProgress={({nativeEvent}) => setProgress(nativeEvent.progress || 0)}
           onLoadEnd={() => {
             web.current?.injectJavaScript(CHECK_HTML_RESPONSE);
+            web.current?.injectJavaScript(INSTALL_NATIVE_HEADER);
             setLoading(false); setShowLaunch(false);
             locate({automatic:true}).catch(()=>{});
           }}
@@ -247,17 +264,6 @@ export default function App() {
 
 const s = StyleSheet.create({
   root:{flex:1,backgroundColor:C.background},
-  header:{height:57,flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:C.border,paddingHorizontal:14,backgroundColor:C.background},
-  identity:{flexDirection:'row',alignItems:'center',gap:10},
-  logo:{width:32,height:32,borderRadius:9,backgroundColor:C.text,alignItems:'center',justifyContent:'center'},
-  logoText:{color:C.surface,fontSize:20,fontWeight:'900',letterSpacing:-2},
-  title:{fontSize:14,fontWeight:'900',letterSpacing:-.2,color:C.text},
-  titleLight:{fontWeight:'500',color:C.muted},
-  subtitle:{fontSize:8,letterSpacing:1.3,fontWeight:'800',color:C.muted,marginTop:2},
-  actions:{flexDirection:'row',gap:7},
-  iconButton:{width:37,height:37,borderRadius:11,borderColor:C.border,borderWidth:1,alignItems:'center',justifyContent:'center',backgroundColor:C.surface},
-  pressed:{backgroundColor:'#eef2f8'},
-  icon:{fontSize:24,lineHeight:29,color:C.text,fontWeight:'400'},
   body:{flex:1,backgroundColor:C.surface},
   web:{flex:1,backgroundColor:C.surface},
   progressTrack:{position:'absolute',top:0,left:0,right:0,height:2,backgroundColor:'transparent'},
