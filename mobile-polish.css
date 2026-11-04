@@ -1,6 +1,9 @@
 /* MONO Mobile Refinement — narrow-screen usability without changing desktop layouts.
    The user-selected light/dark theme remains the source of all component colors. */
 
+/* The mobile-only wordmark must never leak into the desktop app bar. */
+.topbar .mobile-brand { display: none; }
+
 @media (max-width: 930px) {
   html, body { max-width: 100%; overflow-x: clip; }
   .shell, .main, .content, #content { min-width: 0; max-width: 100%; }
