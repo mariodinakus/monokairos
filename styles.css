@@ -559,3 +559,42 @@ html[data-theme=dark]{--r1:#46648c;--r2:#3f7fd8;--r3:#5b9cf0;--r4:#9cc6ff;--r5:#
 /* Keep the extra atmospheric explanation readable in either theme. */
 .mx-atmo-explain summary:focus-visible,.mx-env-guide summary:focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:4px}
 .mx-atmo-explain[open]{background:var(--soft,transparent)}
+
+
+/* Monthly rainfall intelligence: clear totals, climatological reference and partial coverage. */
+.mr-compare{margin-top:16px}
+.mr-compare .mr-heading{margin-bottom:19px}
+.mr-summary{display:flex;gap:12px;flex-wrap:wrap;margin:15px 0 20px}
+.mr-highlight{display:flex;flex-direction:column;gap:4px;min-width:175px;flex:1;padding:15px;border:1px solid var(--line);border-radius:13px;background:var(--soft)}
+.mr-highlight small{font-size:9px;font-weight:750;letter-spacing:.07em;color:var(--sub)}
+.mr-highlight strong{font-size:clamp(22px,2.4vw,31px);line-height:1.15;letter-spacing:-.055em;font-variant-numeric:tabular-nums}
+.mr-highlight strong span{font-size:13px;font-weight:550;letter-spacing:0;color:var(--sub)}
+.mr-highlight>span{font-size:11px;color:var(--sub)}
+.mr-legend{display:flex;align-items:center;gap:10px 20px;flex-wrap:wrap;margin:16px 0 10px;font-size:11px;color:var(--sub)}
+.mr-legend>span{display:inline-flex;align-items:center;gap:7px}
+.mr-key{width:13px;height:10px;display:inline-block;border-radius:2px}
+.mr-key-actual{background:var(--ink)}
+.mr-key-normal{background:var(--muted);opacity:.45}
+.mr-key-partial{background:repeating-linear-gradient(125deg,var(--ink) 0 3px,var(--soft) 3px 6px)}
+.mr-chart-scroll{overflow-x:auto;overscroll-behavior-inline:contain;padding:6px 0 8px;scrollbar-width:thin}
+.mr-chart{display:grid;grid-template-columns:repeat(12,minmax(56px,1fr));min-width:750px;gap:8px;align-items:end;border-bottom:1px solid var(--line)}
+.mr-column{text-align:center;min-width:0}
+.mr-bar-value{font-size:11px;font-weight:750;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap;height:22px;color:var(--ink)}
+.mr-bars{display:flex;gap:4px;justify-content:center;align-items:flex-end;height:155px}
+.mr-bar{width:20px;max-width:42%;border-radius:5px 5px 0 0;transition:height .2s ease}
+.mr-bar.mr-actual{background:var(--ink)}
+.mr-bar.mr-normal{background:var(--muted);opacity:.4}
+.mr-bar.mr-partial{background:repeating-linear-gradient(125deg,var(--ink) 0 4px,var(--soft) 4px 8px);opacity:.7}
+.mr-bar.mr-missing{height:2px;background:transparent;border-bottom:1px dashed var(--line)}
+.mr-xlabel{display:flex;flex-direction:column;align-items:center;gap:3px;margin:10px 0 12px;font-size:11px;color:var(--ink);font-weight:710}
+.mr-xlabel small{font-size:10px;color:var(--muted);font-weight:550}
+.mr-details{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.mr-details summary{cursor:pointer;font-weight:700;font-size:12px;padding:8px 0;color:var(--ink)}
+.mr-table-scroll{overflow-x:auto;margin-top:12px}
+.mr-table-scroll table{border-collapse:collapse;min-width:660px;width:100%;font-size:11px}
+.mr-table-scroll th,.mr-table-scroll td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+.mr-table-scroll th:first-child,.mr-table-scroll td:first-child{text-align:left}
+.mr-table-scroll thead{color:var(--sub);background:var(--soft)}
+.mr-table-scroll tbody th{font-weight:650}
+.mr-compare-note{margin:15px 0 0;font-size:11px;line-height:1.65;color:var(--sub)}
+@media(max-width:700px){.mr-compare{padding:17px}.mr-chart{min-width:700px}.mr-summary{gap:9px}.mr-highlight{min-width:120px}.mr-legend{font-size:10px}.mr-bar{width:19px}}
