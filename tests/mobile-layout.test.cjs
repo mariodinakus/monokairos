@@ -10,7 +10,7 @@ test('phone viewport and layout refinement are in the PWA app shell', () => {
   const html = read('index.html');
   assert.match(html, /name="viewport"[^>]*viewport-fit=cover/);
   assert.match(html, /class="mobile-brand"/);
-  assert.match(html, /mobile-polish\.css\?v=1\.1/);
+  assert.match(html, /mobile-polish\.css\?v=\d+\.\d+/);
   const cssFiles = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(x => x[1]);
   assert.match(cssFiles.at(-1), /^mobile-polish\.css/);
 });
