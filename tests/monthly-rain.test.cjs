@@ -152,7 +152,7 @@ test('monthly comparison shows full-month totals, historic normals and clearly m
   assert.match(html,/31/);
   assert.match(html,/3\/30/);
   assert.match(html,/Οι μήνες με \*/);
-  assert.match(html,/12 μηνών/);
+  assert.match(html,/Τελευταίοι 12 μήνες/);
   assert.doesNotMatch(html,/<test>/);
   assert.match(Rain.renderComparison({status:'error'},null,{lang:'en'}),/unavailable/);
 });
