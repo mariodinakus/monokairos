@@ -42,7 +42,8 @@ async function readFeed(f) {
       const title = decode(tag(block, 'title'));
       const link = decode(tag(block, 'link')) || attr(block, 'link', 'href');
       const rawSummary = tag(block, 'description') || tag(block, 'summary') || tag(block, 'content:encoded');
-      const summary = decode(rawSummary).replace(/\s*(The post|Το άρθρο|Η δημοσίευση)\s.*$/i, '').slice(0, 260);
+      // Google News RSS descriptions are clusters of HTML links, not article summaries.
+      const summary = f.aggregate ? '' : decode(rawSummary).replace(/\s*(The post|Το άρθρο|Η δημοσίευση)\s.*$/i, '').slice(0, 260);
       const date = Date.parse(decode(tag(block, 'pubDate') || tag(block, 'published') || tag(block, 'updated') || tag(block, 'dc:date')));
       const t = Number.isFinite(date) ? date : null;
       const rawImage = attr(block, 'media:content', 'url') || attr(block, 'media:thumbnail', 'url') || attr(block, 'enclosure', 'url');
