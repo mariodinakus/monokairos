@@ -9,7 +9,7 @@
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
 const VERSION = '4.2';
-const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain' };
+const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
 /* ------------------------------------------------------------------ catalogue */
@@ -430,7 +430,7 @@ const state = {
   gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.globeTilesV1 ? (UI.gBase || 'detail') : 'detail', gLayers: UI.globeTilesV1 ? { radar: false, rain: false, grid: false, temps: true, ...(UI.gLayers || {}) } : { radar: false, rain: false, grid: false, temps: UI.gLayers?.temps ?? true }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
-  gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null
+  gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null, recentRain: null
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
 const AN = k => ALG_NAMES[state.lang][k] || k;
@@ -901,6 +901,39 @@ async function loadMonthlyRain(c, force = false) {
   schedule();
 }
 
+const recentRainMemo = new Map(), RECENT_RAIN_TTL = 6 * 3600e3;
+let recentRainSeq = 0;
+async function loadRecentRain(c, force = false) {
+  const key = ckey(c), previous = state.recentRain;
+  if (!force && previous?.key === key && ['loading', 'ready', 'error'].includes(previous.status)) return;
+  const seq = ++recentRainSeq;
+  if (!force) {
+    const cached = recentRainMemo.get(key) || read(K.recentRain, {})[key];
+    if (cached && Number.isFinite(cached.at) && Date.now() - cached.at >= 0 && Date.now() - cached.at < RECENT_RAIN_TTL && cached.daily) {
+      state.recentRain = { key, status:'ready', daily:cached.daily, fetchedAt:cached.at };
+      return;
+    }
+  }
+  state.recentRain = { key, status:'loading' };
+  try {
+    if (!window.MONOMonthlyRain) throw new Error('rain history component unavailable');
+    const daily = await window.MONOMonthlyRain.loadRecent(c);
+    if (seq !== recentRainSeq || ckey(state.city) !== key) return;
+    const cached = { at:Date.now(), daily };
+    recentRainMemo.set(key, cached);
+    while (recentRainMemo.size > 8) recentRainMemo.delete(recentRainMemo.keys().next().value);
+    if (cacheAllowed()) {
+      const all = read(K.recentRain, {}); all[key] = cached;
+      write(K.recentRain, Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 5)));
+    }
+    state.recentRain = { key, status:'ready', daily, fetchedAt:cached.at };
+  } catch {
+    if (seq !== recentRainSeq || ckey(state.city) !== key) return;
+    state.recentRain = { key, status:'error' };
+  }
+  schedule();
+}
+
 async function loadAll(force = false) {
   loadSpace(force);
   loadCosmic(force);
@@ -908,7 +941,7 @@ async function loadAll(force = false) {
   const c = state.city, gen = ++state.gen;
   if(state.sharedRainCity !== ckey(c)) {state.sharedRain = null;state.stationRain = null;state.communityStations = null;state.communityRain = null;state.stationBoxes=null;}
   state.sharedRainCity = ckey(c);
-  state.mainErr = false; state.forecastErrors = ''; loadMonthlyRain(c); render();
+  state.mainErr = false; state.forecastErrors = ''; loadMonthlyRain(c); loadRecentRain(c, force); render();
   try {
     // The primary forecast is essential for every page. Use a same-origin edge rewrite
     // route first; retry Open-Meteo directly when Vercel/upstream
@@ -1647,7 +1680,7 @@ function rainPage() {
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const eps = rainEpisodes();
   const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain}) || '') + rainMeaningCard() + communityRainCard() + communityStationsCard() + rainNowCard(false)
+  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city)}) || '') + rainMeaningCard() + communityRainCard() + communityStationsCard() + rainNowCard(false)
     + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
        <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
