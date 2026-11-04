@@ -8,7 +8,7 @@
 'use strict';
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
-const VERSION = '4.2';
+const VERSION = '4.3';
 const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
@@ -122,7 +122,7 @@ el: {
   chosen:'σε χρήση', algo:'Αλγόριθμος', maeTest:'MAE τεστ', skillClim:'Βελτίωση vs κλιματολογία', maeVal:'MAE επικύρωσης', baseline:'αναφορά', clim:'Κλιματολογία',
   zooChart:'Οι αλγόριθμοι για τις επόμενες 72 ώρες', holdTemp:'Σφάλμα θερμοκρασίας', vsMean:'έναντι μέσου όρου', vsBest:'Καλύτερο μεμονωμένο',
   brier:'Brier βροχής', brierNote:'0 = τέλεια, μικρότερο καλύτερο', windMae:'Σφάλμα ανέμου',
-  modelTable:'Μοντέλα στο MOS', bias:'Μεροληψία', diurnal:'Ημερήσιο εύρος', rawMae:'Σφάλμα πριν', corMae:'Σφάλμα μετά', samples:'Δείγματα',
+  modelTable:'Μοντέλα στο MOS', bias:'Μεροληψία', diurnal:'Ημερήσιο εύρος', rawMae:'Σφάλμα πριν', corMae:'Σφάλμα μετά', sameMae:'MAE · ίδιο δείγμα', samples:'Δείγματα',
   rainBlock:'Βροχή: αλγόριθμοι πιθανότητας', pod:'Ποσοστό εντοπισμού', far:'Ψευδείς συναγερμοί', wetHours:'Βροχερές ώρες τεστ',
   stationBlock:'Ζωντανή διόρθωση από σταθμό', offset:'Μέση απόκλιση σταθμού', tau:'Χρόνος απόσβεσης', maeBefore:'Σφάλμα 72h πριν', maeAfter:'μετά',
   noStation:'Δεν βρέθηκε σταθμός METAR σε απόσταση έως 30 km. Η πρόγνωση στηρίζεται μόνο στα μοντέλα.',
@@ -208,7 +208,7 @@ el: {
   ],
   stepsList:[
     ['Ζωντανές προγνώσεις','Έως 35 μοντέλα (παγκόσμια και περιοχικά υψηλής ανάλυσης) και 8 ensembles (έως 345 μέλη) φορτώνονται για το σημείο. Μοντέλα εκτός περιοχής ή που αντιγράφουν άλλο εντοπίζονται και αφαιρούνται.'],
-    ['Ιστορικό σφαλμάτων','Για τις τελευταίες 8 εβδομάδες κατεβαίνουν οι παλιές προγνώσεις κάθε μοντέλου (ορίζοντας 0–5 ημέρες) και συγκρίνονται με την αναανάλυση ERA5.'],
+    ['Ιστορικό σφαλμάτων','Για τους τελευταίους 9 μήνες κατεβαίνουν οι παλιές προγνώσεις κάθε μοντέλου (ορίζοντας 0–5 ημέρες). Εκτός από το κύριο χρονολογικό τεστ, γίνονται μηνιαία κυλιόμενα τεστ: 60+ ημέρες εκπαίδευση, 30 ημέρες επικύρωση και ο επόμενος μήνας ως αθέατο τεστ.'],
     ['Έξι αλγόριθμοι','Μέσος όρος, καλύτερο μοντέλο, MOS με διόρθωση ημερήσιας μεροληψίας, ridge stacking, φίλτρο Kalman και ανάλογα (analog ensemble) εκπαιδεύονται χωριστά για κάθε ορίζοντα.'],
     ['Τίμιος έλεγχος','Τα δεδομένα χωρίζονται χρονολογικά 60/20/20. Ο αλγόριθμος ή ο συνδυασμός των τριών καλύτερων επιλέγεται στην επικύρωση. Τα νούμερα που βλέπεις είναι από το τεστ, που δεν χρησιμοποιήθηκε πουθενά.'],
     ['Βροχή','Ψήφος μοντέλων, λογιστική παλινδρόμηση και ανάλογα συγκρίνονται με το Brier score. Το αποτέλεσμα συνδυάζεται με το ποσοστό μελών ensemble που δίνουν βροχή.'],
@@ -241,7 +241,7 @@ en: {
   chosen:'in use', algo:'Algorithm', maeTest:'Test MAE', skillClim:'Skill vs climatology', maeVal:'Validation MAE', baseline:'baseline', clim:'Climatology',
   zooChart:'The algorithms for the next 72 hours', holdTemp:'Temperature error', vsMean:'vs plain average', vsBest:'Best single model',
   brier:'Rain Brier score', brierNote:'0 = perfect, lower is better', windMae:'Wind error',
-  modelTable:'Models inside MOS', bias:'Bias', diurnal:'Diurnal swing', rawMae:'Error before', corMae:'Error after', samples:'Samples',
+  modelTable:'Models inside MOS', bias:'Bias', diurnal:'Diurnal swing', rawMae:'Error before', corMae:'Error after', sameMae:'MAE · matched sample', samples:'Samples',
   rainBlock:'Rain: probability algorithms', pod:'Detection rate', far:'False alarms', wetHours:'Wet hours in test',
   stationBlock:'Live station correction', offset:'Mean station offset', tau:'Decay time', maeBefore:'72h error before', maeAfter:'after',
   noStation:'No METAR station found within 30 km. The forecast relies on the models alone.',
@@ -327,7 +327,7 @@ en: {
   ],
   stepsList:[
     ['Live forecasts','Up to 35 models (global and high-resolution regional) and 8 ensembles (up to 345 members) are loaded for the point. Models outside their domain or copying another are detected and removed.'],
-    ['Error history','Each model’s past forecasts for the last 8 weeks (lead 0–5 days) are downloaded and compared with the ERA5 reanalysis.'],
+    ['Error history','Each model’s past forecasts for the last 9 months (lead 0–5 days) are compared with ERA5. Alongside the main chronological split, monthly rolling tests use 60+ days for training, 30 days for validation, and the following month as unseen test data.'],
     ['Six algorithms','Plain average, best model, MOS with diurnal bias correction, ridge stacking, a Kalman filter and an analog ensemble are trained separately for every lead.'],
     ['Honest testing','The data are split in time 60/20/20. The algorithm, or the blend of the best three, is chosen on validation. The numbers you see come from the test set, which is used nowhere else.'],
     ['Rain','Model vote, logistic regression and analogs are compared with the Brier score. The result is blended with the share of ensemble members that give rain.'],
@@ -1037,7 +1037,7 @@ function schedule() { clearTimeout(pending); pending = setTimeout(() => { recomp
 let worker = null, workerOk = true, jobId = 0;
 function runTraining(payload) {
   return new Promise((resolve, reject) => {
-    const inline = () => setTimeout(() => { try { resolve({ temp: M.fitVariable(payload.temp), wind: M.fitVariable(payload.wind, { nonNegative: true }), precip: M.fitRain(payload.precip), cloud: M.fitVariable(payload.cloud) }); } catch (e) { reject(e); } }, 30);
+    const inline = () => setTimeout(() => { try { resolve({ temp: M.fitVariable(payload.temp, { rolling: true }), wind: M.fitVariable(payload.wind, { nonNegative: true }), precip: M.fitRain(payload.precip), cloud: M.fitVariable(payload.cloud) }); } catch (e) { reject(e); } }, 30);
     if (!workerOk || typeof Worker === 'undefined' || location.protocol === 'file:' || window.ICONS) return inline();
     try {
       worker ||= new Worker('trainer.js');
@@ -1061,7 +1061,7 @@ async function ensureTraining(c, gen, force = false) {
   if (!active.length) { state.trainStatus = 'error'; schedule(); return; }
   state.trainStatus = 'loading'; state.train = hit && hit.v === VERSION ? hit : null; schedule();
   try {
-    const start = isoDate(-62), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
+    const start = isoDate(-276), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
     const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
     const full = M.LEADS.flatMap(vars).join(','), noCloud = M.LEADS.flatMap(k => vars(k).slice(0,3)).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
     const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
@@ -1263,6 +1263,22 @@ function recompute() {
     }
   }
 
+  const stationChecks = stations.filter(s => fin(s.dist) && s.dist <= 120).slice(0, 6).map(s => {
+    const paired = Object.fromEntries(order.map(id => [id, []]));
+    for (const o of s.list || []) {
+      if (!fin(o.temp) || !fin(o.t)) continue;
+      const t = Math.round(o.t / 3600e3) * 3600e3, i = idx.get(t);
+      if (i === undefined || Math.abs(o.t - t) > 35 * 60e3 || !fin(out[i]?.tempModel)) continue;
+      for (const id of order) { const v = md[id]?.temperature_2m?.[i]; if (fin(v)) paired[id].push({ model: v - o.temp, mono: out[i].tempModel - o.temp }); }
+    }
+    const scores = Object.entries(paired).filter(([, a]) => a.length >= 12).map(([id, a]) => ({
+      id, name: MODELS.find(m => m.id === id)?.name || id, n: a.length,
+      mae: M.mean(a.map(x => Math.abs(x.model))), bias: M.mean(a.map(x => x.model)),
+      monoMae: M.mean(a.map(x => Math.abs(x.mono))), monoBias: M.mean(a.map(x => x.mono))
+    })).filter(x => fin(x.mae) && fin(x.monoMae)).sort((a, b) => a.mae - b.mae);
+    return scores.length ? { id: s.id, name: s.name || s.id, dist: s.dist, best: scores[0] } : null;
+  }).filter(Boolean);
+
   // ---- current conditions
   const lastObs = station?.last, fresh = lastObs && now - lastObs.t < 80 * 60e3 && useStation;
   const cur = W.current || {}, nowRow = out[iNow];
@@ -1276,7 +1292,7 @@ function recompute() {
   };
   current.isDay = cur.is_day ?? nowRow?.isDay ?? 1;
 
-  state.view = { times, rows: out, iNow, daily, periods, current, md, order, active, dup, famInfo, famCount: fams.length, famP,
+  state.view = { times, rows: out, iNow, daily, periods, current, md, order, active, dup, famInfo, famCount: fams.length, famP, stationChecks,
     members: famT.reduce((a, f) => a + f.members.length, 0), S, station, stations, useStation, live, zone, at: now };
 }
 
@@ -2906,7 +2922,7 @@ function labPage() {
     const zchart = chart({ rows, series: [...M.LIVE.filter(m => m !== ch).map(m => ({ vals: rows.map(r => r.methods?.[m] ?? null), cls: 'model' })), { vals: rows.map(r => r.methods?.[ch] ?? null), cls: 'mono' }] });
     const mos = LT.prod.mos?.models || {}, ids = Object.keys(mos).sort((a, b) => mos[b].weight - mos[a].weight);
     const wt = ids.map(id => { const m = mos[id], pm = LT.perModel[id], amp = Math.hypot(m.bias[1], m.bias[2]);
-      return `<tr><td><b>${esc(MODELS.find(x => x.id === id)?.name || id)}</b></td><td><div class="wbar"><span style="width:${Math.round(m.weight * 100)}%"></span></div><small>${Math.round(m.weight * 100)}%</small></td><td class="num">${sgn(m.bias[0], 2)}°</td><td class="num hide-sm">±${num(amp, 2)}°</td><td class="num">${pm ? num(pm.rawMae, 2) + '°' : '—'}</td><td class="num">${pm ? num(pm.corMae, 2) + '°' : '—'}</td><td class="num hide-sm">${m.n}</td></tr>`; }).join('');
+      return `<tr><td><b>${esc(MODELS.find(x => x.id === id)?.name || id)}</b></td><td><div class="wbar"><span style="width:${Math.round(m.weight * 100)}%"></span></div><small>${Math.round(m.weight * 100)}%</small></td><td class="num">${sgn(m.bias[0], 2)}°</td><td class="num hide-sm">±${num(amp, 2)}°</td><td class="num">${pm ? num(pm.rawMae, 2) + '°' : '—'}</td><td class="num">${pm ? num(pm.corMae, 2) + '°' : '—'}</td><td class="num">${LT.matchup?.[id] ? `${num(LT.matchup[id].model.mae, 2)}° · n=${LT.matchup[id].n}` : '—'}</td><td class="num">${LT.matchup?.[id] ? `${num(LT.matchup[id].mono.mae, 2)}°` : '—'}</td><td class="num hide-sm">${m.n}</td></tr>`; }).join('');
     const rain = LP ? `<div class="card"><div class="panelhead"><b>${T('rainBlock')}</b><span class="badge">${esc(AN(LP.choice))}</span></div>
       ${[...M.RAIN_LIVE, 'combo', 'clim'].filter(m => fin(LP.test[m])).map(m => `<div class="kv ${m === LP.choice ? 'strong' : ''}"><span>Brier · ${esc(AN(m))}</span><b>${num(LP.test[m], 3)}</b></div>`).join('')}
       <div class="kv"><span>${T('pod')}</span><b>${pct(LP.pod)}</b></div><div class="kv"><span>${T('far')}</span><b>${pct(LP.far)}</b></div><div class="kv"><span>${T('wetHours')}</span><b>${LP.wetTest} / ${LP.n.test}</b></div><p class="notice">${T('brierNote')}</p></div>` : `<div class="card placeholder"><b>${T('rainBlock')}</b>${T('untrained')}</div>`;
@@ -2914,7 +2930,7 @@ function labPage() {
       <div class="zoohead hide-sm"><span>${T('algo')}</span><span></span><span>${T('maeTest')}</span><span>RMSE</span><span>${T('skillClim')}</span><span>${T('maeVal')}</span></div>${zoo}
       <p class="notice">${T('period')}: ${esc(tr.start)} → ${esc(tr.end)} · ${tr.hours} h · ${tr.models} ${T('modelsUsed')} · ${T('split')}: ${LT.n.train} / ${LT.n.val} / ${LT.n.test} h · ${T('truth')}: ERA5</p></section>
       <section class="section card"><div class="panelhead"><b>${T('zooChart')}</b></div>${zchart}${legend([['mono', esc(AN(ch))], ['model', T('others')]])}</section>
-      <section class="section card"><div class="panelhead"><b>${T('modelTable')}</b><span class="badge">${T('d')}+${k}</span></div><div class="tablewrap"><table class="metric-table"><thead><tr><th>${T('model')}</th><th>${T('weight')}</th><th>${T('bias')}</th><th class="hide-sm">${T('diurnal')}</th><th>${T('rawMae')}</th><th>${T('corMae')}</th><th class="hide-sm">${T('samples')}</th></tr></thead><tbody>${wt}</tbody></table></div></section>
+      <section class="section card"><div class="panelhead"><b>${T('modelTable')}</b><span class="badge">${T('d')}+${k}</span></div><div class="tablewrap"><table class="metric-table"><thead><tr><th>${T('model')}</th><th>${T('weight')}</th><th>${T('bias')}</th><th class="hide-sm">${T('diurnal')}</th><th>${T('rawMae')}</th><th>${T('corMae')}</th><th>${T('sameMae')} · μοντέλο</th><th>${T('sameMae')} · MONO</th><th class="hide-sm">${T('samples')}</th></tr></thead><tbody>${wt}</tbody></table></div></section>
       <section class="section dual">${rain}${stationCard()}</section>`;
   }
   const steps = `<section class="section card"><div class="panelhead"><b>${T('steps')}</b></div><ol class="steps">${T('stepsList').map(([a, b]) => `<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol></section>`;

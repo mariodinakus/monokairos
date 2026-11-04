@@ -184,6 +184,30 @@
     const ts = rows.filter(r => fin(r.y)).map(r => r.t).sort((a, b) => a - b);
     return { a: ts[Math.floor(ts.length * 0.6)] ?? Infinity, b: ts[Math.floor(ts.length * 0.8)] ?? Infinity };
   }
+  function rollingMonthly(rows, ids, lagH, opts = {}) {
+    const months = [...new Set(rows.filter(r => fin(r.y)).map(r => new Date(r.t).toISOString().slice(0, 7)))].sort();
+    const kal = kalmanRun(rows, ids, lagH, opts), result = [], day = 86400e3;
+    for (const month of months) {
+      const [yy, mm] = month.split('-').map(Number), start = Date.UTC(yy, mm - 1, 1), end = Date.UTC(yy, mm, 1), valStart = start - 30 * day;
+      const train = rows.filter(r => r.t < valStart), val = rows.filter(r => r.t >= valStart && r.t < start), test = rows.filter(r => r.t >= start && r.t < end);
+      if (train.filter(r => fin(r.y)).length < 60 * 24 || val.filter(r => fin(r.y)).length < 7 * 24 || test.filter(r => fin(r.y)).length < 7 * 24) continue;
+      const fitted = {}; for (const m of LIVE) if (m !== 'kalman') fitted[m] = ALG[m].fit(train, ids);
+      const predOf = (m, r) => m === 'kalman' ? kal.preds.get(r.i) : clampNN(ALG[m].pred(fitted[m], r, opts), opts);
+      const valS = {}; for (const m of LIVE) valS[m] = scoreMae(val, r => predOf(m, r));
+      valS.mean = scoreMae(val, r => r.mean);
+      const ranked = LIVE.filter(m => valS[m]).sort((a, b) => valS[a].mae - valS[b].mae).slice(0, 3);
+      const cw = {}; let sumW = 0; for (const m of ranked) { cw[m] = 1 / Math.max(valS[m].mae, 0.05) ** 2; sumW += cw[m]; }
+      for (const m of ranked) cw[m] /= sumW || 1;
+      const combo = r => { let s = 0, w = 0; for (const m of ranked) { const p = predOf(m, r); if (fin(p)) { s += p * cw[m]; w += cw[m]; } } return w ? s / w : null; };
+      valS.combo = scoreMae(val, combo);
+      const choices = LIVE.filter(m => valS[m]).concat(valS.combo ? ['combo'] : []);
+      if (!choices.length) continue;
+      const choice = choices.reduce((a, b) => valS[b].mae < valS[a].mae ? b : a, choices[0]);
+      const score = scoreMae(test, r => choice === 'combo' ? combo(r) : predOf(choice, r)), baseline = scoreMae(test, r => r.mean);
+      if (score && baseline) result.push({ month, choice, mae: r1(score.mae), rmse: r1(score.rmse), bias: r1(score.bias), meanMae: r1(baseline.mae), n: score.n });
+    }
+    return result;
+  }
   function scoreMae(rows, f) { const e = []; for (const r of rows) { if (!fin(r.y)) continue; const p = f(r); if (fin(p)) e.push(p - r.y); } return e.length ? { mae: mean(e.map(Math.abs)), rmse: Math.sqrt(mean(e.map(x => x * x))), bias: mean(e), n: e.length } : null; }
   const clampNN = (v, o) => (o.nonNegative && fin(v) ? Math.max(0, v) : v);
   const shrinkScores = s => Object.fromEntries(Object.entries(s).filter(([, v]) => v).map(([m, v]) => [m, { mae: r1(v.mae), rmse: r1(v.rmse), bias: r1(v.bias), n: v.n }]));
@@ -216,6 +240,13 @@
       valS.combo = scoreMae(val, comboF); testS.combo = scoreMae(test, comboF);
       const cands = [...LIVE, 'combo'].filter(m => valS[m]);
       const choice = cands.reduce((x, y) => (valS[y].mae < valS[x].mae - 1e-9 ? y : x), cands[0] || 'mean');
+      const chosenPred = r => choice === 'combo' ? comboF(r) : predOf(choice, r);
+      const matchup = {};
+      for (const id of ids) {
+        const paired = test.filter(r => fin(r.y) && fin(r.vals[id]) && fin(chosenPred(r)));
+        const modelScore = scoreMae(paired, r => r.vals[id]), monoScore = scoreMae(paired, r => chosenPred(r));
+        if (modelScore && monoScore) matchup[id] = { model: modelScore, mono: monoScore, n: paired.length };
+      }
       const perModel = {};
       for (const id of ids) {
         const raw = [], cor = [], m = fitted.mos.models?.[id];
@@ -225,7 +256,8 @@
       const prod = {}; for (const m of LIVE) if (m !== 'kalman') prod[m] = ALG[m].fit(rows, ids);
       prod.kalman = { state: kal.state };
       const sc = testS[choice] || testS.mean;
-      out.leads[k] = { choice, combo: cw, prod, ids, duplicates: dup, perModel,
+      out.leads[k] = { choice, combo: cw, prod, ids, duplicates: dup, perModel, matchup,
+        rolling: opts.rolling ? rollingMonthly(rows, ids, lagH, opts) : [],
         val: shrinkScores(valS), test: shrinkScores(testS), n: { train: train.length, val: val.length, test: test.length },
         sigma: 1.2533 * (sc?.mae ?? 1.5) };
     }
