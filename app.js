@@ -2956,11 +2956,11 @@ function liveCard() {
 }
 
 /* ------------------------------------------------------------------ weather news (publishers' RSS via /api/news) */
-const NEWS_TTL = 15 * 60e3;
+const NEWS_TTL = 5 * 60e3;
 async function loadNews(force = false) {
   if (!location.protocol.startsWith('http')) return;
   if (!force && state.news?.items && Date.now() - state.news.at < NEWS_TTL) return;
-  try { const d = await getJSON('/api/news', 20000); state.news = { items: d.items || [], at: Date.now() }; }
+  try { const d = await getJSON(force ? '/api/news?refresh=' + Date.now() : '/api/news', 20000); if (!Array.isArray(d.items)) throw new Error('Invalid news response'); state.news = { items: d.items, at: Date.now(), sourcesOk: d.sourcesOk, sourcesTotal: d.sourcesTotal }; }
   catch { if (!state.news?.items) state.news = { error: true, at: Date.now() }; }
   if (state.page === 'news' || state.page === 'now' || state.page === 'maps') render();
 }
@@ -2976,19 +2976,20 @@ function newsFor(tab) {
   return items.filter(x => x.lang === (tab === 'gr' ? 'el' : 'en'));
 }
 const newsAge = t => { if (!t) return ''; const m = Math.max(1, Math.round((Date.now() - t) / 60e3)); return m < 60 ? `${m} ${T('minutes')} ${T('ago')}` : m < 48 * 60 ? `${Math.round(m / 60)} ${T('hrs')} ${T('ago')}` : dt(t, { day: 'numeric', month: 'short' }); };
-const newsItem = (x, big) => /^https?:\/\//i.test(x.link || '') ? `<a class="newsitem ${big ? 'big' : ''}" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer"><div><b>${esc(x.title)}</b><small>${esc(x.source)} · ${esc(String(x.lang || '').toUpperCase())} · ${esc(newsAge(x.t))}</small></div></a>` : '';
+const newsItem = (x, big) => /^https?:\/\//i.test(x.link || '') ? `<a class="newsitem ${big ? 'big' : ''}" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${big && /^https:\/\//i.test(x.image || '') ? `<img src="${esc(x.image)}" loading="lazy" alt="">` : ''}<div><b>${esc(x.title)}</b>${big && x.summary ? `<p>${esc(x.summary)}</p>` : ''}<small>${esc(x.source)} · ${esc(String(x.lang || '').toUpperCase())} · ${esc(newsAge(x.t))}</small></div></a>` : '';
 function newsCard() {
   if (!state.news?.items?.length) return '';
-  const local = newsFor('city'), pref = newsFor(state.city.cc === 'GR' || state.lang === 'el' ? 'gr' : 'world');
+  const local = newsFor('city').filter(x => !x.t || Date.now() - x.t < 3 * 86400e3), pref = newsFor(state.city.cc === 'GR' || state.lang === 'el' ? 'gr' : 'world');
   const pick = [...local, ...pref.filter(x => !local.includes(x))].slice(0, 3);
   if (!pick.length) return '';
   return `<section class="section card"><div class="panelhead"><div><b>${T('newsTitle')}</b><div class="section-sub">${local.length ? T('newsLocal') + ' ' + esc(cityName(state.city)) : T('newsLatest')}</div></div>${btn('goto', '↗ ' + T('news'), 'data-page="news"')}</div><div class="newslist">${pick.map(x => newsItem(x)).join('')}</div></section>`;
 }
 function newsPage() {
   const head = header(T('newsTitle'), T('newsSub'), btn('reloadNews', '↻ ' + T('refresh')));
-  if (!state.news) { loadNews(); return head + loadingCard(); }
+  if (!state.news || state.news.loading) { if (!state.news) loadNews(); return head + loadingCard(); }
   if (state.news.error) return head + `<div class="card placeholder"><b>${T('noData')}</b>${T('newsFail')}</div>`;
-  const tab = state.newsTab || (newsFor('city').length ? 'city' : state.lang === 'el' ? 'gr' : 'world');
+  const hasFreshLocal = newsFor('city').some(x => x.t && Date.now() - x.t < 3 * 86400e3);
+  const tab = state.newsTab || (hasFreshLocal ? 'city' : state.lang === 'el' ? 'gr' : 'world');
   const tabs = [['city', T('newsCity') + ' · ' + cityName(state.city)], ['gr', T('newsGreece')], ['world', T('newsWorld')]];
   const list = newsFor(tab);
   const chips = `<div class="chips">${tabs.map(([k, l]) => `<button class="chip ${tab === k ? 'active' : ''}" data-action="newsTab" data-v="${k}">${esc(l)} <small>${newsFor(k).length}</small></button>`).join('')}</div>`;
@@ -3542,7 +3543,7 @@ function onClick(e) {
   else if (a === 'windyRefresh' || a === 'windyBack') { state.windyStatus='idle'; loadWindyOpen(); }
   else if (a === 'windySelect') { const id=b.dataset.id||''; if(/^[a-z0-9_-]{4,48}$/i.test(id)){state.windyStatus='idle';loadWindyOpen(id);} }
   else if (a === 'newsTab') { state.newsTab = b.dataset.v; render(); }
-  else if (a === 'reloadNews') { state.news = null; render(); loadNews(true); }
+  else if (a === 'reloadNews') { state.news = { loading: true }; render(); loadNews(true); }
   else if (a === 'climMonth') { state.climMonth = +b.dataset.n; render(); }
   else if (a === 'climSrc') { state.climSrc = b.dataset.v; render(); }
   else if (a === 'climOlder') loadClimate(1940);
