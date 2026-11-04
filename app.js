@@ -873,12 +873,12 @@ let monthlyRainSeq = 0;
 async function loadMonthlyRain(c, force = false) {
   const key = ckey(c), previous = state.monthlyRain;
   if (!force && previous?.key === key && previous.status === 'loading') return;
-  if (!force && previous?.key === key && previous.status === 'ready' && Date.now() - previous.fetchedAt < RECENT_RAIN_TTL) return;
+  if (!force && previous?.key === key && previous.status === 'ready' && Number.isFinite(previous.fetchedAt) && Date.now() - previous.fetchedAt < MONTHLY_RAIN_TTL) return;
   const seq = ++monthlyRainSeq;
   if (!force) {
     const cached = monthlyRainMemo.get(key) || read(K.monthlyRain, {})[key];
     if (cached && Number.isFinite(cached.at) && Date.now() - cached.at >= 0 && Date.now() - cached.at < MONTHLY_RAIN_TTL && cached.normals) {
-      state.monthlyRain = { key, status:'ready', normals:cached.normals };
+      state.monthlyRain = { key, status:'ready', normals:cached.normals, fetchedAt:cached.at };
       return;
     }
   }
@@ -894,7 +894,7 @@ async function loadMonthlyRain(c, force = false) {
       const all = read(K.monthlyRain, {}); all[key] = cached;
       write(K.monthlyRain, Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 5)));
     }
-    state.monthlyRain = { key, status:'ready', normals };
+    state.monthlyRain = { key, status:'ready', normals, fetchedAt:cached.at };
   } catch {
     if (seq !== monthlyRainSeq || ckey(state.city) !== key) return;
     state.monthlyRain = { key, status:'error' };
@@ -906,11 +906,11 @@ const recentRainMemo = new Map(), RECENT_RAIN_TTL = 6 * 3600e3;
 let recentRainSeq = 0;
 async function loadRecentRain(c, force = false) {
   const key = ckey(c), previous = state.recentRain;
-  if (!force && previous?.key === key && ['loading', 'ready', 'error'].includes(previous.status)) return;
+  if (!force && previous?.key === key && (previous.status === 'loading' || (previous.status === 'ready' && previous.daily?.time?.length >= 700 && Date.now() - previous.fetchedAt < RECENT_RAIN_TTL))) return;
   const seq = ++recentRainSeq;
   if (!force) {
     const cached = recentRainMemo.get(key) || read(K.recentRain, {})[key];
-    if (cached && Number.isFinite(cached.at) && Date.now() - cached.at >= 0 && Date.now() - cached.at < RECENT_RAIN_TTL && cached.daily) {
+    if (cached && Number.isFinite(cached.at) && Date.now() - cached.at >= 0 && Date.now() - cached.at < RECENT_RAIN_TTL && cached.daily?.time?.length >= 700 && cached.daily?.model === 'era5') {
       state.recentRain = { key, status:'ready', daily:cached.daily, fetchedAt:cached.at };
       return;
     }
@@ -1396,7 +1396,7 @@ function nowPage() {
   const ch = chart({ rows: win, band: { lo: win.map(r => (past(r) ? null : r.lo)), hi: win.map(r => (past(r) ? null : r.hi)) },
     series: [{ vals: win.map(r => (past(r) ? r.tempModel : null)), cls: 'hind' }, { vals: win.map((r, j) => (!past(r) || (win[j + 1] && !past(win[j + 1])) ? r.temp : null)), cls: 'mono' }],
     points: win.map(r => r.obs), bars: win.map(r => (past(r) ? null : r.amount)), nowT: Date.now() });
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || ''}${window.MONOMonthlyRain?.render(state.monthlyRain, {lang:state.lang,zone:V.zone,city:cityName(c)}) || ''}${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoForecast.compact(forecastOptions())}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
+  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || ''}${window.MONOMonthlyRain?.render(state.monthlyRain, {lang:state.lang,zone:V.zone,city:cityName(c)}) || ''}${window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(c)}) || ''}${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoForecast.compact(forecastOptions())}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${esc(rainSentence())}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(rows.slice(iN, iN + 25), cur)}</section>
     <section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
@@ -1697,7 +1697,7 @@ function rainPage() {
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const eps = rainEpisodes();
   const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city)}) || '') + rainMeaningCard() + communityRainCard() + communityStationsCard() + rainNowCard(false)
+  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city)}) || '') + (window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(state.city)}) || '') + rainMeaningCard() + communityRainCard() + communityStationsCard() + rainNowCard(false)
     + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
        <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
