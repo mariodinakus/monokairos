@@ -872,7 +872,8 @@ const monthlyRainMemo = new Map(), MONTHLY_RAIN_TTL = 90 * 86400e3;
 let monthlyRainSeq = 0;
 async function loadMonthlyRain(c, force = false) {
   const key = ckey(c), previous = state.monthlyRain;
-  if (!force && previous?.key === key && ['loading', 'ready', 'error'].includes(previous.status)) return;
+  if (!force && previous?.key === key && previous.status === 'loading') return;
+  if (!force && previous?.key === key && previous.status === 'ready' && Date.now() - previous.fetchedAt < RECENT_RAIN_TTL) return;
   const seq = ++monthlyRainSeq;
   if (!force) {
     const cached = monthlyRainMemo.get(key) || read(K.monthlyRain, {})[key];
