@@ -61,15 +61,17 @@
   async function loadRecent(city, fetcher = fetch) {
     const lat = Number(city?.lat), lon = Number(city?.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) throw new Error('invalid location');
-    const end = new Date(), start = new Date(Date.now() - 45 * 86400000);
-    const params = new URLSearchParams({ latitude:lat.toFixed(4), longitude:lon.toFixed(4), start_date:start.toISOString().slice(0,10), end_date:end.toISOString().slice(0,10), daily:'precipitation_sum', timezone:'auto' });
+    // 26 months support year-over-year comparisons plus a complete rolling 12 months.
+    const end = new Date(), start = new Date(Date.now() - 790 * 86400000);
+    const params = new URLSearchParams({ latitude:lat.toFixed(4), longitude:lon.toFixed(4), start_date:start.toISOString().slice(0,10), end_date:end.toISOString().slice(0,10), models:'era5', daily:'rain_sum', timezone:'auto' });
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 30000);
     try {
       const response = await fetcher('https://archive-api.open-meteo.com/v1/archive?' + params, {signal:controller.signal});
       if (!response.ok) throw new Error('history unavailable');
       const json = await response.json(), daily = json?.daily;
-      if (json?.error || !Array.isArray(daily?.time) || !Array.isArray(daily?.precipitation_sum) || daily.time.length !== daily.precipitation_sum.length) throw new Error('invalid history');
-      return {time:daily.time, precipitation_sum:daily.precipitation_sum, timezone:json.timezone || 'auto'};
+      if (json?.error || !Array.isArray(daily?.time) || !Array.isArray(daily?.rain_sum) || daily.time.length !== daily.rain_sum.length) throw new Error('invalid history');
+      // Existing recent-rain panels consume precipitation_sum; both charts now use the same ERA5 rain_sum source.
+      return {time:daily.time, precipitation_sum:daily.rain_sum, timezone:json.timezone || 'auto', model:'era5'};
     } finally { clearTimeout(timer); }
   }
 
@@ -121,6 +123,104 @@
     return section('<div class="mr-metrics">'+rows+'</div><div class="mr-foot"><p>ERA5 · Open-Meteo · '+freshness+' '+X('Η επανάλυση μπορεί να καθυστερεί. Το σύνολο μήνα καλύπτει μόνο τις διαθέσιμες ημέρες· το 7ήμερο εμφανίζεται μόνο με πλήρη κάλυψη. Είναι εκτίμηση πλέγματος (~25 km), όχι μέτρηση κοντινού βροχομέτρου.','Reanalysis can lag. The month total covers available days only; the 7-day total appears only with complete coverage. Gridded estimate (~25 km), not a nearby rain-gauge measurement.')+'</p></div>');
   }
 
-  root.MONOMonthlyRain = { summarize, load, loadRecent, renderRecent, render, localMonth };
-  if (typeof module !== 'undefined' && module.exports) module.exports = { summarize, load, loadRecent, renderRecent, render, localMonth };
+
+  // The series contains only daily reanalysis values, never forecast amounts or extrapolated missing days.
+  function monthlySeries(daily, now = Date.now(), zone = 'UTC', count = 12) {
+    const times = daily?.time, amounts = daily?.precipitation_sum;
+    if (!Array.isArray(times) || !Array.isArray(amounts) || times.length !== amounts.length) return [];
+    const pieces = new Intl.DateTimeFormat('en-GB',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(now));
+    const getPart = key => pieces.find(p=>p.type===key)?.value;
+    const today = getPart('year')+'-'+getPart('month')+'-'+getPart('day');
+    const lastDay = new Date(Date.UTC(Number(getPart('year')),Number(getPart('month'))-1,Number(getPart('day'))-1,12)).toISOString().slice(0,10);
+    const values = new Map(), duplicate = new Set();
+    times.forEach((k,i)=>{
+      if(typeof k!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(k))return;
+      if(values.has(k))duplicate.add(k);
+      const v=amounts[i];
+      values.set(k,fin(v)&&v>=0?v:null);
+    });
+    const monthly = (y,m) => {
+      const days = new Date(Date.UTC(y,m,0)).getUTCDate();
+      let total=0, coverage=0, latest=null;
+      for(let d=1;d<=days;d++){
+        const key=String(y)+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+        if(key>lastDay)break;
+        const value=duplicate.has(key)?null:values.get(key);
+        if(!fin(value))continue;
+        total+=value;coverage++;latest=key;
+      }
+      const full = String(y)+'-'+String(m).padStart(2,'0') < today.slice(0,7);
+      const complete = full && coverage===days;
+      return {year:y,month:m,amount:coverage?total:null,coverage,days,complete,latest};
+    };
+    const y=Number(getPart('year')),m=Number(getPart('month'));
+    return Array.from({length:count},(_,idx)=>{
+      const offset=idx-(count-1), date=new Date(Date.UTC(y,m-1+offset,1,12));
+      const year=date.getUTCFullYear(),month=date.getUTCMonth()+1;
+      return {...monthly(year,month), previous:monthly(year-1,month)};
+    });
+  }
+
+  function renderComparison(recent, normals, {lang='el',zone='UTC',city='',now=Date.now()}={}) {
+    const el=lang!=='en', X=(a,b)=>el?a:b,locale=el?'el-GR':'en-GB';
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const number=(v,dp=1)=>fin(v)?new Intl.NumberFormat(locale,{minimumFractionDigits:0,maximumFractionDigits:dp}).format(v):'—';
+    const months=Array.from({length:12},(_,i)=>new Intl.DateTimeFormat(locale,{month:'short',timeZone:'UTC'}).format(new Date(Date.UTC(2020,i,15))));
+    const heading='<div class="mr-heading"><span class="mr-icon" aria-hidden="true">▥</span><div><span class="label">MONO / RAINFALL HISTORY</span><h2>'+
+      X('Πόση βροχή έπεσε κάθε μήνα;','How much rain fell each month?')+'</h2><p>'+esc(city)+' · '+
+      X('Τελευταίοι 12 μήνες · σε mm (1 mm = 1 λίτρο/τ.μ.)','Last 12 months · mm (1 mm = 1 L/m²)')+'</p></div></div>';
+    const block=body=>'<section class="section card mr-compare" aria-label="'+X('Μηνιαία σύγκριση βροχής','Monthly rainfall comparison')+'">'+heading+body+'</section>';
+    if(!recent||recent.status==='loading')return block('<p class="mr-status">'+X('Φόρτωση μηνιαίας βροχής…','Loading monthly rainfall…')+'</p>');
+    if(recent.status!=='ready')return block('<p class="mr-status">'+X('Δεν είναι διαθέσιμα τα στοιχεία βροχής.','Rainfall data is unavailable.')+'</p>');
+    let rows;
+    try {rows=monthlySeries(recent.daily,now,zone);}catch{return block('<p class="mr-status">'+X('Δεν είναι διαθέσιμα τα στοιχεία βροχής.','Rainfall data is unavailable.')+'</p>');}
+    if(!rows.some(r=>fin(r.amount)))return block('<p class="mr-status">'+X('Δεν υπάρχουν ακόμη διαθέσιμες μηνιαίες τιμές.','No monthly values published yet.')+'</p>');
+    const norm=normals?.status==='ready'?normals.normals:null;
+    const observations=rows.map(r=>({...r,normal:fin(norm?.[r.month]?.average)?norm[r.month].average:null}));
+    const max=Math.max(1,...observations.flatMap(r=>[r.amount||0,r.normal||0]));
+    const latestComplete=[...observations].reverse().find(r=>r.complete);
+    const wettest=observations.filter(r=>r.complete).reduce((a,r)=>!a||r.amount>a.amount?r:a,null);
+    const label=r=>months[r.month-1]+' '+r.year;
+    const info=(title,r)=>r?'<div class="mr-highlight"><small>'+title+'</small><strong>'+number(r.amount)+' <span>mm</span></strong><span>'+esc(label(r))+'</span></div>':'';
+    const stats='<div class="mr-summary">'+info(X('ΤΕΛΕΥΤΑΙΟΣ ΠΛΗΡΗΣ ΜΗΝΑΣ','LATEST COMPLETE MONTH'),latestComplete)+
+      info(X('ΠΙΟ ΒΡΟΧΕΡΟΣ ΠΛΗΡΗΣ ΜΗΝΑΣ','WETTEST COMPLETE MONTH'),wettest)+'</div>';
+    const bar=(value,klass,title)=>fin(value)?'<div class="mr-bar '+klass+'" style="height:'+Math.max(2,Math.round(value/max*150))+'px" title="'+esc(title)+'"></div>':'<div class="mr-bar mr-missing" title="'+X('Χωρίς στοιχεία','No data')+'"></div>';
+    const columns=observations.map(r=>{
+      const partial=!r.complete && fin(r.amount);
+      const amountText=fin(r.amount)?number(r.amount)+(partial?'*':''):'—';
+      const tip=label(r)+' · '+(r.complete?X('Πλήρης μήνας','Full month'):X('Μερική κάλυψη','Partial coverage')+' '+r.coverage+'/'+r.days);
+      return '<div class="mr-column"><div class="mr-bar-value">'+amountText+'</div><div class="mr-bars">'+
+        bar(r.amount,partial?'mr-partial':'mr-actual',tip+' · '+amountText+' mm')+
+        bar(r.normal,'mr-normal',X('Ιστορικός μέσος','Historical average')+' '+number(r.normal)+' mm')+
+        '</div><span class="mr-xlabel">'+esc(months[r.month-1])+'<small>'+r.year+'</small></span></div>';
+    }).join('');
+    const chart='<div class="mr-chart-scroll" role="region" aria-label="'+X('Γράφημα βροχής 12 μηνών','12-month rainfall chart')+'" tabindex="0"><div class="mr-chart">'+columns+'</div></div>';
+    const legend='<div class="mr-legend"><span><i class="mr-key mr-key-actual"></i>'+X('Βροχή ERA5','ERA5 rainfall')+'</span>'+
+      '<span><i class="mr-key mr-key-normal"></i>'+X('Μέσος 1991–2020','1991–2020 average')+'</span>'+
+      '<span><i class="mr-key mr-key-partial"></i>'+X('Ελλιπής μήνας','Incomplete month')+'</span></div>';
+    const change=(amount,base)=>fin(amount)&&fin(base)&&base>0?((amount-base>=0?'+':'')+number((amount-base)/base*100,0)+'%'):'—';
+    const values=observations.map(r=>{
+      const current=fin(r.amount)?number(r.amount)+(r.complete?'':'*'):'—';
+      const previous=r.previous?.complete?number(r.previous.amount):'—';
+      const normal=number(r.normal);
+      const vsNorm=r.complete?change(r.amount,r.normal):'—';
+      const vsLast=r.complete&&r.previous?.complete?change(r.amount,r.previous.amount):'—';
+      return '<tr><th scope="row">'+esc(label(r))+'</th><td>'+current+'</td><td>'+previous+
+        '</td><td>'+normal+'</td><td>'+vsNorm+'</td><td>'+vsLast+
+        '</td><td>'+r.coverage+'/'+r.days+'</td></tr>';
+    }).join('');
+    const table='<details class="mr-details"><summary>'+X('Αναλυτική σύγκριση ανά μήνα','Detailed monthly comparison')+
+      '</summary><div class="mr-table-scroll"><table><thead><tr><th>'+X('Μήνας','Month')+'</th><th>'+X('Βροχή','Rain')+
+      '</th><th>'+X('Πέρσι','Last year')+'</th><th>'+X('Μ.Ο.','Avg.')+'</th><th>'+X('Διαφ. Μ.Ο.','vs Avg.')+
+      '</th><th>'+X('Διαφ. πέρσι','vs Last year')+'</th><th>'+X('Ημέρες','Days')+'</th></tr></thead><tbody>'+values+'</tbody></table></div></details>';
+    const latest=observations.map(r=>r.latest).filter(Boolean).sort().at(-1);
+    const note='<p class="mr-compare-note">ERA5 · Open-Meteo · '+X('αναανάλυση για την ευρύτερη περιοχή (~25 km), όχι ποσότητα από βροχόμετρο.','regional reanalysis (~25 km), not a rain gauge.')+
+      ' '+X('Ο ιστορικός μέσος όρος αφορά πλήρεις μήνες 1991–2020.','Normals represent complete calendar months in 1991–2020.')+
+      ' '+X('Οι μήνες με * είναι ελλιπείς και δεν υπολογίζεται συγκρίσιμη ποσοστιαία διαφορά.','Months marked * are incomplete, so percentage differences are omitted.')+
+      (latest?' '+X('Τελευταία διαθέσιμη ημέρα: ','Latest available day: ')+esc(latest)+'.':'')+'</p>';
+    return block(stats+legend+chart+table+note);
+  }
+
+  root.MONOMonthlyRain = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth };
+  if (typeof module !== 'undefined' && module.exports) module.exports = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth };
 })(typeof window !== 'undefined' ? window : globalThis);
