@@ -8,7 +8,7 @@
 'use strict';
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
-const VERSION = '4.3';
+const VERSION = '4.4';
 const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
@@ -327,7 +327,7 @@ en: {
   ],
   stepsList:[
     ['Live forecasts','Up to 35 models (global and high-resolution regional) and 8 ensembles (up to 345 members) are loaded for the point. Models outside their domain or copying another are detected and removed.'],
-    ['Error history','Each model’s past forecasts for the last 9 months (lead 0–5 days) are compared with ERA5. Alongside the main chronological split, monthly rolling tests use 60+ days for training, 30 days for validation, and the following month as unseen test data.'],
+    ['Error history','Each model’s past forecasts for the last 8 weeks (lead 0–5 days) are compared with ERA5 using a chronological train, validation and unseen test split.'],
     ['Six algorithms','Plain average, best model, MOS with diurnal bias correction, ridge stacking, a Kalman filter and an analog ensemble are trained separately for every lead.'],
     ['Honest testing','The data are split in time 60/20/20. The algorithm, or the blend of the best three, is chosen on validation. The numbers you see come from the test set, which is used nowhere else.'],
     ['Rain','Model vote, logistic regression and analogs are compared with the Brier score. The result is blended with the share of ensemble members that give rain.'],
@@ -1037,7 +1037,7 @@ function schedule() { clearTimeout(pending); pending = setTimeout(() => { recomp
 let worker = null, workerOk = true, jobId = 0;
 function runTraining(payload) {
   return new Promise((resolve, reject) => {
-    const inline = () => setTimeout(() => { try { resolve({ temp: M.fitVariable(payload.temp, { rolling: true }), wind: M.fitVariable(payload.wind, { nonNegative: true }), precip: M.fitRain(payload.precip), cloud: M.fitVariable(payload.cloud) }); } catch (e) { reject(e); } }, 30);
+    const inline = () => setTimeout(() => { try { resolve({ temp: M.fitVariable(payload.temp), wind: M.fitVariable(payload.wind, { nonNegative: true }), precip: M.fitRain(payload.precip), cloud: M.fitVariable(payload.cloud) }); } catch (e) { reject(e); } }, 30);
     if (!workerOk || typeof Worker === 'undefined' || location.protocol === 'file:' || window.ICONS) return inline();
     try {
       worker ||= new Worker('trainer.js');
@@ -1061,7 +1061,7 @@ async function ensureTraining(c, gen, force = false) {
   if (!active.length) { state.trainStatus = 'error'; schedule(); return; }
   state.trainStatus = 'loading'; state.train = hit && hit.v === VERSION ? hit : null; schedule();
   try {
-    const start = isoDate(-276), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
+    const start = isoDate(-62), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
     const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
     const full = M.LEADS.flatMap(vars).join(','), noCloud = M.LEADS.flatMap(k => vars(k).slice(0,3)).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
     const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
