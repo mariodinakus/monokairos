@@ -1147,6 +1147,17 @@ async function ensureTraining(c, gen, force = false) {
   notifyTrainingFinished();
 }
 
+/* Reuse already-validated historical results on first paint instead of waiting for
+ * dozens of live model feeds. Only runs when the visitor enabled local caching. */
+function restoreHistoricCache(city) {
+  const cached = read(K.train, {})[ckey(city)];
+  if (!cached || cached.v !== VERSION || cached.days !== state.historyDays ||
+      !cached.at || Date.now() - cached.at >= TRAIN_TTL || !cached.temp?.leads) return false;
+  state.train = cached;
+  state.trainStatus = 'done';
+  return true;
+}
+
 /* ------------------------------------------------------------------ the forecast */
 function recompute() {
   const W = state.main; if (!W?.hourly?.time) return;
@@ -3558,6 +3569,7 @@ function setCity(c) {
   killMap(); killGlobe(); MonoForecast.destroy();
   Object.assign(state, { city: c, main: null, view: null, rain15: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
   if (state.page === 'cities') state.page = 'now';
+  restoreHistoricCache(c);
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true); if(state.page==='stations')loadWindyOpen(); localizePlaces();
 }
@@ -3780,6 +3792,7 @@ function init() {
   let rz, lastW = window.innerWidth;
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if ((window.innerWidth < 640) !== (lastW < 640) && state.page !== 'radar' && state.page !== 'globe') render(); lastW = window.innerWidth; }, 200); });
   if (!NAV.some(n => n[0] === state.page)) state.page = 'now';
+  restoreHistoricCache(state.city);
   render();
   loadAll(true);
   if(state.page==='stations')loadWindyOpen();
