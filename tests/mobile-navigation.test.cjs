@@ -12,7 +12,7 @@ test('mobile bottom bar uses four category groups covering every existing route'
   const groups=vm.runInNewContext(matched[1]);
   assert.deepEqual(Array.from(groups,x=>x.id),['weather','earth','data','space']);
   assert.deepEqual(Array.from(new Set(groups.flatMap(x=>x.pages))).sort(),
-    ['now','guide','hourly','rain','radar','maps','globe','earth','phen','climate','environment','models','lab','stations','news','cities','space'].sort());
+    ['now','guide','hourly','rain','radar','maps','globe','earth','phen','climate','environment','history','models','lab','stations','news','cities','space'].sort());
   assert.match(app,/data-action="mobileGroup"/);
   assert.match(app,/data-action="mobileNavClose"/);
   assert.match(app,/aria-expanded="\$\{open\}"/);

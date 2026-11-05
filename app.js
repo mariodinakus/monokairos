@@ -1032,13 +1032,49 @@ async function loadAll(force = false) {
   recompute(); render(); saveSnapshot();
 }
 let pending = 0;
-function schedule() { clearTimeout(pending); pending = setTimeout(() => { recompute(); render(); }, 250); }
+function schedule() {
+  clearTimeout(pending);
+  pending = setTimeout(() => {
+    // Forecast feeds update in the background, but the history dashboard depends on
+    // completed backtests, not individual weather API responses. The main forecast
+    // and the final model batch already invoke recompute()/render() explicitly.
+    if (state.page === 'history') return;
+    recompute(); render();
+  }, 250);
+}
+function notifyHistoryTrainingProgress() {
+  if (state.page === 'history') window.MONOHistoryBacktest?.updateProgress({
+    lang: state.lang, progress: state.trainProgress, status: state.trainStatus
+  });
+  else if (state.page === 'lab') schedule();
+}
+function notifyTrainingFinished() {
+  if (state.page === 'history') render();
+  else schedule();
+}
 
 let worker = null, workerOk = true, jobId = 0;
 function runTraining(payload) {
   return new Promise((resolve, reject) => {
-    const inline = () => setTimeout(() => { try { resolve({ temp: M.fitVariable(payload.temp), wind: M.fitVariable(payload.wind, { nonNegative: true }), precip: M.fitRain(payload.precip), cloud: M.fitVariable(payload.cloud) }); } catch (e) { reject(e); } }, 30);
-    if (!workerOk || typeof Worker === 'undefined' || location.protocol === 'file:' || window.ICONS) return inline();
+    // Always prefer a worker, even when an optional icon pack is installed.
+    // The legacy window.ICONS guard accidentally forced CPU-intensive ML onto the UI thread.
+    const inline = () => {
+      const result = {};
+      const queue = [
+        ['temp', () => M.fitVariable(payload.temp)],
+        ['wind', () => M.fitVariable(payload.wind, { nonNegative: true })],
+        ['precip', () => M.fitRain(payload.precip)],
+        ['cloud', () => M.fitVariable(payload.cloud)]
+      ];
+      const step = () => {
+        const next = queue.shift();
+        if (!next) { resolve(result); return; }
+        try { result[next[0]] = next[1](); setTimeout(step, 0); }
+        catch (e) { reject(e); }
+      };
+      setTimeout(step, 0);
+    };
+    if (!workerOk || typeof Worker === 'undefined' || location.protocol === 'file:') return inline();
     try {
       worker ||= new Worker('trainer.js');
       const id = ++jobId;
@@ -1050,16 +1086,17 @@ function runTraining(payload) {
   });
 }
 async function ensureTraining(c, gen, force = false) {
-  if (!force && state.trainStatus === 'loading') return;
+  if (state.trainStatus === 'loading') return;
   if (!force && state.train && state.train.v === VERSION && state.train.days === state.historyDays && Date.now() - state.train.at < TRAIN_TTL) {
     state.trainStatus = 'done';
+    notifyTrainingFinished();
     return;
   }
   const all = read(K.train, {}), hit = all[ckey(c)];
-  if (!force && hit && Date.now() - hit.at < TRAIN_TTL && hit.v === VERSION && hit.days === state.historyDays) { state.train = hit; state.trainStatus = 'done'; schedule(); return; }
+  if (!force && hit && Date.now() - hit.at < TRAIN_TTL && hit.v === VERSION && hit.days === state.historyDays) { state.train = hit; state.trainStatus = 'done'; notifyTrainingFinished(); return; }
   const active = state.view?.active || [];
-  if (!active.length) { state.trainStatus = 'error'; schedule(); return; }
-  state.trainStatus = 'loading'; state.trainProgress = {complete:0,total:0,phase:'start'}; state.train = hit && hit.v === VERSION && hit.days === state.historyDays ? hit : (state.train?.v === VERSION ? state.train : null); schedule();
+  if (!active.length) { state.trainStatus = 'error'; notifyTrainingFinished(); return; }
+  state.trainStatus = 'loading'; state.trainProgress = {complete:0,total:0,phase:'start'}; state.train = hit && hit.v === VERSION && hit.days === state.historyDays ? hit : (state.train?.v === VERSION ? state.train : null); notifyTrainingFinished();
   try {
     const trainingDays = state.historyDays; const start = isoDate(-trainingDays), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
     const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
@@ -1067,7 +1104,7 @@ async function ensureTraining(c, gen, force = false) {
     const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
     const truthP = getJSON(q(ARCH, { ...base, models: 'era5', hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover' }), 40000);
     const ms = MODELS.filter(m => active.includes(m.id));
-    state.trainProgress = {complete:0,total:ms.length,phase:'download'}; schedule();
+    state.trainProgress = {complete:0,total:ms.length,phase:'download'}; notifyHistoryTrainingProgress();
     const runs = await Promise.allSettled(ms.map(m => trainingSlot(() => {
       if (gen !== state.gen) throw new Error('Stale training request');
       const used = state.models[m.id]?.used || m.id;
@@ -1077,7 +1114,7 @@ async function ensureTraining(c, gen, force = false) {
     }).finally(() => {
       if (gen !== state.gen) return;
       if (state.trainProgress) state.trainProgress.complete++;
-      if (state.page === 'history' || state.page === 'lab') schedule();
+      notifyHistoryTrainingProgress();
     })));
     const truth = await truthP;
     if (gen !== state.gen) return;
@@ -1095,7 +1132,7 @@ async function ensureTraining(c, gen, force = false) {
       if (any) used++;
     });
     const data = (key, tv) => ({ times, hours, truth: tv, models: sets[key] });
-    state.trainProgress = {...(state.trainProgress||{}),phase:'train'}; schedule();
+    state.trainProgress = {...(state.trainProgress||{}),phase:'train'}; notifyHistoryTrainingProgress();
     const res = await runTraining({ temp: data('temp', truth.hourly.temperature_2m), wind: data('wind', truth.hourly.wind_speed_10m), precip: data('precip', truth.hourly.precipitation), cloud: data('cloud', truth.hourly.cloud_cover) });
     if (gen !== state.gen) return;
     if (!Object.keys(res.temp.leads).length) throw new Error('nothing to train');
@@ -1107,7 +1144,18 @@ async function ensureTraining(c, gen, force = false) {
     if (gen !== state.gen) return;
     state.trainStatus = state.train ? 'done' : 'error'; state.trainProgress = null;
   }
-  schedule();
+  notifyTrainingFinished();
+}
+
+/* Reuse already-validated historical results on first paint instead of waiting for
+ * dozens of live model feeds. Only runs when the visitor enabled local caching. */
+function restoreHistoricCache(city) {
+  const cached = read(K.train, {})[ckey(city)];
+  if (!cached || cached.v !== VERSION || cached.days !== state.historyDays ||
+      !cached.at || Date.now() - cached.at >= TRAIN_TTL || !cached.temp?.leads) return false;
+  state.train = cached;
+  state.trainStatus = 'done';
+  return true;
 }
 
 /* ------------------------------------------------------------------ the forecast */
@@ -2878,28 +2926,55 @@ function backtestEntry() {
 }
 function historyPage() {
   const el = state.lang !== 'en', tr = state.train;
-  const title = el ? 'Ιστορική ακρίβεια MONO' : 'MONO historical accuracy';
-  const subtitle = el
-    ? 'Εκπαιδεύουμε το μοντέλο με πραγματικές παλιότερες προγνώσεις και ελέγχουμε αν πέτυχε σε δεδομένα που δεν είχε δει.'
-    : 'Train with archived forecasts, then test against later reference data kept out of training.';
-  const lead = M.LEADS.map(n => '<button class="chip '+(state.lead===n?'active':'')+'" data-action="lead" data-n="'+n+'">D+'+n+' · '+(n*24)+'–'+(n*24+24)+'h</button>').join('');
-  const intro = '<section class="mono-backtest-intro"><span class="mono-backtest-entry-eyebrow">MONO · FORECAST VERIFICATION</span>'+
-    '<h2>'+(el?'Μπορούμε να αποδείξουμε πόσο καλά προβλέπει;':'Can we measure how well MONO predicts?')+'</h2>'+
-    '<p>'+(el?'Οι γραμμές προκύπτουν από ιστορικές προγνώσεις. Οι μετρικές μετρούν πραγματικά σφάλματα σε ανεξάρτητο χρονολογικό τεστ — δεν είναι «βαθμοί» που επινοήθηκαν.':'The lines come from archived forecasts. Metrics measure errors on an independent chronological holdout—not invented success rates.')+'</p></section>';
-  const status = state.trainStatus==='error' && !tr
+  const fit = tr?.temp?.leads?.[state.lead], hold = fit?.test?.[fit.choice];
+  const mae = hold?.mae, mean = fit?.test?.mean?.mae;
+  const delta = fin(mae) && fin(mean) && mean > 0 ? (1 - mae / mean) * 100 : null;
+  const samples = fit?.n?.test;
+  const working = state.trainStatus === 'loading';
+  const primaryAction = working
+    ? '<button class="outline-btn" disabled aria-disabled="true">'+(el?'Εκπαίδευση σε εξέλιξη':'Training in progress')+'</button>'
+    : btn('retrain','↻ '+(el?'Επανεκπαίδευση':'Retrain'));
+  const head = header(el?'Ιστορική ακρίβεια':'Historical accuracy',
+    el?'Έλεγχος των πραγματικών παλιότερων προγνώσεων του MONO.':'Verification against archived weather forecasts.',primaryAction);
+  const status = working ? (el?'ΑΝΑΛΥΣΗ ΣΕ ΕΞΕΛΙΞΗ':'ANALYSIS IN PROGRESS')
+    : fit ? (el?'ΑΠΟΤΕΛΕΣΜΑΤΑ ΕΚΤΟΣ ΔΕΙΓΜΑΤΟΣ':'OUT-OF-SAMPLE RESULTS')
+    : (el?'ΑΝΑΜΟΝΗ ΔΕΔΟΜΕΝΩΝ':'AWAITING DATA');
+  const stat = (label,value,detail) => '<div class="mh-hero-stat"><span>'+label+'</span><strong>'+value+'</strong><small>'+detail+'</small></div>';
+  const stats =
+    stat('MAE · D+'+state.lead,fin(mae)?num(mae,2)+'<em>°C</em>':'—',el?'Μέσο απόλυτο σφάλμα':'Mean absolute error')+
+    stat(el?'Διαφορά από απλό μέσο':'Vs plain-model mean',fin(delta)?(delta>=0?'+':'')+num(delta,1)+'<em>%</em>':'—',
+      el?'Θετικό = μικρότερο σφάλμα':'Positive means lower error')+
+    stat(el?'Ώρες ανεξάρτητου τεστ':'Holdout test hours',fin(samples)?num(samples,0):'—',
+      el?'Χωρίς χρήση στην εκπαίδευση':'Not used for training');
+  const intro = '<section class="mh-hero"><div class="mh-hero-top"><span class="mh-eyebrow">MONO / MODEL INTELLIGENCE / 01</span>'+
+    '<span class="mh-hero-status '+(working?'is-loading':fit?'is-ready':'')+'"><i aria-hidden="true"></i>'+status+'</span></div>'+
+    '<div class="mh-hero-body"><div class="mh-hero-message"><h2>'+
+    (el?'Κάθε πρόβλεψη.<br>Μια πραγματική απόκλιση.':'Every forecast.<br>Measured against reality.')+'</h2>'+
+    '<p>'+(el?'Πόσο έπεσε μέσα το MONO; Δες τα ιστορικά αποτελέσματα, σύγκρινε πρόβλεψη και πραγματικότητα και ανακάλυψε πού κάνει λάθη.':
+     'How accurate was MONO? Compare historic forecasts with reference conditions and see where the model missed.')+'</p></div>'+
+    '<div class="mh-hero-score"><span>'+(el?'ΙΣΤΟΡΙΚΗ ΕΠΑΛΗΘΕΥΣΗ':'HISTORICAL VERIFICATION')+'</span><strong>BACKTEST<span> / </span>MONO</strong>'+
+    '<small>'+(el?'Open-Meteo Previous Runs → ERA5':'Open-Meteo Previous Runs → ERA5')+'</small></div></div>'+
+    '<div class="mh-hero-stats">'+stats+'</div></section>';
+  const lead = M.LEADS.map(n => '<button class="mh-segment '+(state.lead===n?'active':'')+
+    '" data-action="lead" data-n="'+n+'" aria-pressed="'+(state.lead===n)+'"><b>D+'+n+'</b><small>'+n*24+'–'+(n*24+24)+'h</small></button>').join('');
+  const timeline = '<section class="mh-lead-panel"><div><span class="mh-section-label">01 / '+(el?'ΟΡΙΖΟΝΤΑΣ ΠΡΟΒΛΕΨΗΣ':'FORECAST HORIZON')+'</span>'+
+    '<h3>'+(el?'Πόσο μπροστά προέβλεψε;':'How far ahead?')+'</h3><p>'+
+    (el?'Επίλεξε πότε είχε εκδοθεί κάθε παλιά πρόβλεψη.':'Choose the lead time of each archived forecast.')+'</p></div>'+
+    '<div class="mh-segments" role="group" aria-label="'+(el?'Ημέρες πρόγνωσης':'Forecast days')+'">'+lead+'</div></section>';
+  const statusBlock = state.trainStatus==='error' && !tr
     ? '<p class="notice mono-history-warning" role="status">'+(el?
       (state.modelsLoading?'Φορτώνονται πρώτα τα μοντέλα· θα γίνει νέα προσπάθεια εκπαίδευσης.':'Δεν φορτώθηκαν αρκετά ιστορικά runs. Δοκίμασε επανεκπαίδευση ή μικρότερο ιστορικό.')
-      :(state.modelsLoading?'Loading the forecast models before training.':'Not enough historical model runs could be loaded. Retry or choose a shorter period.'))+'</p>'
+      :(state.modelsLoading?'Loading forecast models before training.':'Not enough historical model runs loaded. Retry or try a shorter window.'))+'</p>'
     : '';
   const panel = window.MONOHistoryBacktest?.render({
-      train:tr, lead:state.lead, lang:state.lang, days:state.historyDays, variable:state.historyVar,
-      order:state.historyOrder, status:state.trainStatus, progress:state.trainProgress, modelsLoading:state.modelsLoading
-    }) || '<p class="notice">'+(el?'Ο πίνακας ιστορικών δεδομένων δεν είναι διαθέσιμος.':'The historic data panel is unavailable.')+'</p>';
-  return header(title,subtitle,btn('retrain','↻ '+(el?'Επανεκπαίδευση':'Retrain'))) +
-    intro + '<div class="mono-history-leads"><b>'+(el?'Πόσες ημέρες νωρίτερα έγινε η πρόβλεψη;':'Forecast lead time')+'</b><div class="chips">'+lead+'</div></div>'+
-    status + panel + '<p class="notice mono-history-footnote">'+(el?
-      'Πηγή: Open-Meteo Previous Runs. Αναφορά: ERA5 (επανάλυση, όχι επίγειος σταθμός). Το τελικό τεστ δεν χρησιμοποιείται για την επιλογή του νικητή.'
-      :'Source: Open-Meteo Previous Runs. Reference: ERA5 (reanalysis, not a surface station). The final holdout is not used to select the winning model.')+'</p>';
+    train:tr, lead:state.lead, lang:state.lang, days:state.historyDays, variable:state.historyVar,
+    order:state.historyOrder, status:state.trainStatus, progress:state.trainProgress, modelsLoading:state.modelsLoading
+  }) || '<p class="notice">'+(el?'Δεν διατίθεται ο πίνακας ιστορικών.':'Historical dashboard unavailable.')+'</p>';
+  return head + '<div class="mh-dashboard">'+intro+timeline+statusBlock+panel+
+    '<p class="mh-footnote">'+(el?
+      'Μέθοδος: χρονολογικός διαχωρισμός 60/20/20. Η ERA5 είναι επανάλυση — όχι μέτρηση σταθμού. Τα δεδομένα του τελικού τεστ δεν επιλέγουν τον αλγόριθμο.':
+      'Method: chronological 60/20/20 split. ERA5 is reanalysis, not a station measurement. Holdout results are not used to select the algorithm.')+
+    '</p></div>';
 }
 
 /* ------------------------------------------------------------------ page: models */
@@ -3494,6 +3569,7 @@ function setCity(c) {
   killMap(); killGlobe(); MonoForecast.destroy();
   Object.assign(state, { city: c, main: null, view: null, rain15: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
   if (state.page === 'cities') state.page = 'now';
+  restoreHistoricCache(c);
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
   window.scrollTo(0, 0); loadAll(true); if(state.page==='stations')loadWindyOpen(); localizePlaces();
 }
@@ -3716,6 +3792,7 @@ function init() {
   let rz, lastW = window.innerWidth;
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if ((window.innerWidth < 640) !== (lastW < 640) && state.page !== 'radar' && state.page !== 'globe') render(); lastW = window.innerWidth; }, 200); });
   if (!NAV.some(n => n[0] === state.page)) state.page = 'now';
+  restoreHistoricCache(state.city);
   render();
   loadAll(true);
   if(state.page==='stations')loadWindyOpen();
