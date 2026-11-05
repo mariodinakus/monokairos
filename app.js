@@ -8,7 +8,7 @@
 'use strict';
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
-const VERSION = '4.4';
+const VERSION = '4.5';
 const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
@@ -208,7 +208,7 @@ el: {
   ],
   stepsList:[
     ['Ζωντανές προγνώσεις','Έως 35 μοντέλα (παγκόσμια και περιοχικά υψηλής ανάλυσης) και 8 ensembles (έως 345 μέλη) φορτώνονται για το σημείο. Μοντέλα εκτός περιοχής ή που αντιγράφουν άλλο εντοπίζονται και αφαιρούνται.'],
-    ['Ιστορικό σφαλμάτων','Για τους τελευταίους 9 μήνες κατεβαίνουν οι παλιές προγνώσεις κάθε μοντέλου (ορίζοντας 0–5 ημέρες). Εκτός από το κύριο χρονολογικό τεστ, γίνονται μηνιαία κυλιόμενα τεστ: 60+ ημέρες εκπαίδευση, 30 ημέρες επικύρωση και ο επόμενος μήνας ως αθέατο τεστ.'],
+    ['Ιστορικό σφαλμάτων','Οι παλιές προγνώσεις (ορίζοντες 0–5 ημέρες) συγκρίνονται με ERA5 για επιλεγμένο ιστορικό 2, 6 ή 12 μηνών. Το τελευταίο 20% μένει αποκλειστικά για τεστ και εμφανίζεται σε γράφημα και CSV.'],
     ['Έξι αλγόριθμοι','Μέσος όρος, καλύτερο μοντέλο, MOS με διόρθωση ημερήσιας μεροληψίας, ridge stacking, φίλτρο Kalman και ανάλογα (analog ensemble) εκπαιδεύονται χωριστά για κάθε ορίζοντα.'],
     ['Τίμιος έλεγχος','Τα δεδομένα χωρίζονται χρονολογικά 60/20/20. Ο αλγόριθμος ή ο συνδυασμός των τριών καλύτερων επιλέγεται στην επικύρωση. Τα νούμερα που βλέπεις είναι από το τεστ, που δεν χρησιμοποιήθηκε πουθενά.'],
     ['Βροχή','Ψήφος μοντέλων, λογιστική παλινδρόμηση και ανάλογα συγκρίνονται με το Brier score. Το αποτέλεσμα συνδυάζεται με το ποσοστό μελών ensemble που δίνουν βροχή.'],
@@ -327,7 +327,7 @@ en: {
   ],
   stepsList:[
     ['Live forecasts','Up to 35 models (global and high-resolution regional) and 8 ensembles (up to 345 members) are loaded for the point. Models outside their domain or copying another are detected and removed.'],
-    ['Error history','Each model’s past forecasts for the last 8 weeks (lead 0–5 days) are compared with ERA5 using a chronological train, validation and unseen test split.'],
+    ['Error history','Archived model forecasts for a selected 2, 6 or 12 months (lead 0–5 days) are compared against ERA5; the last 20% is reserved for an unseen holdout and exportable chart.'],
     ['Six algorithms','Plain average, best model, MOS with diurnal bias correction, ridge stacking, a Kalman filter and an analog ensemble are trained separately for every lead.'],
     ['Honest testing','The data are split in time 60/20/20. The algorithm, or the blend of the best three, is chosen on validation. The numbers you see come from the test set, which is used nowhere else.'],
     ['Rain','Model vote, logistic regression and analogs are compared with the Brier score. The result is blended with the share of ensemble members that give rain.'],
@@ -425,7 +425,7 @@ const state = {
   theme: P.theme === 'dark' || P.theme === 'light' ? P.theme : (sysDark() ? 'dark' : 'light'),
   city: P.city || CITIES[0], firstRun: !P.city,
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
-  page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
+  page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, historyDays: [62,180,365].includes(Number(UI.historyDays)) ? Number(UI.historyDays) : 62, historyVar: 'temp', historyOrder: 'latest', stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   windyStatus: 'idle', windyHtml: '', windySelected: null,
   gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
@@ -1051,17 +1051,17 @@ function runTraining(payload) {
 }
 async function ensureTraining(c, gen, force = false) {
   if (!force && state.trainStatus === 'loading') return;
-  if (!force && state.train && state.train.v === VERSION && Date.now() - state.train.at < TRAIN_TTL) {
+  if (!force && state.train && state.train.v === VERSION && state.train.days === state.historyDays && Date.now() - state.train.at < TRAIN_TTL) {
     state.trainStatus = 'done';
     return;
   }
   const all = read(K.train, {}), hit = all[ckey(c)];
-  if (!force && hit && Date.now() - hit.at < TRAIN_TTL && hit.v === VERSION) { state.train = hit; state.trainStatus = 'done'; schedule(); return; }
+  if (!force && hit && Date.now() - hit.at < TRAIN_TTL && hit.v === VERSION && hit.days === state.historyDays) { state.train = hit; state.trainStatus = 'done'; schedule(); return; }
   const active = state.view?.active || [];
   if (!active.length) { state.trainStatus = 'error'; schedule(); return; }
-  state.trainStatus = 'loading'; state.train = hit && hit.v === VERSION ? hit : null; schedule();
+  state.trainStatus = 'loading'; state.train = hit && hit.v === VERSION && hit.days === state.historyDays ? hit : (state.train?.v === VERSION ? state.train : null); schedule();
   try {
-    const start = isoDate(-62), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
+    const trainingDays = state.historyDays; const start = isoDate(-trainingDays), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
     const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
     const full = M.LEADS.flatMap(vars).join(','), noCloud = M.LEADS.flatMap(k => vars(k).slice(0,3)).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
     const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
@@ -1093,7 +1093,7 @@ async function ensureTraining(c, gen, force = false) {
     const res = await runTraining({ temp: data('temp', truth.hourly.temperature_2m), wind: data('wind', truth.hourly.wind_speed_10m), precip: data('precip', truth.hourly.precipitation), cloud: data('cloud', truth.hourly.cloud_cover) });
     if (gen !== state.gen) return;
     if (!Object.keys(res.temp.leads).length) throw new Error('nothing to train');
-    const rec = { v: VERSION, at: Date.now(), start, end, hours: times.length, models: used, temp: res.temp, wind: res.wind, precip: res.precip, cloud: res.cloud };
+    const rec = { v: VERSION, days: trainingDays, at: Date.now(), start, end, hours: times.length, models: used, temp: res.temp, wind: res.wind, precip: res.precip, cloud: res.cloud };
     state.train = rec; state.trainStatus = 'done';
     const keep = Object.entries({ ...all, [ckey(c)]: rec }).sort((a, b) => b[1].at - a[1].at).slice(0, 3);
     if (!write(K.train, Object.fromEntries(keep))) write(K.train, { [ckey(c)]: rec });
@@ -2561,7 +2561,7 @@ const lhm = t => dt(t, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
 const ldate = t => dt(t, { day: 'numeric', month: 'short' }, LZ);
 const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 const isoMin = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
-function persistUI() { write('mono32_ui', { gBase: state.gBase, globeTilesV1:true, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode,radarForecastBase:state.radarForecastBase,radarClearMapV2:true }); }
+function persistUI() { write('mono32_ui', { gBase: state.gBase, globeTilesV1:true, gLayers: state.gLayers, gGrid: state.gGrid, radarSat: state.radarSat, radarBasemap: state.radarBasemap, radarMode:radar.mode,radarForecastBase:state.radarForecastBase,radarClearMapV2:true, historyDays:state.historyDays }); }
 function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
 function loadGlobeLayer(layer, fmt = 'image/jpeg', extra = '') {
   return loadImg(GIBS(layer, fmt, extra, GW, GH)).catch(error => {
@@ -2935,7 +2935,8 @@ function labPage() {
   }
   const steps = `<section class="section card"><div class="panelhead"><b>${T('steps')}</b></div><ol class="steps">${T('stepsList').map(([a, b]) => `<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol></section>`;
   const insights = window.MONOModelInsights?.render({train:tr,view:V,stationLearning:state.stationRain,lead:k,lang:state.lang,algorithmName:AN}) || '';
-  return head + chips + insights + body + liveCard() + steps;
+   const history = window.MONOHistoryBacktest?.render({ train:tr, lead:k, lang:state.lang, days:state.historyDays, variable:state.historyVar, order:state.historyOrder, status:state.trainStatus }) || '';
+  return head + chips + history + insights + body + liveCard() + steps;
 }
 function stationCard() {
   const V = state.view, S = V.S;
@@ -3531,6 +3532,10 @@ function onClick(e) {
   else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); if(state.page==='space')window.MONOSpaceControl?.load(true); }
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
   else if (a === 'retrain') ensureTraining(state.city, state.gen, true);
+   else if (a === 'historyPeriod') { const days=Number(b.dataset.days); if(![62,180,365].includes(days)||days===state.historyDays||state.trainStatus==='loading')return; state.historyDays=days; persistUI(); render(); ensureTraining(state.city,state.gen,true); }
+   else if (a === 'historyVariable') { if(['temp','wind','rain'].includes(b.dataset.v)){ state.historyVar=b.dataset.v; render(); } }
+   else if (a === 'historyOrder') { if(['latest','worst'].includes(b.dataset.v)){ state.historyOrder=b.dataset.v; render(); } }
+   else if (a === 'historyCsv') { const ok=window.MONOHistoryBacktest?.download({train:state.train,lead:state.lead,variable:state.historyVar}); if(ok) toast(T('exported')); }
   else if (a === 'city') setCity(findCity(b.dataset.id));
   else if (a === 'fav') { const c = findCity(b.dataset.id); if (!c) return; const id = ckey(c); if (state.favorites.some(x => ckey(x) === id)) { state.favorites = state.favorites.filter(x => ckey(x) !== id); toast(T('removed')); } else { state.favorites = [...state.favorites, c]; toast(T('added')); } persist(); render(); }
   else if (a === 'hours') { state.hours = +b.dataset.n; render(); }

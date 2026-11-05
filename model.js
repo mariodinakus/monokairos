@@ -139,7 +139,10 @@
     },
     analog: {
       fit(rows) {
-        const lib = rows.filter(r => fin(r.y)).map(r => [r.H, r1(r.mean), r1(r.prev), r1(r.next), r1(r.y)]);
+        // Keep long-history training bounded; sample all seasons and hours evenly.
+         const valid = rows.filter(r => fin(r.y));
+         const stride = Math.max(1, Math.ceil(valid.length / 2400));
+         const lib = valid.filter((_, i) => i % stride === 0).map(r => [r.H, r1(r.mean), r1(r.prev), r1(r.next), r1(r.y)]);
         if (lib.length < 120) return {};
         const sd = [1, 2, 3].map(j => { const m = mean(lib.map(x => x[j])); return Math.sqrt(mean(lib.map(x => (x[j] - m) ** 2))) || 1; });
         return { lib, sd };
@@ -256,7 +259,11 @@
       const prod = {}; for (const m of LIVE) if (m !== 'kalman') prod[m] = ALG[m].fit(rows, ids);
       prod.kalman = { state: kal.state };
       const sc = testS[choice] || testS.mean;
-      out.leads[k] = { choice, combo: cw, prod, ids, duplicates: dup, perModel, matchup,
+       // Time-ordered untouched holdout: [UTC time, MONO, raw model mean, ERA5].
+       // Full test error metrics still use every valid hour.
+       const holdout = test.filter((r, i) => i % 6 === 0 && fin(r.y) && fin(chosenPred(r)))
+         .map(r => [r.t, r1(chosenPred(r)), r1(r.mean), r1(r.y)]).slice(-360);
+       out.leads[k] = { choice, combo: cw, prod, ids, duplicates: dup, perModel, matchup, holdout,
         rolling: opts.rolling ? rollingMonthly(rows, ids, lagH, opts) : [],
         val: shrinkScores(valS), test: shrinkScores(testS), n: { train: train.length, val: val.length, test: test.length },
         sigma: 1.2533 * (sc?.mae ?? 1.5) };
@@ -366,7 +373,10 @@
       const amountChoice = amountValScaled && amountValRaw && amountValScaled.mae < amountValRaw.mae ? 'scaled' : 'raw';
       const prod = Object.fromEntries(RAIN_LIVE.map(m => [m, RAIN[m].fit(rows)]));
       const scale = amountScale(rows);
-      out.leads[k] = { choice, ranked, prod, scale, amountChoice, base,
+      // Hourly Brier scores below remain exact; this sparse series is visualization only.
+       const holdout = test.filter((r, i) => i % 6 === 0 && fin(choiceF(r)))
+         .map(r => [r.t, r1(choiceF(r)), r.wet, r1(r.f.amt * (amountChoice === 'scaled' ? trainScale : 1)), r1(r.y)]).slice(-360);
+       out.leads[k] = { choice, ranked, prod, scale, amountChoice, base, holdout,
         amountVal: {raw:amountValRaw,scaled:amountValScaled},
         amountTest: checkAmount(test, amountChoice==='scaled'?trainScale:1),
         val: mapR(valS), test: mapR(testS), pod: hit + miss ? hit / (hit + miss) : null, far: hit + fa ? fa / (hit + fa) : null,
