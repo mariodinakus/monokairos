@@ -108,7 +108,7 @@
         '<strong class="hb-training-percent" data-hb-progress-percent>'+p.percent+'%</strong>'+
         '<div class="hb-loading-track"><span data-hb-progress-meter style="width:'+p.percent+'%"></span></div></div>';
     }
-    if (active !== days) out += '<p class="notice">'+choose(el,'Οι μετρήσεις που φαίνονται αφορούν ακόμη το προηγούμενο ιστορικό ('+active+' ημέρες).','The displayed results still use the earlier window ('+active+' days).')+'</p>';
+    if (tr && active !== days) out += '<p class="notice">'+choose(el,'Οι μετρήσεις που φαίνονται αφορούν ακόμη το προηγούμενο ιστορικό ('+active+' ημέρες).','The displayed results still use the earlier window ('+active+' days).')+'</p>';
     out += '<div class="hb-variable-header"><span class="mh-section-label">03 / '+
       choose(el,'ΤΙ ΜΕΤΡΑΜΕ','VARIABLE')+'</span><h3>'+choose(el,'Πρόβλεψη εναντίον πραγματικότητας','Forecast versus reference')+'</h3></div>'+
       '<div class="hb-variable" role="group" aria-label="'+choose(el,'Μεταβλητή επαλήθευσης','Verification variable')+'">'+
