@@ -8,7 +8,7 @@
 'use strict';
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
-const VERSION = '4.5';
+const VERSION = '4.6';
 const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
@@ -111,7 +111,7 @@ el: {
   trainingNow:'Εκπαίδευση σε ιστορικά δεδομένα…', untrained:'Χωρίς εκπαίδευση ακόμα', trainFail:'Τα ιστορικά δεδομένα δεν φορτώθηκαν· χρησιμοποιείται απλός μέσος όρος', waitModels:'Περιμένει τα μοντέλα…',
   hourlyTitle:'Ωριαία πρόγνωση', hourlySub:'Τιμές του MONO στην τοπική ώρα. Το εύρος είναι το διάστημα 80%.',
   time:'Ώρα', temp:'Θερμ.', range:'Εύρος', rain:'Βροχή', amount:'Ύψος', windCol:'Άνεμος', rh:'Υγρ.', exportCsv:'Εξαγωγή CSV', exported:'Το αρχείο κατέβηκε',
-  modelsTitle:'Όλα τα μοντέλα', modelsSub:'Ζωντανές προγνώσεις από εθνικές μετεωρολογικές υπηρεσίες και μοντέλα AI, μαζί με τα ensembles.',
+  history:'Ιστορική ακρίβεια', modelsTitle:'Όλα τα μοντέλα', modelsSub:'Ζωντανές προγνώσεις από εθνικές μετεωρολογικές υπηρεσίες και μοντέλα AI, μαζί με τα ensembles.',
   varTemp:'Θερμοκρασία', varRain:'Βροχή', varWind:'Άνεμος',
   model:'Μοντέλο', type:'Τύπος', phys:'Φυσικό', ai:'AI', valueAt:'Τιμή', weight:'Βάρος MOS', skill:'Σφάλμα (τεστ)', live72:'Σφάλμα 72h vs σταθμός', status:'Κατάσταση',
   ok:'Ενεργό', noCover:'Δεν καλύπτει την περιοχή', dupOf:'Ίδιο με', failed:'Απέτυχε', loading:'Φόρτωση…',
@@ -230,7 +230,7 @@ en: {
   trainingNow:'Training on historical data…', untrained:'Not trained yet', trainFail:'Historical data did not load; using a plain average', waitModels:'Waiting for the models…',
   hourlyTitle:'Hourly forecast', hourlySub:'MONO values in local time. The range is the 80% interval.',
   time:'Time', temp:'Temp', range:'Range', rain:'Rain', amount:'Amount', windCol:'Wind', rh:'RH', exportCsv:'Export CSV', exported:'File downloaded',
-  modelsTitle:'Every model', modelsSub:'Live forecasts from national weather services and AI models, plus the ensembles.',
+  history:'Historical accuracy', modelsTitle:'Every model', modelsSub:'Live forecasts from national weather services and AI models, plus the ensembles.',
   varTemp:'Temperature', varRain:'Rain', varWind:'Wind',
   model:'Model', type:'Type', phys:'Physics', ai:'AI', valueAt:'Value', weight:'MOS weight', skill:'Error (test)', live72:'72h error vs station', status:'Status',
   ok:'Active', noCover:'Does not cover this area', dupOf:'Same as', failed:'Failed', loading:'Loading…',
@@ -425,7 +425,7 @@ const state = {
   theme: P.theme === 'dark' || P.theme === 'light' ? P.theme : (sysDark() ? 'dark' : 'light'),
   city: P.city || CITIES[0], firstRun: !P.city,
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
-  page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, historyDays: [62,180,365].includes(Number(UI.historyDays)) ? Number(UI.historyDays) : 62, historyVar: 'temp', historyOrder: 'latest', stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
+  page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, historyDays: [62,180,365].includes(Number(UI.historyDays)) ? Number(UI.historyDays) : 62, historyVar: 'temp', historyOrder: 'latest', trainProgress: null, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   windyStatus: 'idle', windyHtml: '', windySelected: null,
   gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
@@ -1059,7 +1059,7 @@ async function ensureTraining(c, gen, force = false) {
   if (!force && hit && Date.now() - hit.at < TRAIN_TTL && hit.v === VERSION && hit.days === state.historyDays) { state.train = hit; state.trainStatus = 'done'; schedule(); return; }
   const active = state.view?.active || [];
   if (!active.length) { state.trainStatus = 'error'; schedule(); return; }
-  state.trainStatus = 'loading'; state.train = hit && hit.v === VERSION && hit.days === state.historyDays ? hit : (state.train?.v === VERSION ? state.train : null); schedule();
+  state.trainStatus = 'loading'; state.trainProgress = {complete:0,total:0,phase:'start'}; state.train = hit && hit.v === VERSION && hit.days === state.historyDays ? hit : (state.train?.v === VERSION ? state.train : null); schedule();
   try {
     const trainingDays = state.historyDays; const start = isoDate(-trainingDays), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
     const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
@@ -1067,12 +1067,17 @@ async function ensureTraining(c, gen, force = false) {
     const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
     const truthP = getJSON(q(ARCH, { ...base, models: 'era5', hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover' }), 40000);
     const ms = MODELS.filter(m => active.includes(m.id));
+    state.trainProgress = {complete:0,total:ms.length,phase:'download'}; schedule();
     const runs = await Promise.allSettled(ms.map(m => trainingSlot(() => {
       if (gen !== state.gen) throw new Error('Stale training request');
       const used = state.models[m.id]?.used || m.id;
       return chain([used], id => q(PREV, { ...base, models: id, hourly: full }))
         .catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: noCloud })))
         .catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: tOnly })));
+    }).finally(() => {
+      if (gen !== state.gen) return;
+      if (state.trainProgress) state.trainProgress.complete++;
+      if (state.page === 'history' || state.page === 'lab') schedule();
     })));
     const truth = await truthP;
     if (gen !== state.gen) return;
@@ -1090,16 +1095,17 @@ async function ensureTraining(c, gen, force = false) {
       if (any) used++;
     });
     const data = (key, tv) => ({ times, hours, truth: tv, models: sets[key] });
+    state.trainProgress = {...(state.trainProgress||{}),phase:'train'}; schedule();
     const res = await runTraining({ temp: data('temp', truth.hourly.temperature_2m), wind: data('wind', truth.hourly.wind_speed_10m), precip: data('precip', truth.hourly.precipitation), cloud: data('cloud', truth.hourly.cloud_cover) });
     if (gen !== state.gen) return;
     if (!Object.keys(res.temp.leads).length) throw new Error('nothing to train');
     const rec = { v: VERSION, days: trainingDays, at: Date.now(), start, end, hours: times.length, models: used, temp: res.temp, wind: res.wind, precip: res.precip, cloud: res.cloud };
-    state.train = rec; state.trainStatus = 'done';
+    state.train = rec; state.trainStatus = 'done'; state.trainProgress = null;
     const keep = Object.entries({ ...all, [ckey(c)]: rec }).sort((a, b) => b[1].at - a[1].at).slice(0, 3);
     if (!write(K.train, Object.fromEntries(keep))) write(K.train, { [ckey(c)]: rec });
   } catch (e) {
     if (gen !== state.gen) return;
-    state.trainStatus = state.train ? 'done' : 'error';
+    state.trainStatus = state.train ? 'done' : 'error'; state.trainProgress = null;
   }
   schedule();
 }
@@ -2851,11 +2857,57 @@ function globeTick() {
 }
 function killGlobe() { globeRO?.disconnect(); globeRO = null; ++globeBusy; if (globe) { try { globe.pauseAnimation(); globe._destructor(); } catch {} globe = null; } globeTilesActive = false; }
 
+
+/* Prominent discoverability: the accuracy dashboard should never be buried inside a table. */
+function backtestEntry() {
+  const el = state.lang !== 'en', train = state.train, temp = train?.temp?.leads?.[1];
+  const score = temp?.test?.[temp.choice]?.mae;
+  const summary = fin(score)
+    ? (el ? 'D+1 · MAE στο ανεξάρτητο τεστ: ' : 'D+1 · Holdout MAE: ') + num(score,2) + '°C'
+    : state.trainStatus === 'loading'
+      ? (el ? 'Ιστορική εκπαίδευση σε εξέλιξη' : 'Historical training in progress')
+      : (el ? 'Δες αν οι παλιές προβλέψεις πέτυχαν' : 'See whether old forecasts were right');
+  return '<section class="mono-backtest-entry" aria-label="'+(el?'Ιστορική ακρίβεια MONO':'MONO historical accuracy')+'">' +
+    '<div class="mono-backtest-entry-icon" aria-hidden="true">↗</div><div class="mono-backtest-entry-copy">' +
+    '<span class="mono-backtest-entry-eyebrow">MONO · BACKTEST LAB</span>' +
+    '<h2>'+(el?'Ιστορικές προβλέψεις vs πραγματικότητα':'Historical forecasts vs reality')+'</h2>' +
+    '<p>'+(el?'Εκπαίδευση 2, 6 ή 12 μηνών · Αληθινά παλιότερα runs · Σφάλματα MAE/RMSE · Γραφήματα και CSV':'2, 6 or 12 months of training · Real archived runs · MAE/RMSE · Charts and CSV')+'</p>' +
+    '<small>'+esc(summary)+'</small></div>' +
+    '<button type="button" class="mono-backtest-entry-action" data-action="goto" data-page="history">'+
+    (el?'Δες την ακρίβεια':'Explore accuracy')+' <span aria-hidden="true">→</span></button></section>';
+}
+function historyPage() {
+  const el = state.lang !== 'en', tr = state.train;
+  const title = el ? 'Ιστορική ακρίβεια MONO' : 'MONO historical accuracy';
+  const subtitle = el
+    ? 'Εκπαιδεύουμε το μοντέλο με πραγματικές παλιότερες προγνώσεις και ελέγχουμε αν πέτυχε σε δεδομένα που δεν είχε δει.'
+    : 'Train with archived forecasts, then test against later reference data kept out of training.';
+  const lead = M.LEADS.map(n => '<button class="chip '+(state.lead===n?'active':'')+'" data-action="lead" data-n="'+n+'">D+'+n+' · '+(n*24)+'–'+(n*24+24)+'h</button>').join('');
+  const intro = '<section class="mono-backtest-intro"><span class="mono-backtest-entry-eyebrow">MONO · FORECAST VERIFICATION</span>'+
+    '<h2>'+(el?'Μπορούμε να αποδείξουμε πόσο καλά προβλέπει;':'Can we measure how well MONO predicts?')+'</h2>'+
+    '<p>'+(el?'Οι γραμμές προκύπτουν από ιστορικές προγνώσεις. Οι μετρικές μετρούν πραγματικά σφάλματα σε ανεξάρτητο χρονολογικό τεστ — δεν είναι «βαθμοί» που επινοήθηκαν.':'The lines come from archived forecasts. Metrics measure errors on an independent chronological holdout—not invented success rates.')+'</p></section>';
+  const status = state.trainStatus==='error' && !tr
+    ? '<p class="notice mono-history-warning" role="status">'+(el?
+      (state.modelsLoading?'Φορτώνονται πρώτα τα μοντέλα· θα γίνει νέα προσπάθεια εκπαίδευσης.':'Δεν φορτώθηκαν αρκετά ιστορικά runs. Δοκίμασε επανεκπαίδευση ή μικρότερο ιστορικό.')
+      :(state.modelsLoading?'Loading the forecast models before training.':'Not enough historical model runs could be loaded. Retry or choose a shorter period.'))+'</p>'
+    : '';
+  const panel = window.MONOHistoryBacktest?.render({
+      train:tr, lead:state.lead, lang:state.lang, days:state.historyDays, variable:state.historyVar,
+      order:state.historyOrder, status:state.trainStatus, progress:state.trainProgress, modelsLoading:state.modelsLoading
+    }) || '<p class="notice">'+(el?'Ο πίνακας ιστορικών δεδομένων δεν είναι διαθέσιμος.':'The historic data panel is unavailable.')+'</p>';
+  return header(title,subtitle,btn('retrain','↻ '+(el?'Επανεκπαίδευση':'Retrain'))) +
+    intro + '<div class="mono-history-leads"><b>'+(el?'Πόσες ημέρες νωρίτερα έγινε η πρόβλεψη;':'Forecast lead time')+'</b><div class="chips">'+lead+'</div></div>'+
+    status + panel + '<p class="notice mono-history-footnote">'+(el?
+      'Πηγή: Open-Meteo Previous Runs. Αναφορά: ERA5 (επανάλυση, όχι επίγειος σταθμός). Το τελικό τεστ δεν χρησιμοποιείται για την επιλογή του νικητή.'
+      :'Source: Open-Meteo Previous Runs. Reference: ERA5 (reanalysis, not a surface station). The final holdout is not used to select the winning model.')+'</p>';
+}
+
 /* ------------------------------------------------------------------ page: models */
 function modelsPage() {
   const V = state.view;
   const head = header(T('modelsTitle'), T('modelsSub'), btn('reloadModels', '↻ ' + T('refresh')));
-  if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
+  const backtest = backtestEntry();
+  if (!V) return head + backtest + (state.mainErr ? errorCard() : loadingCard());
   // Visible on mobile: the detailed status column is hidden on narrow screens.
   const ready = MODELS.filter(m => V.md[m.id] && !V.md[m.id].nocover).length;
   const loading = MODELS.filter(m => !state.models[m.id]).length;
@@ -2887,7 +2939,7 @@ function modelsPage() {
   const monoRow = `<tr class="monorow"><td><b>MONO</b><div class="compact">${esc(AN(Lk?.choice || 'untrained'))}</div></td><td><span class="tag mono">ML</span></td><td class="num"><b>${fmtV(mono[sel])}</b></td><td></td><td class="num hide-sm">${Lk ? `${num(Lk.test[Lk.choice]?.mae, 2)}°` : '—'}</td><td class="num hide-sm">${V.live.__mono ? `${num(V.live.__mono.mae, 1)}°` : '—'}</td><td class="hide-sm"></td></tr>`;
   const ens = ENSEMBLES.map(e => { const r = state.ens[e.id], info = V.famInfo[e.id]; const st = !r ? T('loading') : r.error ? T('failed') + (r.reason ? ' · ' + esc(r.reason) : '') : info?.nocover ? T('noCover') : `${info?.members ?? 0}`;
     return `<tr class="${info?.members ? '' : 'off'}"><td><b>${esc(e.name)}</b><div class="compact">${esc(r?.used || e.id)}${info?.vars?.length ? ' · ' + info.vars.join(', ') : ''}</div></td><td class="num">${st}</td></tr>`; }).join('');
-  return head + progress + `<div class="chips">${[['temp', 'varTemp'], ['rain', 'varRain'], ['wind', 'varWind']].map(([v, l]) => `<button class="chip ${state.mvar === v ? 'active' : ''}" data-action="mvar" data-v="${v}">${T(l)}</button>`).join('')}</div>
+  return head + backtest + progress + `<div class="chips">${[['temp', 'varTemp'], ['rain', 'varRain'], ['wind', 'varWind']].map(([v, l]) => `<button class="chip ${state.mvar === v ? 'active' : ''}" data-action="mvar" data-v="${v}">${T(l)}</button>`).join('')}</div>
     <div class="card">${ch}${legend([['mono', 'MONO'], ['model', T('legendModels')], ...(state.mvar === 'temp' ? [['band', 'Ensemble P10–P90']] : [])])}</div>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${esc(dt(at.t, { weekday: 'long', day: 'numeric', month: 'short' }))} · ${hhmm(at.t)}</h2><div class="section-sub">${T('leadDay')} ${T('d')}+${k}</div></div><input type="range" id="selHour" min="0" max="${rows.length - 1}" value="${sel}" aria-label="${T('time')}"></div>
       <div class="card tablecard"><div class="tablewrap"><table class="metric-table"><thead><tr><th>${T('model')}</th><th>${T('type')}</th><th>${T('valueAt')}</th><th>${T('weight')}</th><th class="hide-sm">${T('skill')}</th><th class="hide-sm">${T('live72')}</th><th class="hide-sm">${T('status')}</th></tr></thead><tbody>${monoRow}${tbl}</tbody></table></div></div></section>
@@ -2899,7 +2951,7 @@ function modelsPage() {
 function labPage() {
   const V = state.view, tr = state.train;
   const head = header(T('labTitle'), T('labSub'), btn('retrain', '↻ ' + T('retrain')));
-  if (!V) return head + loadingCard();
+  if (!V) return head + backtestEntry() + loadingCard();
   const k = state.lead, LT = tr?.temp?.leads?.[k], LW = tr?.wind?.leads?.[k], LP = tr?.precip?.leads?.[k];
   const chips = `<div class="chips">${M.LEADS.map(n => `<button class="chip ${k === n ? 'active' : ''}" data-action="lead" data-n="${n}">${T('d')}+${n} · ${n * 24}–${n * 24 + 24}h</button>`).join('')}</div>`;
   let body;
@@ -2935,7 +2987,7 @@ function labPage() {
   }
   const steps = `<section class="section card"><div class="panelhead"><b>${T('steps')}</b></div><ol class="steps">${T('stepsList').map(([a, b]) => `<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol></section>`;
   const insights = window.MONOModelInsights?.render({train:tr,view:V,stationLearning:state.stationRain,lead:k,lang:state.lang,algorithmName:AN}) || '';
-   const history = window.MONOHistoryBacktest?.render({ train:tr, lead:k, lang:state.lang, days:state.historyDays, variable:state.historyVar, order:state.historyOrder, status:state.trainStatus }) || '';
+   const history = window.MONOHistoryBacktest?.render({ train:tr, lead:k, lang:state.lang, days:state.historyDays, variable:state.historyVar, order:state.historyOrder, status:state.trainStatus, progress:state.trainProgress, modelsLoading:state.modelsLoading }) || '';
   return head + chips + history + insights + body + liveCard() + steps;
 }
 function stationCard() {
@@ -3329,7 +3381,7 @@ async function loadCityLive() {
 const NAV_GROUPS = [
   {id:'weather',el:'ΚΑΙΡΟΣ',en:'WEATHER',symbol:'◐',pages:['now','guide','hourly','rain','radar','maps']},
   {id:'earth',el:'ΓΗ & ΚΛΙΜΑ',en:'EARTH & CLIMATE',symbol:'◈',pages:['globe','earth','phen','climate','environment']},
-  {id:'data',el:'ΔΕΔΟΜΕΝΑ & ΕΡΓΑΛΕΙΑ',en:'DATA & TOOLS',symbol:'▤',pages:['models','lab','stations','news','cities']},
+  {id:'data',el:'ΔΕΔΟΜΕΝΑ & ΕΡΓΑΛΕΙΑ',en:'DATA & TOOLS',symbol:'▤',pages:['history','models','lab','stations','news','cities']},
   {id:'space',el:'ΔΙΑΣΤΗΜΑ',en:'SPACE',symbol:'☄',pages:['space']}
 ];
 const NAV_OPEN_KEY='mono-nav-groups-v1';
@@ -3337,7 +3389,7 @@ let navOpen=read(NAV_OPEN_KEY,{weather:true,earth:true,data:false,space:false});
 if(!navOpen || typeof navOpen!=='object') navOpen={weather:true,earth:true,data:false,space:false};
 const activeNavGroup=NAV_GROUPS.find(g=>g.pages.includes(state.page));
 if(activeNavGroup)navOpen[activeNavGroup.id]=true;
-const NAV = [['now', '◐'], ['guide', '☷'], ['maps','▱'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['earth', '◈'], ['models', '≋'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
+const NAV = [['now', '◐'], ['guide', '☷'], ['maps','▱'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['earth', '◈'], ['models', '≋'], ['history', '◎'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
 /* Mobile navigation shows sections, never a crowded row of individual pages. */
 const MOBILE_NAV_LABELS={
   el:{weather:'Καιρός',earth:'Γη',data:'Εργαλεία',space:'Διάστημα',choose:'Επίλεξε ενότητα',current:'Τώρα εδώ',close:'Κλείσιμο',open:'Άνοιγμα'},
@@ -3397,7 +3449,7 @@ function render() {
   if (state.page === 'maps' && MonoForecast.isMounted(forecastOptions())) { MonoForecast.update(forecastOptions()); return; }
   if (state.page === 'radar' && map && $('#map')) return;   // keep the live map running
   if ((state.page === 'globe' || state.page === 'earth') && globe && $('#globe')) { updateGlobeCtl(); return; }
-  const pages = { maps: forecastPage, guide: guidePage, now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, environment: environmentPage, space: spacePage, radar: radarPage, globe: globePage, earth: () => window.MONOEarth.page(state.lang), models: modelsPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
+  const pages = { maps: forecastPage, guide: guidePage, now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, environment: environmentPage, space: spacePage, radar: radarPage, globe: globePage, earth: () => window.MONOEarth.page(state.lang), models: modelsPage, history: historyPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
   const y = window.scrollY;
   const openEnvDetails = [...document.querySelectorAll('.environment-section details[open]')].map(el => el.id);
   const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap')].map(el => [el.id, el.scrollLeft]);
