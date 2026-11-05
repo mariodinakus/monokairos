@@ -54,7 +54,7 @@
 .hb-variable{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:17px}
 .hb-variable-btn{display:inline-flex;align-items:center;gap:9px;justify-content:center;min-height:39px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:8px 14px;color:var(--sub);font-size:11px;font-weight:730;transition:background .13s,color .13s,border-color .13s}
 .hb-variable-btn:hover{background:var(--soft);color:var(--ink)}
-.hb-variable-btn.active{border-color:#5c81df;background:var(--mh-accent-soft);color:#476fc9}
+.hb-variable-btn.active{border-color:#5c81df;background:var(--mh-accent-soft,rgba(86,121,213,.09));color:#476fc9}
 .hb-variable-symbol{display:inline-grid;place-items:center;min-width:21px;height:21px;border-radius:6px;background:var(--soft);color:var(--ink);font-size:13px}
 .hb-variable-btn.active .hb-variable-symbol{background:rgba(77,116,208,.13);color:#446bc9}
 .hb-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:13px 0 15px}
@@ -112,7 +112,7 @@ html[data-theme=dark] .hb-error-large{color:#eda69e}
 .hb-method-note{padding:13px 14px;margin:16px 0 0;font-size:10px;line-height:1.75;color:var(--sub);background:var(--bg);border:1px solid var(--line);border-radius:10px}
 .mh-footnote{font-size:10px;color:var(--sub);line-height:1.7;padding:0 4px;margin:17px 0}
 .mono-history-warning{border-left:3px solid #bb8e3b;padding:10px 12px}
-.hb-training-status{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:11px;align-items:center;border:1px solid rgba(96,134,220,.22);border-radius:12px;padding:13px 15px 11px;margin:1px 0 19px;background:var(--mh-accent-soft)}
+.hb-training-status{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:11px;align-items:center;border:1px solid rgba(96,134,220,.22);border-radius:12px;padding:13px 15px 11px;margin:1px 0 19px;background:var(--mh-accent-soft,rgba(86,121,213,.09))}
 .hb-training-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel)}
 .hb-training-text b{display:block;font-size:11px;color:var(--ink)}
 .hb-training-text p{margin:5px 0 0;color:var(--sub);font-size:10px}
