@@ -56,10 +56,25 @@
       '<p class="hb-lede">'+choose(el,'Διάλεξε πόσο πίσω θα εκπαιδευτεί το MONO. Η επιλογή αλγορίθμου γίνεται στην επικύρωση· οι συγκρίσεις παρακάτω προέρχονται αποκλειστικά από το τελευταίο, ανέγγιχτο χρονικό 20%.',
       'Choose how far back MONO should train. Algorithm selection uses validation data; the comparisons below come exclusively from the untouched final 20% of the timeline.')+'</p>'+
       '<div class="hb-controls"><span class="hb-caption">'+choose(el,'Ιστορικό εκπαίδευσης','Training history')+'</span><div class="chips">'+opts+'</div></div>';
-    if (loading) out += '<p class="notice" role="status">'+choose(el,'Γίνεται λήψη παλαιότερων προγνώσεων και επανεκπαίδευση. Τα προηγούμενα αποτελέσματα εμφανίζονται ώσπου να ολοκληρωθεί.','Downloading older model runs and retraining. Previous results remain visible until completion.')+'</p>';
+    if (loading) {
+      const p=o.progress, phase=p?.phase||'start';
+      const detail=phase==='download' && p?.total
+        ? choose(el,'Ιστορικά μοντέλα: ','Archived models: ')+Math.min(p.complete,p.total)+' / '+p.total
+        : phase==='train' ? choose(el,'Υπολογίζονται σφάλματα και αποτελέσματα τεστ…','Calculating test errors and scores…')
+        : choose(el,'Προετοιμασία ιστορικών δεδομένων…','Preparing historical data…');
+      const percentage=p?.total ? Math.max(0,Math.min(100,Math.round(100*p.complete/p.total))) : 0;
+      out += '<div class="hb-training-status" role="status" aria-live="polite"><span class="hb-spinner" aria-hidden="true"></span>'+
+        '<div><b>'+choose(el,'Η εκπαίδευση εκτελείται','Training in progress')+'</b><p>'+detail+'</p></div>'+
+        '<div class="hb-loading-track"><span style="width:'+percentage+'%"></span></div></div>';
+    }
     if (active !== days) out += '<p class="notice">'+choose(el,'Οι μετρήσεις που φαίνονται αφορούν ακόμη το προηγούμενο ιστορικό ('+active+' ημέρες).','The displayed results still use the earlier window ('+active+' days).')+'</p>';
     out += '<div class="chips hb-variable">'+Object.entries(labels).map(([id,name]) => '<button class="chip '+(variable===id?'active':'')+'" data-action="historyVariable" data-v="'+id+'">'+name+'</button>').join('')+'</div>';
-    if (!hasData) return out+'<p class="notice">'+choose(el,'Δεν υπάρχουν ακόμη επαληθευμένα δείγματα για αυτόν τον ορίζοντα. Χρειάζεται εκπαίδευση και επαρκής κάλυψη ιστορικών runs.','No verified holdout samples for this lead yet. Training and historical model coverage are required.')+'</p></section>';
+    if (!hasData) return out+'<div class="hb-no-data"><b>'+choose(el,'Αναμονή πραγματικών αποτελεσμάτων','Waiting for verified results')+'</b><p>'+
+      (o.modelsLoading ? choose(el,'Φορτώνονται τα προγνωστικά μοντέλα.','Loading forecast models.')
+        : o.status==='error' ? choose(el,'Απέτυχε η λήψη ιστορικού. Δοκίμασε μικρότερο διάστημα ή επανεκπαίδευση.','Historical downloads failed. Try a shorter period or retrain.')
+        : loading ? choose(el,'Τα αποτελέσματα θα εμφανιστούν εδώ όταν ολοκληρωθεί η εκπαίδευση.','Results will appear here after training finishes.')
+        : choose(el,'Δεν υπάρχουν ακόμη επαληθευμένα δεδομένα για αυτόν τον ορίζοντα.','No verified history for this lead yet.'))+
+      '</p></div></section>';
     const rows = viewRows(t,variable), rain = variable==='rain', tt = t.test?.[t.choice];
     const mae = rain ? null : tt?.mae, rmse = rain ? null : tt?.rmse;
     const baseline = rain ? t.test?.clim : t.test?.mean?.mae;
