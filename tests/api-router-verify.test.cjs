@@ -50,7 +50,7 @@ test('nearest curated city within 25 km, otherwise none', () => {
   assert.equal(V.nearestCity(48.85, 2.35), null);
 });
 
-function fakeIO(now) {
+function fakeIO(now, stationOffset = 0) {
   const truth = t => 14 + 6 * Math.sin(((t / H) % 24 - 9) / 24 * 2 * Math.PI) + 2 * Math.sin(t / (5 * DAY));
   const noise = (t, k) => { const x = Math.sin(t * 1e-4 + k * 7.1) * 43758.5; return (x - Math.floor(x)) * 2 - 1; };
   const series = (u, f) => {
@@ -71,7 +71,7 @@ function fakeIO(now) {
     },
     text: async () => {
       const lines = ['station,valid,tmpc'];
-      for (let t = Math.floor((now - 40 * DAY) / H) * H; t < now; t += 1800e3) lines.push(`LGTS,${new Date(t + 20 * 60e3).toISOString().slice(0, 16).replace('T', ' ')},${(truth(t + 20 * 60e3) + 0.4 * noise(t, 9)).toFixed(1)}`);
+      for (let t = Math.floor((now - 40 * DAY) / H) * H; t < now; t += 1800e3) lines.push(`LGTS,${new Date(t + 20 * 60e3).toISOString().slice(0, 16).replace('T', ' ')},${(truth(t + 20 * 60e3) + stationOffset + 0.4 * noise(t, 9)).toFixed(1)}`);
       return lines.join('\n');
     }
   } };
@@ -99,4 +99,16 @@ test('a daily update only adds the missing day and keeps history', async () => {
   assert.equal(next.records.at(-1).day, '2026-11-08');
   const again = await V.update(city, next, later + 60e3, io);
   assert.equal(again.records.length, 31);
+});
+
+test('station correction learned from earlier days removes a station-vs-ERA5 offset', async () => {
+  const now = Date.parse('2026-11-08T07:40:00Z'), city = V.nearestCity(40.64, 22.94);
+  const state = await V.update(city, null, now, fakeIO(now, -1.2).io); // airport 1.2° colder than the ERA5 cell
+  const s = V.summary(state);
+  assert.ok(s.bias > 0.9, 'raw MONO inherits the ERA5 offset: ' + s.bias);
+  assert.ok(s.corrected && s.corrected.days >= 25);
+  assert.ok(s.corrected.mae < s.corrected.maeRaw - 0.5, JSON.stringify(s.corrected));
+  assert.ok(Math.abs(s.corrected.bias) < 0.3);
+  assert.equal(state.records.slice(0, 3).some(r => 'maeCor' in r), false, 'no correction before 3 earlier days exist');
+  assert.equal(state.version, 2);
 });
