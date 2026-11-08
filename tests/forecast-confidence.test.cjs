@@ -50,7 +50,7 @@ test('missing hours never imply a dry forecast, a shift, or a fake revision',()=
  const old=F.capture(raw(),now-hour), recent=F.capture(raw({rainAt:3}),now);
  recent.rows[0].liquid=null;
  const c=F.compare([old,recent],now);
- assert.equal(c.firstRain,null);
+ assert.equal(c.firstRain,null);assert.equal(c.liquid,null);
  assert.match(F.render({view:view(),history:[old,recent],now}),/Δεν υπάρχουν αρκετές κοινές ώρες/);
  assert.equal(F.compare([recent],now),null);
  assert.equal(F.compare([old,recent],now+40*hour),null);

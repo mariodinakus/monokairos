@@ -58,9 +58,9 @@ function compare(history,now=Date.now()){
  const old=new Map(pair.previous.rows.filter(r=>fin(r?.t)).map(r=>[r.t,r]));
  const common=pair.current.rows.filter(r=>fin(r?.t)&&r.t>now&&r.t<=now+24*hour&&old.has(r.t))
    .map(current=>({current,previous:old.get(current.t)}));
- const calc=(key,op)=>{
+ const calc=(key,op,min=18)=>{
   const xs=common.filter(p=>fin(p.current[key])&&fin(p.previous[key]));
-  if(xs.length<18)return null;
+  if(xs.length<min)return null;
   const before=op(xs.map(p=>p.previous[key])),after=op(xs.map(p=>p.current[key]));
   return {before,after,delta:after-before,n:xs.length};
  };
@@ -74,7 +74,7 @@ function compare(history,now=Date.now()){
  }
  return {...pair,count:common.length,
   temp:calc('temp',avg),wind:calc('wind',a=>Math.max(...a)),cloud:calc('cloud',avg),
-  liquid:calc('liquid',a=>a.reduce((s,x)=>s+x,0)),pop:calc('pop',a=>Math.max(...a)),firstRain};
+  liquid:calc('liquid',a=>a.reduce((s,x)=>s+x,0),24),pop:calc('pop',a=>Math.max(...a)),firstRain};
 }
 function render({view,lang='el',history=[],train=null,snapshot=false,now=Date.now()}={}){
  const el=lang!=='en', X=(a,b)=>el?a:b;
