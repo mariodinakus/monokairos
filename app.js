@@ -1432,7 +1432,7 @@ function homeMore(id, title, hint, body) {
 }
 function nowPage() {
   const c = state.city, V = state.view;
-  const head = header(esc(cityName(c)), esc([adminName(c), countryName(c)].filter(Boolean).join(' · ')), `${favBtn(c)}${btn('reload', '↻ ' + T('refresh'))}`);
+  const head = header(esc(cityName(c)), esc([adminName(c), countryName(c)].filter(Boolean).join(' · ')), `${favBtn(c)}${V ? btn('share', '⇪ ' + (state.lang === 'el' ? 'Κοινοποίηση' : 'Share'), `aria-label="${state.lang === 'el' ? 'Κοινοποίηση πρόγνωσης' : 'Share forecast'}"`) : ''}${btn('reload', '↻ ' + T('refresh'))}`);
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard(state.locating ? T('locating') : ''));
   // Do not flash the raw model temperature and then silently replace it with a station observation.
   if (!state.obsReady && !state.snapshot) return head + loadingCard(T('checkingStations'));
@@ -1453,7 +1453,7 @@ function nowPage() {
     ? '<div class="hero-station-report">📍 '+num(nearbyReport.dist,1)+' km · '+hhmm(nearbyReport.t)+' · '+esc(nearbyReport.src||'')+'</div>' : '';
   const hero = `<article class="card hero"><div class="hero-header"><div><div class="hero-place">${T('now')}</div><div class="hero-country">${esc(dt(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' }))} · ${hhmm(Date.now())}</div></div>${icon(cur.code ?? rows[iN]?.code ?? 3, cur.isDay, 'hero-icon')}</div>
     <div class="temperature" aria-label="${fin(cur.temp) ? num(Math.round(cur.temp)) + ' °C' : '—'}">${fin(cur.temp) ? num(Math.round(cur.temp)) : '—'}<span class="temp-unit">°C</span></div>
-    <div class="hero-bottom"><div><div class="condition">${condition}</div>${weatherSource}<div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div></div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
+    <div class="hero-bottom"><div><div class="condition">${condition}</div>${weatherSource}<div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div>${state.snapshot ? '' : (window.MONODayCompare?.render(window.MONODayCompare.compare({rows, daily:V.daily, now:Date.now(), zone:V.zone}), {lang:state.lang}) || '')}</div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
   const minis = `<div class="mini-grid">
     ${mini(T('rainChance'), pct(pop6), (state.lang === 'el' ? 'Μέγιστη ανά ώρα · επόμενες 6 ώρες' : 'Peak hourly chance · next 6 hours') + (today?.mm >= 0.1 ? ` · ${num(today.mm, 1)} mm ${T('today').toLowerCase()}` : ''), 'umbrella')}
     ${mini(T('wind'), `${num(cur.wind)} <small>km/h</small> ${dirArrow(cur.dir)}${fin(cur.wind) ? `<span class="wind-beaufort" title="${state.lang === 'el' ? 'Κλίμακα Μποφόρ για μέση ταχύτητα ανέμου' : 'Beaufort scale for mean wind speed'}">${windBft(cur.wind)}</span>` : ''}`, fin(cur.gust) ? `${T('gust')} ${num(cur.gust)} km/h` : '&nbsp;', 'wind')}
@@ -1540,7 +1540,7 @@ function environment(full = false) {
     const i = D.time.findIndex(t => dayKey(t * 1000 + 12 * 3600e3, V.zone) === dayKey(Date.now(), V.zone)), j = i >= 0 ? i : 0;
     const sr = D.sunrise?.[j] * 1000, ss = D.sunset?.[j] * 1000, dl = D.daylight_duration?.[j];
     const ph = M.moonPhase(Date.now()), illum = (1 - Math.cos(2 * Math.PI * ph)) / 2, name = T('moonNames')[Math.round(ph * 8) % 8];
-    cards.push(`<div class="card env"><div class="minihead"><span class="label">${T('sun')}</span><img src="${iconSrc('sunrise')}" alt=""></div><div class="minivalue">${fin(sr) ? hhmm(sr) : '—'} <small>→ ${fin(ss) ? hhmm(ss) : '—'}</small></div><div class="mininote">${T('daylight')} ${fin(dl) ? `${Math.floor(dl / 3600)}h ${Math.round(dl % 3600 / 60)}′` : '—'} · ${T('uvMax')} ${num(D.uv_index_max?.[j], 1)}</div>
+    cards.push(`<div class="card env"><div class="minihead"><span class="label">${T('sun')}</span><img src="${iconSrc('sunrise')}" alt=""></div><div class="minivalue">${fin(sr) ? hhmm(sr) : '—'} <small>→ ${fin(ss) ? hhmm(ss) : '—'}</small></div><div class="mininote">${T('daylight')} ${fin(dl) ? `${Math.floor(dl / 3600)}h ${Math.round(dl % 3600 / 60)}′` : '—'} · ${T('uvMax')} ${num(D.uv_index_max?.[j], 1)}</div>${(() => { const dc = window.MONODayCompare?.daylight(D, Date.now(), V.zone); return dc ? `<div class="mininote dc-daylight">${esc(window.MONODayCompare.daylightPhrase(dc.delta, state.lang))}</div>` : ''; })()}
       <div class="moonrow"><span class="moon" style="--lit:${(ph < 0.5 ? 1 : -1) * Math.round(illum * 100)}"></span><div><b>${esc(name)}</b><small>${pct(illum)} ${T('illum')}</small></div></div></div>`);
   }
   const mr = state.marine && !state.marine.error ? state.marine.current : null;
@@ -3580,6 +3580,27 @@ function render() {
   if (state.page === 'earth') window.MONOEarth.mount(state.lang);
 }
 let toastT;
+function shareText() {
+  const V = state.view; if (!V) return '';
+  const el = state.lang === 'el', cur = V.current, d = V.daily, S = plainSummary();
+  const lines = [`MONO Weather · ${cityName(state.city)} · ${hhmm(Date.now())}`];
+  lines.push(`${el ? 'Τώρα' : 'Now'} ${deg(cur.temp)}${cur.source === 'obs' ? (el ? ' (μέτρηση σταθμού)' : ' (station)') : ''} · ${T('high')} ${deg(d[0]?.hi)} · ${T('low')} ${deg(d[0]?.lo)}`);
+  if (S?.headline) lines.push(S.headline);
+  lines.push(rainSentence());
+  if (d[1]) lines.push(`${dayLabel(d[1].t, 1)}: ${deg(d[1].lo)} / ${deg(d[1].hi)} · ☂ ${pct(d[1].pop)}`);
+  return lines.filter(Boolean).join('\n');
+}
+async function shareForecast() {
+  const text = shareText(); if (!text) return;
+  const url = location.origin + location.pathname, title = 'MONO Weather · ' + cityName(state.city);
+  try {
+    if (navigator.share) { await navigator.share({ title, text, url }); return; }
+    await navigator.clipboard.writeText(text + '\n' + url);
+    toast(state.lang === 'el' ? 'Η πρόγνωση αντιγράφηκε' : 'Forecast copied');
+  } catch (err) {
+    if (err?.name !== 'AbortError') toast(state.lang === 'el' ? 'Η κοινοποίηση δεν είναι διαθέσιμη' : 'Sharing is not available');
+  }
+}
 function toast(m) { const n = $('#toast'); n.textContent = m; n.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => n.classList.remove('show'), 3200); }
 function goto(p) {
   if(p!=='earth'&&p!=='globe'&&window.MONOStormLens)window.MONOStormLens.pause();
@@ -3689,6 +3710,7 @@ function onClick(e) {
   else if (a === 'menu') { closeMobileNavigation(); $('.sidebar').classList.toggle('open'); }
   else if (a === 'navGroup') { const key=b.dataset.v; if(NAV_GROUPS.some(g=>g.id===key)){navOpen[key]=!navOpen[key];write(NAV_OPEN_KEY,navOpen);navRender();} }
   else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); if(state.page==='space')window.MONOSpaceControl?.load(true); }
+  else if (a === 'share') shareForecast();
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
   else if (a === 'retrain') ensureTraining(state.city, state.gen, true);
    else if (a === 'historyPeriod') { const days=Number(b.dataset.days); if(![62,180,365].includes(days)||days===state.historyDays||state.trainStatus==='loading')return; state.historyDays=days; persistUI(); render(); ensureTraining(state.city,state.gen,true); }

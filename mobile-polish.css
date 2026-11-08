@@ -325,3 +325,10 @@
   }
   .topbar .topActions { gap: 2px; }
 }
+/* Day-over-day context in the home hero */
+.day-compare{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.dc-item{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:999px;padding:6px 10px;font-size:11px;font-weight:680;line-height:1.2}
+.dc-item i{font-style:normal;font-weight:850;font-size:12px}
+.dc-up i{color:var(--warm,#b4442c)}.dc-down i{color:var(--cold,#2f62a8)}.dc-flat i{color:var(--muted)}
+.dc-daylight{margin-top:4px}
+@media (max-width:560px){.day-compare{gap:5px}.dc-item{font-size:10.5px;padding:5px 9px}}
