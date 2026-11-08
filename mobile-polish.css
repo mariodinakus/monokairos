@@ -399,3 +399,7 @@
 .th-verdict{margin:12px 0 0;font-size:12px;font-weight:700}
 .th-foot{margin:8px 0 0;color:var(--sub);font-size:10.5px;line-height:1.6}
 @media (max-width:640px){.th-grid{grid-template-columns:1fr 1fr}.th-grid>div:last-child{grid-column:1/-1}}
+.th-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11.5px;font-variant-numeric:tabular-nums}
+.th-table th{text-align:left;color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:6px 4px;border-bottom:1px solid var(--line)}
+.th-table td{padding:7px 4px;border-bottom:1px solid var(--line)}.th-table td:not(:first-child),.th-table th:not(:first-child){text-align:right}
+.th-table tr.best td{font-weight:800}

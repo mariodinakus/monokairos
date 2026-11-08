@@ -132,3 +132,15 @@ test('the daily job visits cities one at a time', () => {
   assert.doesNotMatch(s, /Promise\.all\(CITIES/);
   assert.match(s, /setTimeout\(r, 20000\)/);
 });
+
+test('MONO-auto picks, for each day, the variant that did best over the previous 14 days only', () => {
+  const recs = Array.from({ length: 20 }, (_, i) => ({ day: 'd' + String(i).padStart(2, '0'), n: 24, mae: 2, hit: .5, bias: 1, maeSta: i < 10 ? 1 : 3, hitSta: .9, biasSta: 0, ...(i >= 7 ? { maeCor: 1.5, hitCor: .7, biasCor: 0 } : {}) }));
+  const out = V.autoSelect(recs);
+  assert.equal(out[6].auto, undefined, 'needs a week of history');
+  assert.equal(out[7].auto, 'sta');
+  assert.equal(out[7].maeAuto, 1);
+  // the station variant turns bad from day 10; the choice follows with a lag, never using the same day
+  assert.equal(out[10].auto, 'sta');
+  assert.equal(out[10].maeAuto, 3);
+  assert.equal(out[19].auto, 'cor');
+});

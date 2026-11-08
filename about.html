@@ -1,7 +1,7 @@
 <!doctype html><html lang="el"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MONO · Πώς δουλεύει η πρόγνωση</title>
 <meta name="description" content="Πώς φτιάχνει την πρόγνωση το MONO Weather: 35 μοντέλα, ensembles, σταθμοί, έξι αλγόριθμοι, ανεξάρτητος έλεγχος ακρίβειας και επαλήθευση με σταθμούς αεροδρομίων.">
 <link rel="canonical" href="https://monokairos.vercel.app/about">
-<link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="mono-plus.css"></head>
+<link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="mono-plus.css"><style>.legal-page code{font-family:var(--mono-font,ui-monospace,monospace);font-size:.92em;background:var(--soft);padding:1px 5px;border-radius:5px;white-space:normal}.legal-page h3{font-size:15px;margin:22px 0 6px}.eq-list li{margin:8px 0;line-height:1.7}.eq-note{color:var(--sub)}</style></head>
 <body><main class="legal-page"><a href="/">← MONO Weather</a>
 <h1>Πώς δουλεύει η πρόγνωση MONO</h1>
 <p>Το MONO δεν είναι ένα ακόμα μοντέλο καιρού. Παίρνει τις προγνώσεις των μεγάλων μετεωρολογικών κέντρων, μαθαίνει από το παρελθόν πόσο και πότε πέφτει έξω η καθεμία, και τις συνδυάζει. Μετά δείχνει, με αριθμούς, πόσο σωστό βγήκε.</p>
@@ -16,14 +16,47 @@
 
 <h2>3. Πόσο σωστή βγαίνει</h2>
 <p><b>Ιστορικό:</b> το ποσοστό «πόσο συχνά βγαίνει σωστή» μετράει τις ώρες του ανεξάρτητου τεστ όπου ταυτόχρονα η θερμοκρασία ήταν μέσα σε ±2 °C, ο άνεμος σε ±10 km/h και το «βρέχει / δεν βρέχει» σωστό, ξεχωριστά για κάθε μέρα πρόγνωσης.</p>
-<p><b>Σταθμός:</b> για 12 ελληνικές πόλεις, κάθε πρωί ο διακομιστής ξαναφτιάχνει την πρόγνωση MONO μίας μέρας πριν, στο σημείο του αεροδρομίου, και τη συγκρίνει με τις ωριαίες μετρήσεις METAR. Η εκπαίδευση τελειώνει πάντα πριν από κάθε μέρα που ελέγχεται. Τα αποτελέσματα δείχνονται όπως είναι, και όταν ο απλός μέσος όρος των μοντέλων τα πάει καλύτερα.</p>
+<p><b>Σταθμός:</b> για 12 ελληνικές πόλεις (όπου το αεροδρόμιο δίνει ωριαίες μετρήσεις), κάθε πρωί ο διακομιστής ξαναφτιάχνει την πρόγνωση MONO μίας μέρας πριν, στο σημείο του αεροδρομίου, και τη συγκρίνει με τις ωριαίες μετρήσεις METAR. Η εκπαίδευση τελειώνει πάντα πριν από κάθε μέρα που ελέγχεται. Τα αποτελέσματα δείχνονται όπως είναι, και όταν ο απλός μέσος όρος των μοντέλων τα πάει καλύτερα.</p>
 <p><b>Χθες:</b> η εφαρμογή συγκρίνει τη χθεσινή πρόγνωση του MONO, όπως είχε βγει μία μέρα πριν, με τον κοντινό σταθμό.</p>
 
-<h2>4. Τι δεν είναι</h2>
+<h2>5. Οι εξισώσεις, όπως είναι στον κώδικα</h2>
+<p class="eq-note">Συμβολισμοί: <i>f<sub>m</sub>(t)</i> η πρόγνωση του μοντέλου <i>m</i> για την ώρα <i>t</i> (από τρέξιμο <i>k</i> μέρες πριν), <i>M</i> το πλήθος των μοντέλων, <i>y(t)</i> η αλήθεια (ERA5 ή μέτρηση σταθμού), <i>h</i> η τοπική ώρα και <i>ω = 2πh/24</i>. Όλα τα παρακάτω εκπαιδεύονται χωριστά για κάθε σημείο, μεταβλητή και ορίζοντα <i>k = 0…5</i> (αρχείο <code>model.js</code>).</p>
+
+<h3>5.1 Οι έξι μέθοδοι για θερμοκρασία, άνεμο και νέφωση</h3>
+<ol class="eq-list">
+<li><b>Μέσος όρος:</b> <code>ŷ = (1/M) · Σ<sub>m</sub> f<sub>m</sub></code></li>
+<li><b>Καλύτερο μοντέλο:</b> <code>ŷ = f<sub>m*</sub></code>, με <code>m* = argmin<sub>m</sub> MAE<sub>m</sub></code> στην εκπαίδευση (τουλάχιστον 36 ώρες).</li>
+<li><b>MOS (διόρθωση μεροληψίας ανά ώρα):</b> για κάθε μοντέλο <code>b<sub>m</sub>(h) = a<sub>m</sub> + β<sub>m</sub>·sin ω + γ<sub>m</sub>·cos ω</code>, εκτίμηση με ridge (λ = 12) στα σφάλματα <code>e = f<sub>m</sub> − y</code>. Βάρη <code>w<sub>m</sub> = 0,75·(1/MSE<sub>m</sub>) / Σ(1/MSE) + 0,25/M</code>. Πρόγνωση <code>ŷ = Σ w<sub>m</sub>·(f<sub>m</sub> − b<sub>m</sub>(h)) / Σ w<sub>m</sub></code>.</li>
+<li><b>Ridge stacking:</b> <code>ŷ = θ<sub>0</sub> + θ<sub>1</sub> sin ω + θ<sub>2</sub> cos ω + Σ<sub>m</sub> θ<sub>m</sub> f<sub>m</sub></code>. Ελαχιστοποιεί <code>Σ(y − ŷ)² + λ·[θ<sub>1</sub>² + θ<sub>2</sub>² + Σ<sub>m</sub>(θ<sub>m</sub> − 1/M)²]</code> με <code>λ = max(4; 0,05·N)</code>: τα βάρη «τραβιούνται» προς τον απλό μέσο όρο, όχι προς το μηδέν.</li>
+<li><b>Φίλτρο Kalman (μεροληψία ανά μοντέλο και ώρα):</b> <code>P ← P + Q</code>, <code>K = P/(P + R)</code>, <code>b ← b + K·(e − b)</code>, <code>P ← (1 − K)·P</code>, με <code>Q = 0,04</code>, <code>R = 1</code>. Ένα σφάλμα χρησιμοποιείται μόνο αφού γίνει γνωστό, <code>24·(k+1)</code> ώρες μετά. Πρόγνωση <code>ŷ = (1/M)·Σ(f<sub>m</sub> − b<sub>m,h</sub>)</code>.</li>
+<li><b>Ανάλογα (analog ensemble):</b> από τις παλιές ώρες (ίδια ώρα ±1) κρατά τις 20 πιο κοντινές με απόσταση <code>d = 2·(Δf̄/σ<sub>1</sub>)² + (Δf̄<sub>t−1</sub>/σ<sub>2</sub>)² + (Δf̄<sub>t+1</sub>/σ<sub>3</sub>)²</code>. Πρόγνωση <code>ŷ = Σ w<sub>a</sub>·(y<sub>a</sub> + 0,5·(f̄ − f̄<sub>a</sub>)) / Σ w<sub>a</sub></code>, <code>w<sub>a</sub> = 1/(d<sub>a</sub> + 0,05)</code>.</li>
+</ol>
+<p><b>Συνδυασμός:</b> οι τρεις καλύτερες μέθοδοι της επικύρωσης, με βάρη <code>∝ 1/MAE²</code>. <b>Επιλογή:</b> χρονολογικά 60% εκπαίδευση, 20% επικύρωση, 20% τεστ. Κερδίζει η μέθοδος (ή ο συνδυασμός) με το μικρότερο MAE στην <i>επικύρωση</i>. Όλα τα νούμερα που βλέπεις βγαίνουν από το <i>τεστ</i>.</p>
+
+<h3>5.2 Βροχή</h3>
+<p>Χαρακτηριστικά ανά ώρα: <code>φ</code> = ποσοστό μοντέλων με ≥ 0,2 mm, <code>ā</code> = μέση ποσότητα. Τρεις μέθοδοι: ψήφος <code>p = φ</code>· λογιστική παλινδρόμηση <code>p = 1/(1 + e<sup>−(w<sub>0</sub> + w<sub>1</sub>φ + w<sub>2</sub>·ln(1+ā))</sup>)</code> (Newton–Raphson με ridge λ = 1)· ανάλογα (30 κοντινότερες ώρες, <code>p = (Σ βροχερές + 0,5)/(n + 1)</code>). Επιλογή με το Brier score <code>(1/N)·Σ(p − o)²</code> στην επικύρωση, και συνδυασμός με τα ensembles. Η ποσότητα διορθώνεται με <code>s = Σy/Σā</code> (όριο 0,4–2,5) μόνο αν βελτιώνει την επικύρωση.</p>
+
+<h3>5.3 Διόρθωση από τον κοντινό σταθμό (ζωντανά)</h3>
+<p>Από τις διαφορές <code>r = μέτρηση − MONO</code> των τελευταίων 72 ωρών: ημερήσιος κύκλος <code>c(h) = a + β sin ω + γ cos ω</code> (ridge λ = 8), συρρίκνωση <code>s = n/(n + 12)</code>, και το τρέχον υπόλοιπο <code>e<sub>0</sub></code> που σβήνει εκθετικά: <code>Δ(t) = s·c(h) + e<sub>0</sub>·exp(−(t − t<sub>0</sub>)/τ)</code>, με <code>τ = −1/ln ρ</code> (ρ = αυτοσυσχέτιση 1 ώρας, 2–18 ώρες), όριο ±6 °C.</p>
+
+<h3>5.4 Αβεβαιότητα και πιθανότητες</h3>
+<p><code>σ = max(0,5; √(0,5·σ<sub>ens</sub>² + 0,5·σ<sub>hist</sub>²))</code>, με <code>σ<sub>hist</sub> = 1,2533·MAE<sub>τεστ</sub></code> (για κανονική κατανομή MAE = σ·√(2/π)) και <code>σ<sub>ens</sub></code> τη διασπορά των ensembles. Ζώνη 80%: <code>ŷ ± 1,2816·σ</code>. Παγετός <code>P = Φ((0 − ŷ)/σ)</code>, καύσωνας <code>P = 1 − Φ((35 − ŷ)/σ)</code>.</p>
+
+<h3>5.5 Πώς μετριέται η αξιοπιστία</h3>
+<p><b>Ιστορικό:</b> ποσοστό ωρών του τεστ με <code>|ŷ − y| ≤ 2 °C</code>, <code>|άνεμος| ≤ 10 km/h</code> και σωστό «βρέχει/δεν βρέχει» (p ≥ 0,5 έναντι ERA5 ≥ 0,2 mm), όλα μαζί. <b>Σταθμός:</b> για κάθε μέρα <i>D</i>, η εκπαίδευση τελειώνει πριν από το <i>D</i> και συγκρίνονται τέσσερις τρόποι στο σημείο του αεροδρομίου:</p>
+<ul class="eq-list">
+<li>MONO εκπαιδευμένο σε ERA5·</li>
+<li>το ίδιο, με διόρθωση <code>b(h) = μέσο σφάλμα της ώρας h στις 14 προηγούμενες μέρες</code>·</li>
+<li>MONO εκπαιδευμένο στις ίδιες τις μετρήσεις του σταθμού·</li>
+<li><b>αυτόματη επιλογή:</b> τη μέρα <i>D</i> χρησιμοποιείται ο τρόπος με το μικρότερο μέσο σφάλμα στις μέρες <i>D−14…D−1</i> (τουλάχιστον 7). Τίποτα από τη μέρα <i>D</i> δεν μπαίνει στην επιλογή.</li>
+</ul>
+<p>Παράδειγμα από τις πρώτες 30 μέρες: στη Ρόδο η εκπαίδευση στον σταθμό έριξε το μέσο σφάλμα από 1,57 °C σε 0,93 °C, ενώ στη Θεσσαλονίκη δεν βοήθησε (1,32 έναντι 1,30 °C) και κέρδισε η διόρθωση των 14 ημερών (1,07 °C). Γι' αυτό η επιλογή γίνεται αυτόματα, ανά πόλη.</p>
+
+<h2>6. Τι δεν είναι</h2>
 <p>Το MONO δεν είναι επίσημη μετεωρολογική υπηρεσία. Για επικίνδυνα φαινόμενα ακολούθησε τις προειδοποιήσεις της ΕΜΥ, της Πολιτικής Προστασίας και του 112. Οι πιθανότητες και τα ποσοστά ακρίβειας περιγράφουν το παρελθόν· δεν εγγυώνται την επόμενη μέρα. Οι ειδοποιήσεις βροχής στη συσκευή στηρίζονται στην πρόγνωση 15λέπτου και όχι σε ραντάρ ή μέτρηση.</p>
 
 <h2>English summary</h2>
-<p>MONO combines up to 35 numerical weather models and 8 ensembles (via Open-Meteo) with live station observations. For each place it learns from each model's archived forecasts (0–5 days ahead) against ERA5, choosing among six methods (mean, best model, MOS, ridge stacking, Kalman filter, analog ensemble) on a chronological 60/20/20 split; every accuracy figure comes from the untouched test set. A nearby station corrects the near-term forecast. For 12 Greek cities, MONO's day-ahead forecast at the airport is re-run every morning and verified against hourly METAR, with training that always ends before the evaluated day. MONO is not an official warning service.</p>
+<p>MONO combines up to 35 numerical weather models and 8 ensembles (via Open-Meteo) with live station observations. For each place it learns from each model's archived forecasts (0–5 days ahead) against ERA5, choosing among six methods (mean, best model, MOS, ridge stacking, Kalman filter, analog ensemble) on a chronological 60/20/20 split; every accuracy figure comes from the untouched test set. A nearby station corrects the near-term forecast. For 12 Greek cities, MONO's day-ahead forecast at the airport is re-run every morning and verified against hourly METAR, with training that always ends before the evaluated day. For each airport four variants are scored side by side (ERA5-trained, plus a 14-day hourly bias correction, station-trained, and an automatic choice that uses, each day, the variant with the lowest error over the previous 14 days). Section 5 lists every equation exactly as implemented in <code>model.js</code>. MONO is not an official warning service.</p>
 <footer><a href="privacy.html">Απόρρητο</a> · <a href="terms.html">Πηγές & όροι</a> · <a href="/">Επιστροφή</a></footer></main>
 <script defer src="/_vercel/insights/script.js"></script>
 </body></html>
