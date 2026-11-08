@@ -355,3 +355,24 @@
 .ra-text b{font-size:13px;letter-spacing:-.02em}
 .ra-text span{color:var(--sub);font-size:11px;line-height:1.55}
 .ra-actions{display:flex;gap:8px;flex-wrap:wrap}
+/* MONO reliability: historical hit rate per forecast day */
+.rel-title{margin:6px 0 0;font-size:19px;letter-spacing:-.045em;font-weight:730}
+.rel-hero{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.rel-big{font-size:clamp(46px,6vw,64px);font-weight:720;letter-spacing:-.07em;line-height:1;font-variant-numeric:tabular-nums}
+.rel-hero p{margin:0;font-size:13px;font-weight:680;flex:1 1 220px;line-height:1.45}
+.rel-hero small{display:block;color:var(--sub);font-weight:500;font-size:11px;margin-top:4px}
+.rel-hi{color:var(--good)}.rel-mid{color:var(--ink)}.rel-lo{color:var(--warm)}
+.rel-days{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:18px}
+.rel-day{border:1px solid var(--line);border-radius:12px;padding:10px 10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.rel-day span{font-size:10.5px;color:var(--sub);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rel-day b{font-size:18px;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.rel-day i{display:block;height:4px;border-radius:4px;background:linear-gradient(90deg,var(--ink) var(--w),var(--soft) var(--w))}
+.rel-parts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.rel-part{background:var(--soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:3px}
+.rel-part span{font-size:10.5px;color:var(--sub);font-weight:700}
+.rel-part b{font-size:16px;font-variant-numeric:tabular-nums}
+.rel-part small{font-size:10px;color:var(--muted)}
+.rel-foot{margin:12px 0 0;color:var(--sub);font-size:10.5px;line-height:1.6}
+.rel-badge{display:inline-block;margin-left:7px;font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:999px;background:var(--soft);vertical-align:middle;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rel-badge.rel-mid{color:var(--sub)}
+@media (max-width:640px){.rel-days{grid-template-columns:repeat(3,minmax(0,1fr))}.rel-parts{grid-template-columns:1fr 1fr}.dailyrow strong .rel-badge{display:block;margin:4px 0 0;width:max-content}}
