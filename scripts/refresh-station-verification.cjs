@@ -11,7 +11,11 @@ async function refresh([id, lat, lon]) {
   } catch (e) { console.log(`${id}: request failed (${e.message})`); return false; }
 }
 (async () => {
+  // One city at a time with a pause: the station archive (IEM) and Open-Meteo throttle bursts.
   const results = [];
-  for (let i = 0; i < CITIES.length; i += 3) results.push(...await Promise.all(CITIES.slice(i, i + 3).map(refresh)));
+  for (const [n, city] of CITIES.entries()) {
+    if (n) await new Promise(r => setTimeout(r, 20000));
+    results.push(await refresh(city));
+  }
   if (results.every(x => !x)) process.exitCode = 1;
 })();
