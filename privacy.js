@@ -9,7 +9,7 @@ async function clearCaches() {
 document.getElementById('save-cache').addEventListener('click',async()=>{
   try {
     localStorage.setItem('mono_privacy_cache',choice.checked?'yes':'no');
-    if(!choice.checked){for(const key of ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain'])localStorage.removeItem(key);await clearCaches();}
+    if(!choice.checked){for(const key of ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain','mono31_forecast_history'])localStorage.removeItem(key);await clearCaches();}
     status.textContent=choice.checked?'Η προαιρετική cache ενεργοποιήθηκε.':'Η προαιρετική cache απενεργοποιήθηκε και καθαρίστηκε.';
   } catch {status.textContent='Η αποθήκευση δεν ήταν διαθέσιμη. Έλεγξε τις ρυθμίσεις browser.';}
 });

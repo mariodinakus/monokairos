@@ -9,7 +9,7 @@
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
 const VERSION = '4.6';
-const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain' };
+const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain', forecastHistory: 'mono31_forecast_history' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
 /* ------------------------------------------------------------------ catalogue */
@@ -413,11 +413,24 @@ Object.assign(L.en,{checkingStations:'Checking nearby stations… Confirming the
 
 /* ------------------------------------------------------------------ state */
 const $ = s => document.querySelector(s);
-const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain'].includes(k);
+const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain','mono31_forecast_history'].includes(k);
 const cacheAllowed = () => { try {return localStorage.getItem('mono_privacy_cache') === 'yes';} catch {return false;} };
 const read = (k, d) => { if (optionalCache(k) && !cacheAllowed()) return d; try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch { return d; } };
 const write = (k, v) => { if (optionalCache(k) && !cacheAllowed()) return false; try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const ckey = c => `${(+c.lat).toFixed(3)},${(+c.lon).toFixed(3)}`;
+// Only compare forecasts actually retrieved for the same location. A rolling
+// history stays in memory unless the visitor has enabled optional local cache.
+const storedForecastHistory = read(K.forecastHistory, {});
+const forecastHistory = storedForecastHistory && typeof storedForecastHistory === 'object' && !Array.isArray(storedForecastHistory) ? storedForecastHistory : {};
+function rememberForecast(city, data, at) {
+  const sample = window.MONOForecastConfidence?.capture(data, at);
+  if (!sample) return;
+  const key = ckey(city), prior = Array.isArray(forecastHistory[key]) ? forecastHistory[key] : [];
+  forecastHistory[key] = [...prior.filter(x => Number.isFinite(x?.at) && x.at <= at && at - x.at <= 48 * 3600e3), sample].slice(-24);
+  const recent = Object.entries(forecastHistory).filter(([,v]) => Array.isArray(v) && v.length)
+    .sort((a,b) => b[1].at(-1).at - a[1].at(-1).at).slice(0, 3);
+  write(K.forecastHistory, Object.fromEntries(recent));
+}
 const P = read(K.prefs, {}), UI = read('mono32_ui', {});
 const sysDark = () => { try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch { return false; } };
 const state = {
@@ -534,7 +547,7 @@ const OM = 'https://api.open-meteo.com/v1/forecast', ENS = 'https://ensemble-api
 const ll = c => ({ latitude: (+c.lat).toFixed(4), longitude: (+c.lon).toFixed(4) });
 const mainURL = c => q(OM, { ...ll(c), timezone: 'auto', timeformat: 'unixtime', past_days: 3, forecast_days: 7,
   current: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,visibility,is_day',
-  hourly: 'temperature_2m,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
+  hourly: 'temperature_2m,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility,wind_speed_10m,cloud_cover', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
 const modelURL = (c, id) => q('/proxy/mono-forecast', { ...ll(c), models: id, hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
 const modelBatchURL = (c, group) => q('/proxy/mono-forecast', { ...ll(c), models: group.map(m => m.id).join(','), hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
 const rain15URL = c => q(OM, { ...ll(c), minutely_15: 'precipitation,rain,showers,snowfall,weather_code', forecast_minutely_15: 96, past_minutely_15: 4, timezone: 'auto', timeformat: 'unixtime' });
@@ -951,6 +964,7 @@ async function loadAll(force = false) {
     if (gen !== state.gen) return;
     primaryRetryCount = 0;
     state.main = d; state.fetchedAt = Date.now(); state.snapshot = false;
+    rememberForecast(c, d, state.fetchedAt);
   } catch (err) {
     if (gen !== state.gen) return;
     console.warn('[MONO] Forecast unavailable; checking automatic recovery:', err.message);
@@ -1225,7 +1239,7 @@ function recompute() {
       pMono: pr.prob, rainChoice: fin(stationAmount)?'station-calibrated':pr.choice, stationAdjusted:fin(stationAmount), amount: fin(stationAmount)?stationAmount:(fin(pr.amount) && !tr?.precip?.leads?.[k] && fin(state.sharedRain?.rain?.scale) ? Math.max(0,pr.amount*state.sharedRain.rain.scale) : pr.amount), codes: Object.values(vals('weather_code', i)),
       isDay: W.hourly.is_day?.[i] ?? 1, uv: W.hourly.uv_index?.[i], visMain: W.hourly.visibility?.[i],
       vi: { cape: vals('cape', i), prec: vals('precipitation', i), snowf: vals('snowfall', i), vis: vals('visibility', i), gust: vals('wind_gusts_10m', i), code: vals('weather_code', i) },
-      models: Object.fromEntries(order.map(id => [id, { T: md[id].temperature_2m[i], P: md[id].precipitation[i], W: md[id].wind_speed_10m[i] }]))
+      models: Object.fromEntries(order.map(id => [id, { T: md[id].temperature_2m[i], P: md[id].precipitation[i], W: md[id].wind_speed_10m[i], C: md[id].cloud_cover[i] }]))
     });
   }
 
@@ -1412,6 +1426,10 @@ const errorCard = () => `<div class="card placeholder"><b>${T('noData')}</b>${T(
 const probCls = p => (p >= 0.6 ? 'p-hi' : p >= 0.3 ? 'p-mid' : p >= 0.1 ? 'p-lo' : 'p-0');
 
 /* ------------------------------------------------------------------ page: now */
+const homeOpen = new Set();
+function homeMore(id, title, hint, body) {
+  return `<details class="home-more" data-home-section="${id}" ${homeOpen.has(id) ? 'open' : ''}><summary><span>${title}<small class="home-more-desc">${hint}</small></span></summary><div class="home-more-body">${body}</div></details>`;
+}
 function nowPage() {
   const c = state.city, V = state.view;
   const head = header(esc(cityName(c)), esc([adminName(c), countryName(c)].filter(Boolean).join(' · ')), `${favBtn(c)}${btn('reload', '↻ ' + T('refresh'))}`);
@@ -1419,7 +1437,8 @@ function nowPage() {
   // Do not flash the raw model temperature and then silently replace it with a station observation.
   if (!state.obsReady && !state.snapshot) return head + loadingCard(T('checkingStations'));
   const cur = V.current, rows = V.rows, iN = V.iNow, today = V.daily[0];
-  const pop6 = Math.max(0, ...rows.slice(iN + 1, iN + 7).map(r => r.pop ?? 0));
+  const hourlyPop6 = rows.slice(iN + 1, iN + 7).map(r => r.pop).filter(fin);
+  const pop6 = hourlyPop6.length ? Math.max(...hourlyPop6) : null;
   const src = cur.source === 'obs' ? `${T('observed')} · ${esc(V.station.id)} · ${num(V.station.dist)} km · ${hhmm(cur.t)}` : `${T('modelNow')} · ${hhmm(cur.t)}`;
   const nearbyReport=window.MONORainIntelligence?.present(V.stations,state.pws);
   const conditionBase=cur.wx ? esc(cur.wx[0].toUpperCase() + cur.wx.slice(1)) : desc(cur.code ?? rows[iN]?.code);
@@ -1432,11 +1451,11 @@ function nowPage() {
       :conditionBase+(cur.source==='model'?' · '+T('modelNow'):'');
   const weatherSource=nearbyReport?.kind==='rain'||nearbyReport?.kind==='snow'
     ? '<div class="hero-station-report">📍 '+num(nearbyReport.dist,1)+' km · '+hhmm(nearbyReport.t)+' · '+esc(nearbyReport.src||'')+'</div>' : '';
-  const hero = `<article class="card hero"><div class="hero-header"><div><div class="hero-place">${esc(cityName(c))}</div><div class="hero-country">${esc(dt(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' }))} · ${hhmm(Date.now())}</div></div>${icon(cur.code ?? rows[iN]?.code ?? 3, cur.isDay, 'hero-icon')}</div>
+  const hero = `<article class="card hero"><div class="hero-header"><div><div class="hero-place">${T('now')}</div><div class="hero-country">${esc(dt(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' }))} · ${hhmm(Date.now())}</div></div>${icon(cur.code ?? rows[iN]?.code ?? 3, cur.isDay, 'hero-icon')}</div>
     <div class="temperature" aria-label="${fin(cur.temp) ? num(Math.round(cur.temp)) + ' °C' : '—'}">${fin(cur.temp) ? num(Math.round(cur.temp)) : '—'}<span class="temp-unit">°C</span></div>
     <div class="hero-bottom"><div><div class="condition">${condition}</div>${weatherSource}<div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div></div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
   const minis = `<div class="mini-grid">
-    ${mini(T('rainChance'), pct(pop6), T('next6') + (today?.mm >= 0.1 ? ` · ${num(today.mm, 1)} mm ${T('today').toLowerCase()}` : ''), 'umbrella')}
+    ${mini(T('rainChance'), pct(pop6), (state.lang === 'el' ? 'Μέγιστη ανά ώρα · επόμενες 6 ώρες' : 'Peak hourly chance · next 6 hours') + (today?.mm >= 0.1 ? ` · ${num(today.mm, 1)} mm ${T('today').toLowerCase()}` : ''), 'umbrella')}
     ${mini(T('wind'), `${num(cur.wind)} <small>km/h</small> ${dirArrow(cur.dir)}${fin(cur.wind) ? `<span class="wind-beaufort" title="${state.lang === 'el' ? 'Κλίμακα Μποφόρ για μέση ταχύτητα ανέμου' : 'Beaufort scale for mean wind speed'}">${windBft(cur.wind)}</span>` : ''}`, fin(cur.gust) ? `${T('gust')} ${num(cur.gust)} km/h` : '&nbsp;', 'wind')}
     ${mini(T('humidity'), `${num(cur.rh)}%`, `${T('dew')} ${deg(cur.dew)} · ☁ ${ccTxt(rows[iN]?.cloud)}`, 'humidity')}
     ${mini(T('pressure'), `${num(cur.pres)} <small>hPa</small>`, fin(cur.vis) ? `${T('visibility')} ${num(cur.vis, cur.vis < 10 ? 1 : 0)} km` : '&nbsp;', 'pressure')}</div>`;
@@ -1450,12 +1469,20 @@ function nowPage() {
   const ch = chart({ rows: win, band: { lo: win.map(r => (past(r) ? null : r.lo)), hi: win.map(r => (past(r) ? null : r.hi)) },
     series: [{ vals: win.map(r => (past(r) ? r.tempModel : null)), cls: 'hind' }, { vals: win.map((r, j) => (!past(r) || (win[j + 1] && !past(win[j + 1])) ? r.temp : null)), cls: 'mono' }],
     points: win.map(r => r.obs), bars: win.map(r => (past(r) ? null : r.amount)), nowT: Date.now() });
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>${window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || ''}${window.MONOMonthlyRain?.render(state.monthlyRain, {lang:state.lang,zone:V.zone,city:cityName(c)}) || ''}${window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(c)}) || ''}${rainNowCard(true)}${alertsStrip()}${summaryCard()}${MonoForecast.compact(forecastOptions())}${MonoSky.render({...skyOptions(),compact:true})}${todoCard()}${weekendCard()}
-    <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${esc(rainSentence())}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(rows.slice(iN, iN + 25), cur)}</section>
-    <section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
+  const el = state.lang === 'el', X = (a,b) => el ? a : b;
+  const hours = `<section class="section"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${esc(rainSentence())}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(rows.slice(iN, iN + 25), cur)}</section>`;
+  const rainDetail = (window.MONOMonthlyRain?.render(state.monthlyRain, {lang:state.lang,zone:V.zone,city:cityName(c)}) || '') +
+    (window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(c)}) || '') + rainNowCard(true);
+  const chartDetail = `<section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
-    <section class="section dual"><div class="card"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</div>
-      <div class="card">${engineSummary()}</div></section>${newsCard()}${holidaysCard()}${environment()}${glossary()}`;
+    <section class="section dual"><div class="card"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</div><div class="card">${engineSummary()}</div></section>`;
+  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + alertsStrip() +
+    (window.MONOForecastConfidence?.render({view:V,lang:state.lang,train:state.train,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot}) || '') +
+    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + hours + summaryCard() +
+    homeMore('rain',X('Βροχή και μετρήσεις','Rain and measurements'),X('Ποσότητες, σταθμοί και μηνιαία σύγκριση','Amounts, stations and monthly comparison'),rainDetail) +
+    homeMore('charts',X('Γραφήματα και εβδομάδα','Charts and the week'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
+    homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),MonoForecast.compact(forecastOptions())+MonoSky.render({...skyOptions(),compact:true})+todoCard()+weekendCard()) +
+    homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),X('Ήλιος, αέρας, θάλασσα και ειδήσεις','Sun, air, sea and news'),newsCard()+holidaysCard()+environment()+glossary());
 }
 function ccTxt(c) { return Number.isFinite(c) ? Math.round(c) + '%' : '—'; } function hoursStrip(rows, cur) {
   return `<div class="scroll-hours">${rows.map((r, j) => `<div class="hourcard ${j === 0 ? 'active' : ''}"><span class="hourtime">${j === 0 ? T('now') : hh(r.t) + ':00'}</span>${icon(j === 0 && cur && fin(cur.code) ? cur.code : r.code, j === 0 && cur ? cur.isDay : r.isDay)}<span class="hourtemp">${deg(j === 0 && cur && fin(cur.temp) ? cur.temp : r.temp)}</span><span class="hoursub">☂ ${pct(r.pop)}</span><span class="hoursub cc" title="${T('clouds')}">☁ ${ccTxt(r.cloud)}</span>${(r.amount ?? 0) >= 0.1 ? `<span class="hoursub rn-hmm">${mm1(r.amount)} mm</span>` : ''}</div>`).join('')}</div>`;
@@ -3527,6 +3554,9 @@ function render() {
   const pages = { maps: forecastPage, guide: guidePage, now: nowPage, rain: rainPage, hourly: hourlyPage, phen: phenPage, environment: environmentPage, space: spacePage, radar: radarPage, globe: globePage, earth: () => window.MONOEarth.page(state.lang), models: modelsPage, history: historyPage, lab: labPage, stations: stationsPage, news: newsPage, climate: climatePage, cities: citiesPage };
   const y = window.scrollY;
   const openEnvDetails = [...document.querySelectorAll('.environment-section details[open]')].map(el => el.id);
+  const oldHomeDetails = [...document.querySelectorAll('#content details[data-home-section]')];
+  if (oldHomeDetails.length) { homeOpen.clear(); oldHomeDetails.filter(el => el.open).forEach(el => homeOpen.add(el.dataset.homeSection)); }
+  const explainOpen = !!document.querySelector('#content .fc-explain[open]');
   const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap')].map(el => [el.id, el.scrollLeft]);
   if (document.getElementById('sc-globe')) window.MONOSpaceControl?.destroy();
   $('#content').innerHTML = (pages[state.page] || nowPage)();
@@ -3539,6 +3569,7 @@ function render() {
     },{passive:true});
   }
   openEnvDetails.forEach(id => { const el = document.getElementById(id); if (el) el.open = true; });
+  if (explainOpen && document.querySelector('.fc-explain')) document.querySelector('.fc-explain').open = true;
   envScroll.forEach(([id, left]) => { const el = document.getElementById(id); if (el) el.scrollLeft = left; });
   window.scrollTo(0, y);
   const r = $('#selHour'); if (r) r.addEventListener('input', e => { state.sel = +e.target.value; const yy = window.scrollY; render(); window.scrollTo(0, yy); $('#selHour')?.focus(); });

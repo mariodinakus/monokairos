@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
         latitude: lat.toFixed(4), longitude: lon.toFixed(4),
         timezone: 'auto', timeformat: 'unixtime', past_days: '3', forecast_days: '7',
         current: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,visibility,is_day',
-        hourly: 'temperature_2m,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility',
+        hourly: 'temperature_2m,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility,wind_speed_10m,cloud_cover',
         daily: 'sunrise,sunset,uv_index_max,daylight_duration'
       });
       const upstream = await fetch('https://api.open-meteo.com/v1/forecast?' + params, {signal: AbortSignal.timeout(10000)});
