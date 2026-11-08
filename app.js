@@ -1518,11 +1518,16 @@ function nowPage() {
     <section class="section dual"><div class="card"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</div><div class="card">${engineSummary()}</div></section>`;
   return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + alertsStrip() +
     (window.MONOForecastConfidence?.render({view:V,lang:state.lang,train:state.train,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot}) || '') +
-    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + rainAlertsCard() + hours + summaryCard() + yesterdayCard() +
+    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + rainAlertsCard() + hours + summaryCard() + reliabilityCard() + yesterdayCard() +
     homeMore('rain',X('Βροχή και μετρήσεις','Rain and measurements'),X('Ποσότητες, σταθμοί και μηνιαία σύγκριση','Amounts, stations and monthly comparison'),rainDetail) +
     homeMore('charts',X('Γραφήματα και εβδομάδα','Charts and the week'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
     homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),MonoForecast.compact(forecastOptions())+MonoSky.render({...skyOptions(),compact:true})+todoCard()+weekendCard()) +
     homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),X('Ήλιος, αέρας, θάλασσα και ειδήσεις','Sun, air, sea and news'),newsCard()+holidaysCard()+environment()+glossary());
+}
+function reliabilityCard() {
+  const R = window.MONOReliability; if (!R || state.snapshot) return '';
+  const rel = R.compute(state.train), d = state.view?.daily || [];
+  return R.render(rel, { lang: state.lang, dayLabels: d.map((x, i) => dayLabel(x.t, i)) });
 }
 function yesterdayCard() {
   const V = state.view, Y = window.MONOYesterdayCheck;
@@ -1536,7 +1541,8 @@ function ccTxt(c) { return Number.isFinite(c) ? Math.round(c) + '%' : '—'; } f
 function dailyRows(d) {
   if (!d?.length) return `<p class="muted">—</p>`;
   const lo = Math.min(...d.map(x => x.lo)), hi = Math.max(...d.map(x => x.hi)), sp = Math.max(1, hi - lo);
-  return d.map((x, i) => `<div class="dailyrow"><strong>${esc(dayLabel(x.t, i))}</strong>${icon(x.code, 1)}<div class="dailybar"><span style="left:${(100 * (x.lo - lo) / sp).toFixed(1)}%;width:${Math.max(4, 100 * (x.hi - x.lo) / sp).toFixed(1)}%"></span></div><div class="dailytemps"><span class="min">${deg(x.lo)}</span><span>${deg(x.hi)}</span></div><div class="dailycc" title="${T('clouds')}">☁ ${ccTxt(x.cloud)}</div><div class="dailywet">☂ ${pct(x.pop)}${x.mm >= 0.1 ? ` · ${num(x.mm, 1)}mm` : ''}</div></div>`).join('');
+  const rel = state.snapshot ? null : window.MONOReliability?.compute(state.train);
+  return d.map((x, i) => `<div class="dailyrow"><strong>${esc(dayLabel(x.t, i))}${rel ? window.MONOReliability.badge(rel, i, state.lang) : ''}</strong>${icon(x.code, 1)}<div class="dailybar"><span style="left:${(100 * (x.lo - lo) / sp).toFixed(1)}%;width:${Math.max(4, 100 * (x.hi - x.lo) / sp).toFixed(1)}%"></span></div><div class="dailytemps"><span class="min">${deg(x.lo)}</span><span>${deg(x.hi)}</span></div><div class="dailycc" title="${T('clouds')}">☁ ${ccTxt(x.cloud)}</div><div class="dailywet">☂ ${pct(x.pop)}${x.mm >= 0.1 ? ` · ${num(x.mm, 1)}mm` : ''}</div></div>`).join('');
 }
 function periodText(p) {
   const V = state.view, lab = t => { const i = V.daily.findIndex(d => d.key === dayKey(t, V.zone)); return i >= 0 ? dayLabel(t, i) : dt(t, { weekday: 'short' }); };
