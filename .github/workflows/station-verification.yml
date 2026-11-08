@@ -1,0 +1,20 @@
+name: MONO station verification
+on:
+  schedule:
+    - cron: '37 7 * * *'   # daily, after the previous day's METAR archive is complete
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mono-station-verification
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify yesterday's MONO forecast against airport stations
+        run: node scripts/refresh-station-verification.cjs

@@ -39,10 +39,10 @@ test('API rejects unsupported methods and repeated bursts',()=>{
 });
 test('SYNOP rejects missing, out of range or unbounded inputs before fetching',async()=>{
  const original=global.fetch;global.fetch=async()=>assert.fail('invalid input contacted upstream');
- try{for(const url of ['/api/synop','/api/synop?lat=&lon=0','/api/synop?lat=91&lon=0','/api/synop?lat=40&lon=23&hours=-1','/api/synop?lat=40&lon=23&km=Infinity']){const r=response();await require('../api/synop.js')({url},r);assert.equal(r.code,400);}}finally{global.fetch=original;}
+ try{for(const url of ['/api/synop','/api/synop?lat=&lon=0','/api/synop?lat=91&lon=0','/api/synop?lat=40&lon=23&hours=-1','/api/synop?lat=40&lon=23&km=Infinity']){const r=response();await require('../lib/routes/synop.js')({url},r);assert.equal(r.code,400);}}finally{global.fetch=original;}
 });
 test('GCN parser deduplicates followups, dates events and discards old reports',()=>{
- const parse=require('../api/cosmic-events.js').parse;
+ const parse=require('../lib/routes/cosmic-events.js').parse;
  const html='<a href="/circulars/7">GRB 261014A: Fermi detection</a><a href="/circulars/6">GRB 261014A: follow-up</a><a href="/circulars/5">IceCube-261013A: observation</a><a href="/circulars/4">GRB 240101A: old</a>';
  const items=parse(html,now);assert.equal(items.length,2);assert.equal(items[1].kind,'neutrino');assert.equal(items[0].time,Date.parse('2026-10-14T00:00:00Z'));
 });

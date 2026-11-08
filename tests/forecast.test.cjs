@@ -72,12 +72,12 @@ test('outlook discards expired weeks and null padding, preserves neutral anomali
 test('forecast endpoints reject invalid inputs without contacting a user-selected upstream',async()=>{
  const original=global.fetch;global.fetch=async()=>assert.fail('invalid input contacted upstream');
  try{
-  for(const url of ['/api/weather-maps?region=secret','/api/weather-maps?model=https://example.com','/api/weather-maps?region=local&lat=91&lon=0','/api/weather-maps?region=local&lat=&lon=0']){const r=response();await require('../api/weather-maps.js')({url},r);assert.equal(r.code,400);}
-  for(const url of ['/api/outlook','/api/outlook?lat=0&lon=Infinity','/api/outlook?lat=0&lon=181']){const r=response();await require('../api/outlook.js')({url},r);assert.equal(r.code,400);}
+  for(const url of ['/api/weather-maps?region=secret','/api/weather-maps?model=https://example.com','/api/weather-maps?region=local&lat=91&lon=0','/api/weather-maps?region=local&lat=&lon=0']){const r=response();await require('../lib/routes/weather-maps.js')({url},r);assert.equal(r.code,400);}
+  for(const url of ['/api/outlook','/api/outlook?lat=0&lon=Infinity','/api/outlook?lat=0&lon=181']){const r=response();await require('../lib/routes/outlook.js')({url},r);assert.equal(r.code,400);}
  }finally{global.fetch=original;}
 });
 test('map requests coalesce and cache the normalized grid; failed upstreams remain unavailable',async()=>{
- const original=global.fetch,g=Core.grid('greece'),raw=sample(g),handler=require('../api/weather-maps.js');let calls=0;
+ const original=global.fetch,g=Core.grid('greece'),raw=sample(g),handler=require('../lib/routes/weather-maps.js');let calls=0;
  // Use live-aligned timestamps to exercise the handler without a network dependency.
  const delta=Math.floor((Date.now()-now)/HOUR)*3600;raw.forEach(d=>{d.hourly.time=d.hourly.time.map(t=>t+delta);});
  global.fetch=async url=>{calls++;assert.ok(String(url).startsWith('https://api.open-meteo.com/v1/forecast?'));return new Response(JSON.stringify(raw));};

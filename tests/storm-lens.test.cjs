@@ -39,7 +39,7 @@ test('API computes six-hour totals across 49 coordinates and labels its limits',
   return {ok:true,text:async()=>JSON.stringify(Array.from({length:49},(_,i)=>({hourly:{time,precipitation:time.map(()=>i%7>=2&&i%7<=4?2:0)}})))};
  };
  try{
-  const handler=require('../api/storm-lens.js');
+  const handler=require('../lib/routes/storm-lens.js');
   const res={setHeader(){},status(v){this.code=v;return this;},json(v){this.body=v;return v;}};
   await handler({method:'GET',query:{lat:'38',lon:'24',radius:'600'}},res);
   assert.equal(res.code,200);assert.equal(res.body.points.length,49);
@@ -49,7 +49,7 @@ test('API computes six-hour totals across 49 coordinates and labels its limits',
  }finally{globalThis.fetch=saved;}
 });
 test('API rejects invalid coordinates and unsupported POST',async()=>{
- const handler=require('../api/storm-lens.js');
+ const handler=require('../lib/routes/storm-lens.js');
  const response=()=>({setHeader(){},status(v){this.code=v;return this;},json(v){this.body=v;return v;}});
  const x=response();await handler({method:'GET',query:{lat:90,lon:24,radius:600}},x);assert.equal(x.code,400);
  const y=response();await handler({method:'POST',query:{}},y);assert.equal(y.code,405);
