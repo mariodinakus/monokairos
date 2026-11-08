@@ -71,7 +71,7 @@ function fakeIO(now, stationOffset = 0) {
     },
     text: async () => {
       const lines = ['station,valid,tmpc'];
-      for (let t = Math.floor((now - 40 * DAY) / H) * H; t < now; t += 1800e3) lines.push(`LGTS,${new Date(t + 20 * 60e3).toISOString().slice(0, 16).replace('T', ' ')},${(truth(t + 20 * 60e3) + stationOffset + 0.4 * noise(t, 9)).toFixed(1)}`);
+      for (let t = Math.floor((now - 110 * DAY) / H) * H; t < now; t += 1800e3) lines.push(`LGTS,${new Date(t + 20 * 60e3).toISOString().slice(0, 16).replace('T', ' ')},${(truth(t + 20 * 60e3) + stationOffset + 0.4 * noise(t, 9)).toFixed(1)}`);
       return lines.join('\n');
     }
   } };
@@ -110,7 +110,10 @@ test('station correction learned from earlier days removes a station-vs-ERA5 off
   assert.ok(s.corrected.mae < s.corrected.maeRaw - 0.5, JSON.stringify(s.corrected));
   assert.ok(Math.abs(s.corrected.bias) < 0.3);
   assert.equal(state.records.slice(0, 7).some(r => 'maeCor' in r), false, 'no correction before a week of earlier days exists');
-  assert.equal(state.version, 2);
+  assert.equal(state.version, 3);
+  assert.ok(s.stationTrained && s.stationTrained.days >= 25, 'station-trained variant scored');
+  assert.ok(s.stationTrained.mae < s.stationTrained.maeEra5 - 0.5, JSON.stringify(s.stationTrained));
+  assert.ok(Math.abs(s.stationTrained.bias) < 0.4);
 });
 
 test('an empty (throttled) station archive is retried and then fails instead of saving an empty check', async () => {
