@@ -11,16 +11,25 @@
     const el = lang !== 'en', X = (a, b) => el ? a : b;
     const pc = v => fin(v) ? Math.round(v * 100) + '%' : '—';
     const deg = v => fin(v) ? new Intl.NumberFormat(el ? 'el-GR' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(v) + '°' : '—';
-    const c = s.corrected, best = c || { hit: s.hit, mae: s.mae, bias: s.bias, hitMean: s.hitMean, maeMean: s.maeMean, days: s.days, hours: s.hours };
-    const label = c ? X('MONO + διόρθωση σταθμού', 'MONO + station correction') : 'MONO';
+    const a = s.auto, c = s.corrected, best = a || c || { hit: s.hit, mae: s.mae, bias: s.bias, hitMean: s.hitMean, maeMean: s.maeMean, days: s.days, hours: s.hours };
+    const label = a ? X('MONO · αυτόματη επιλογή', 'MONO · automatic choice') : c ? X('MONO + διόρθωση σταθμού', 'MONO + station correction') : 'MONO';
+    const variants = [
+      [X('Εκπαίδευση σε ERA5', 'Trained on ERA5'), { mae: s.mae, hit: s.hit }],
+      [X('+ διόρθωση 14 ημερών', '+ 14-day correction'), c],
+      [X('Εκπαίδευση στον σταθμό', 'Trained on the station'), s.stationTrained],
+      [X('Αυτόματη επιλογή', 'Automatic choice'), a],
+      [X('Απλός μέσος όρος μοντέλων', 'Plain model average'), { mae: s.maeMean, hit: s.hitMean }]
+    ].filter(([, v]) => v && fin(v.mae));
+    const table = variants.length > 2 ? `<table class="th-table"><thead><tr><th>${X('Μέθοδος', 'Method')}</th><th>±2°</th><th>${X('Σφάλμα', 'Error')}</th></tr></thead><tbody>${variants.map(([n, v]) => `<tr${v === a ? ' class="best"' : ''}><td>${esc(n)}</td><td>${pc(v.hit)}</td><td>${deg(v.mae)}</td></tr>`).join('')}</tbody></table>` : '';
     const diff = fin(best.mae) && fin(best.maeMean) ? best.mae - best.maeMean : null;
     const verdict = diff === null ? '' : diff < -0.05
       ? X('Καλύτερα από τον απλό μέσο όρο των μοντέλων.', 'Better than the plain model average.')
       : diff > 0.05 ? X('Εδώ ο απλός μέσος όρος των μοντέλων τα πήγε λίγο καλύτερα. Το δείχνουμε όπως είναι.', 'Here the plain model average did slightly better. We show it as it is.')
         : X('Ίδια με τον απλό μέσο όρο των μοντέλων.', 'On par with the plain model average.');
     const recs = (s.records || []).slice(-30), w = 300, h = 46;
-    const maxE = Math.max(3, ...recs.map(r => fin(r.maeCor) ? r.maeCor : r.mae).filter(fin));
-    const pts = recs.map((r, i) => { const v = fin(r.maeCor) ? r.maeCor : r.mae; return fin(v) ? `${(i / Math.max(1, recs.length - 1) * w).toFixed(1)},${(h - v / maxE * h).toFixed(1)}` : null; }).filter(Boolean).join(' ');
+    const maxE = Math.max(3, ...recs.map(r => fin(r.maeAuto) ? r.maeAuto : fin(r.maeCor) ? r.maeCor : r.mae).filter(fin));
+    const pick = r => fin(r.maeAuto) ? r.maeAuto : fin(r.maeCor) ? r.maeCor : r.mae;
+    const pts = recs.map((r, i) => { const v = pick(r); return fin(v) ? `${(i / Math.max(1, recs.length - 1) * w).toFixed(1)},${(h - v / maxE * h).toFixed(1)}` : null; }).filter(Boolean).join(' ');
     const ptsM = recs.map((r, i) => fin(r.maeMean) ? `${(i / Math.max(1, recs.length - 1) * w).toFixed(1)},${(h - r.maeMean / maxE * h).toFixed(1)}` : null).filter(Boolean).join(' ');
     const last = recs.at(-1);
     return `<div class="th-station">
@@ -31,9 +40,10 @@
     <div><span>${X('Συστηματική απόκλιση', 'Bias')}</span><b>${(best.bias > 0 ? '+' : '') + deg(best.bias)}</b><small>${best.bias > 0.3 ? X('πιο ζεστά από τη μέτρηση', 'warmer than measured') : best.bias < -0.3 ? X('πιο κρύα από τη μέτρηση', 'colder than measured') : X('χωρίς ουσιαστική', 'negligible')}</small></div>
   </div>
   ${pts ? `<svg class="th-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${X('Ημερήσιο μέσο σφάλμα, 30 μέρες', 'Daily mean error, 30 days')}"><polyline class="th-spark-mean" points="${ptsM}"/><polyline class="th-spark-mono" points="${pts}"/></svg>
-  <div class="th-legend"><span><i class="mono"></i>${esc(label)}</span><span><i class="mean"></i>${X('μέσος όρος μοντέλων', 'model average')}</span><span>${X('ημερήσιο μέσο σφάλμα', 'daily mean error')}${last ? ' · ' + X('χθες', 'yesterday') + ' ' + deg(fin(last.maeCor) ? last.maeCor : last.mae) : ''}</span></div>` : ''}
+  <div class="th-legend"><span><i class="mono"></i>${esc(label)}</span><span><i class="mean"></i>${X('μέσος όρος μοντέλων', 'model average')}</span><span>${X('ημερήσιο μέσο σφάλμα', 'daily mean error')}${last ? ' · ' + X('χθες', 'yesterday') + ' ' + deg(pick(last)) : ''}</span></div>` : ''}
   ${verdict ? `<p class="th-verdict">${esc(verdict)}</p>` : ''}
-  <p class="th-foot">${esc(X(`Η πρόγνωση MONO μίας μέρας πριν, στο σημείο του σταθμού, έναντι ωριαίων μετρήσεων METAR. Η εκπαίδευση τελειώνει πάντα πριν από κάθε μέρα που ελέγχεται· η διόρθωση σταθμού μαθαίνει μόνο από προηγούμενες μέρες. Ενημερώνεται κάθε πρωί.`, `MONO's day-ahead forecast at the station point vs hourly METAR observations. Training always ends before each evaluated day; the station correction learns only from earlier days. Updated every morning.`))}</p>
+  ${table}
+  <p class="th-foot">${esc(X(`Η πρόγνωση MONO μίας μέρας πριν, στο σημείο του σταθμού, έναντι ωριαίων μετρήσεων METAR. Η εκπαίδευση τελειώνει πάντα πριν από κάθε μέρα που ελέγχεται. Η αυτόματη επιλογή διαλέγει κάθε μέρα τη μέθοδο με το μικρότερο σφάλμα στις προηγούμενες 14 μέρες, χωρίς να βλέπει τη μέρα που κρίνεται. Ενημερώνεται κάθε πρωί.`, `MONO's day-ahead forecast at the station point vs hourly METAR observations. Training always ends before each evaluated day. The automatic choice picks, each day, the method with the lowest error over the previous 14 days, never seeing the day being judged. Updated every morning.`))}</p>
 </div>`;
   }
 
