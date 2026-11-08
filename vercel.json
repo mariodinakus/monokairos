@@ -3,6 +3,58 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/api/atmosphere",
+      "destination": "/api/mono?route=atmosphere"
+    },
+    {
+      "source": "/api/cosmic-events",
+      "destination": "/api/mono?route=cosmic-events"
+    },
+    {
+      "source": "/api/earth-signals",
+      "destination": "/api/mono?route=earth-signals"
+    },
+    {
+      "source": "/api/netatmo",
+      "destination": "/api/mono?route=netatmo"
+    },
+    {
+      "source": "/api/news",
+      "destination": "/api/mono?route=news"
+    },
+    {
+      "source": "/api/nexus",
+      "destination": "/api/mono?route=nexus"
+    },
+    {
+      "source": "/api/outlook",
+      "destination": "/api/mono?route=outlook"
+    },
+    {
+      "source": "/api/rain-memory",
+      "destination": "/api/mono?route=rain-memory"
+    },
+    {
+      "source": "/api/space-weather",
+      "destination": "/api/mono?route=space-weather"
+    },
+    {
+      "source": "/api/storm-lens",
+      "destination": "/api/mono?route=storm-lens"
+    },
+    {
+      "source": "/api/synop",
+      "destination": "/api/mono?route=synop"
+    },
+    {
+      "source": "/api/verify",
+      "destination": "/api/mono?route=verify"
+    },
+    {
+      "source": "/api/weather-maps",
+      "destination": "/api/mono?route=weather-maps"
+    },
+    {
       "source": "/proxy/mono-forecast",
       "destination": "https://api.open-meteo.com/v1/forecast"
     },
@@ -93,5 +145,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/mono.js": {
+      "maxDuration": 60
+    }
+  }
 }

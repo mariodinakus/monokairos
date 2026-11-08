@@ -61,6 +61,6 @@ test('app pins the ERA5 reference and integrates explanations with PWA',()=>{
  const read=f=>fs.readFileSync(path.join(__dirname,'..',f),'utf8');
  assert.match(read('app.js'),/models: 'era5', hourly: 'temperature_2m,precipitation/);
  assert.match(read('app.js'),/MONOModelInsights\?\.render/);
- assert.match(read('index.html'),/model-insights\.js/);
+ assert.match(read('index.html')+read('app.js'),/model-insights\.js/); // loaded on demand (LAZY_GROUPS)
  assert.match(read('sw.js'),/model-insights\.js/);
 });

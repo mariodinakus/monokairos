@@ -63,7 +63,7 @@ test('module is loaded by the page and precached by the service worker', () => {
 });
 
 test('API routes read query strings from req.url, not the deprecated req.query parser', async () => {
-  for (const f of ['api/synop.js', 'api/storm-lens.js', 'lib/windy.cjs']) assert.doesNotMatch(read(f), /req\.query\b(?!\s*&&)/, f);
+  for (const f of ['lib/routes/synop.js', 'lib/routes/storm-lens.js', 'lib/windy.cjs']) assert.doesNotMatch(read(f), /req\.query\b(?!\s*&&)/, f);
   const { query } = require('../lib/server.cjs');
   let touched = false;
   const req = { url: '/api/synop?lat=40.6&lon=22.9&windy=open', get query() { touched = true; return {}; } };

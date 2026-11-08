@@ -58,7 +58,7 @@ test('server consolidates official observations and isolates unavailable upstrea
    return {ok:true,json:async()=>({features:[{id:'q',geometry:{type:'Point',coordinates:[23,38,9]},properties:{mag:5.1,place:'Example',time:Date.now(),url:'https://earthquake.usgs.gov/earthquakes/eventpage/q'}}]})};
  };
  try{
-   const handler=require('../api/earth-signals.js');
+   const handler=require('../lib/routes/earth-signals.js');
    const res={status(n){this.code=n;return this;},setHeader(){},json(obj){this.body=obj;return obj;}};
    await handler({method:'GET'},res);
    assert.equal(res.code,200);
@@ -126,7 +126,7 @@ test('NOAA GIS backend accepts only fresh, hourly horizons of one forecast advis
   return {ok:true,json:async()=>({features:[]})};
  };
  try{
-  const handler=require('../api/earth-signals.js');
+  const handler=require('../lib/routes/earth-signals.js');
   const res={status(n){this.code=n;return this;},setHeader(){},json(obj){this.body=obj;return obj;}};
   await handler({method:'GET'},res);
   assert.equal(res.code,200);
@@ -157,7 +157,7 @@ test('NHC current storms accepts both official coordinate spellings and reports 
     return{ok:true,json:async()=>({features:[]})};
   };
   try{
-    const handler=require('../api/earth-signals.js');
+    const handler=require('../lib/routes/earth-signals.js');
     const res={status(code){this.code=code;return this;},setHeader(){},json(body){this.body=body;return body;}};
     await handler({method:'GET'},res);
     assert.equal(res.code,200);
@@ -176,7 +176,7 @@ test('Earth API returns safe diagnostics even on complete upstream outage',async
   const saved=globalThis.fetch;
   globalThis.fetch=async()=>{throw new Error('test upstream failure');};
   try{
-    const handler=require('../api/earth-signals.js');
+    const handler=require('../lib/routes/earth-signals.js');
     const res={status(code){this.code=code;return this;},setHeader(){},json(body){this.body=body;return body;}};
     await handler({method:'GET'},res);
     assert.equal(res.code,503);

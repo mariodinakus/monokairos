@@ -84,8 +84,8 @@ test('all panels render loading, failure, missing values and both languages with
 test('NOAA proxy preserves partial success and uses an error status for total failure', async () => {
   const original = global.fetch;
   const invoke = async () => {
-    delete require.cache[require.resolve('../api/space-weather.js')];
-    const handler = require('../api/space-weather.js');
+    delete require.cache[require.resolve('../lib/routes/space-weather.js')];
+    const handler = require('../lib/routes/space-weather.js');
     const response = { setHeader() {}, status(code) { this.code = code; return this; }, json(body) { this.body = body; } };
     await handler({}, response); return response;
   };
@@ -98,7 +98,7 @@ test('NOAA proxy preserves partial success and uses an error status for total fa
 });
 
 test('atmospheric proxy rejects missing or invalid coordinates before contacting the source', async () => {
-  const handler = require('../api/atmosphere.js'), original = global.fetch;
+  const handler = require('../lib/routes/atmosphere.js'), original = global.fetch;
   try {
     global.fetch = async () => { assert.fail('Invalid input must not contact the upstream API'); };
     for (const url of ['/api/atmosphere', '/api/atmosphere?lat=&lon=0', '/api/atmosphere?lat=91&lon=23', '/api/atmosphere?lat=40&lon=oops']) {

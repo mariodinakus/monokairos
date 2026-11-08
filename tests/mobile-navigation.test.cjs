@@ -23,7 +23,7 @@ test('mobile category drawer does not erase desktop sidebar',()=>{
   assert.match(html,/id="nav" class="nav"/);
   assert.match(html,/id="mobileNavSheet"/);
   assert.match(html,/id="mobileNavScrim"/);
-  assert.match(html,/mobile-nav\.css\?v=1\.0/);
+  assert.match(html,/mobile-nav\.css\?v=[0-9a-f]{10}/);
   assert.match(css,/@media\(max-width:930px\)/);
   assert.match(css,/grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(css,/safe-area-inset-bottom/);
@@ -36,8 +36,7 @@ test('PWA updates with mobile navigation stylesheet',()=>{
   assert.match(sw,/mobile-nav\.css/);
   assert.match(sw,/quick-screens\.js/);
   assert.match(sw,/quick-screens\.css/);
-  const version=sw.match(/mono-weather-v4\.(\d+)/);
-  assert.ok(version && Number(version[1]) >= 32, 'the PWA cache must use a current version');
+  assert.match(sw,/mono-weather-\d+\.\d+\.\d+-[0-9a-f]{8}/, 'the PWA cache name carries the release and a content hash');
   assert.match(sw,/next-hour\.js/);
 });
 test('mobile navigation code stays syntactically valid',()=>{

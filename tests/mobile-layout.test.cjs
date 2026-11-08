@@ -10,7 +10,7 @@ test('phone viewport and layout refinement are in the PWA app shell', () => {
   const html = read('index.html');
   assert.match(html, /name="viewport"[^>]*viewport-fit=cover/);
   assert.match(html, /class="mobile-brand"/);
-  assert.match(html, /mobile-polish\.css\?v=\d+\.\d+/);
+  assert.match(html, /mobile-polish\.css\?v=[0-9a-f]{10}/);
   const cssFiles = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(x => x[1]);
   assert.match(cssFiles.at(-1), /^mobile-polish\.css/);
 });
@@ -20,7 +20,7 @@ test('app scripts defer while retaining declared execution order', () => {
   const scripts = [...html.matchAll(/<script\s+(?:defer\s+)?src="([^"]+)"/g)].map(x => x[0]);
   assert.ok(scripts.length >= 20, 'should keep all existing app modules');
   assert.ok(scripts.slice(0, -1).every(x => /<script defer src=/.test(x)));
-  assert.ok(scripts.some(x => /app\.js\?v=\d+\.\d+/.test(x)), 'versioned app JS should load');
+  assert.ok(scripts.some(x => /app\.js\?v=[0-9a-f]{10}/.test(x)), 'content-hashed app JS should load');
 });
 
 test('mobile stylesheet is scoped and search field is readable on phones', () => {
@@ -34,7 +34,7 @@ test('mobile stylesheet is scoped and search field is readable on phones', () =>
 
 test('new PWA cache precaches the mobile stylesheet', () => {
   const sw = read('sw.js');
-  assert.match(sw, /mono-weather-v\d+\.\d+/);
+  assert.match(sw, /mono-weather-\d+\.\d+\.\d+-[0-9a-f]{8}/);
   assert.match(sw, /\.\/mobile-polish\.css/);
 });
 
