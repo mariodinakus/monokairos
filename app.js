@@ -9,7 +9,7 @@
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
 const VERSION = '4.6';
-const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain', forecastHistory: 'mono31_forecast_history' };
+const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain', forecastHistory: 'mono31_forecast_history', yday: 'mono31_yday' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
 /* ------------------------------------------------------------------ catalogue */
@@ -413,7 +413,7 @@ Object.assign(L.en,{checkingStations:'Checking nearby stations… Confirming the
 
 /* ------------------------------------------------------------------ state */
 const $ = s => document.querySelector(s);
-const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain','mono31_forecast_history'].includes(k);
+const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain','mono31_forecast_history','mono31_yday'].includes(k);
 const cacheAllowed = () => { try {return localStorage.getItem('mono_privacy_cache') === 'yes';} catch {return false;} };
 const read = (k, d) => { if (optionalCache(k) && !cacheAllowed()) return d; try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch { return d; } };
 const write = (k, v) => { if (optionalCache(k) && !cacheAllowed()) return false; try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
@@ -443,7 +443,7 @@ const state = {
   gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.globeTilesV1 ? (UI.gBase || 'detail') : 'detail', gLayers: UI.globeTilesV1 ? { radar: false, rain: false, grid: false, temps: true, ...(UI.gLayers || {}) } : { radar: false, rain: false, grid: false, temps: UI.gLayers?.temps ?? true }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
-  gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null, recentRain: null
+  gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null, recentRain: null, yday: null
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
 const AN = k => ALG_NAMES[state.lang][k] || k;
@@ -1054,6 +1054,7 @@ function schedule() {
     // and the final model batch already invoke recompute()/render() explicitly.
     if (state.page === 'history') return;
     recompute(); render();
+    if (state.trainStatus === 'done') ensureYesterdayCheck(state.city, state.gen);
   }, 250);
 }
 function notifyHistoryTrainingProgress() {
@@ -1062,7 +1063,46 @@ function notifyHistoryTrainingProgress() {
   });
   else if (state.page === 'lab') schedule();
 }
+/* MONO's real day-ahead forecast for yesterday: each model's previous-day run
+ * (Previous Runs API) through the trained lead-1 MONO combination. Training ends
+ * six days ago, so yesterday is out of sample. One batched request per city/day. */
+let ydayBusy = '';
+async function ensureYesterdayCheck(c, gen) {
+  const Y = window.MONOYesterdayCheck, V = state.view, fit = state.train?.temp;
+  if (!Y || !V || state.snapshot || !fit?.leads || !Array.isArray(V.active) || !V.active.length) return;
+  const day = Y.yesterdayKey(Date.now(), V.zone), key = ckey(c) + '|' + day + '|' + state.train.at;
+  if (!day || state.yday?.key === key || ydayBusy === key) return;
+  const cached = read(K.yday, {})[ckey(c)];
+  if (cached?.key === key && Array.isArray(cached.forecast)) { state.yday = cached; schedule(); return; }
+  ydayBusy = key;
+  const ms = MODELS.filter(m => V.active.includes(m.id)).map(m => ({ id: m.id, used: state.models[m.id]?.used || m.id }));
+  const base = { ...ll(c), start_date: isoDate(-2), end_date: isoDate(0), hourly: 'temperature_2m_previous_day1', timeformat: 'unixtime', timezone: 'UTC' };
+  const series = {}; let times = null, calls = 0;
+  const fetchGroup = async group => {
+    if (!group.length || calls >= 8 || gen !== state.gen) return;
+    calls++;
+    try {
+      const d = Y.splitBatch(await getJSON(q(PREV, { ...base, models: group.map(m => m.used).join(',') }), 30000), group.map(m => m.used));
+      if (!d) throw new Error('empty');
+      times = times || d.times;
+      for (const m of group) if (d.models[m.used] && d.times.length === times.length) series[m.id] = d.models[m.used];
+    } catch {
+      if (group.length > 1) { const mid = Math.ceil(group.length / 2); await fetchGroup(group.slice(0, mid)); await fetchGroup(group.slice(mid)); }
+    }
+  };
+  try {
+    await fetchGroup(ms);
+    if (gen !== state.gen) return;
+    if (!times || Object.keys(series).length < 2) { state.yday = { key, forecast: null }; return; }
+    const forecast = Y.liveRows(times, series, V.zone).map(r => ({ t: r.t, mono: M.predictVariable(fit, 1, r).value, mean: r.mean })).filter(r => fin(r.mono));
+    state.yday = { key, forecast, models: Object.keys(series).length };
+    const all = read(K.yday, {}); write(K.yday, Object.fromEntries(Object.entries({ ...all, [ckey(c)]: state.yday }).slice(-3)));
+    schedule();
+  } catch { if (gen === state.gen) state.yday = { key, forecast: null }; }
+  finally { if (ydayBusy === key) ydayBusy = ''; }
+}
 function notifyTrainingFinished() {
+  if (state.trainStatus === 'done') ensureYesterdayCheck(state.city, state.gen);
   if (state.page === 'history') render();
   else schedule();
 }
@@ -1432,7 +1472,7 @@ function homeMore(id, title, hint, body) {
 }
 function nowPage() {
   const c = state.city, V = state.view;
-  const head = header(esc(cityName(c)), esc([adminName(c), countryName(c)].filter(Boolean).join(' · ')), `${favBtn(c)}${btn('reload', '↻ ' + T('refresh'))}`);
+  const head = header(esc(cityName(c)), esc([adminName(c), countryName(c)].filter(Boolean).join(' · ')), `${favBtn(c)}${V ? btn('share', '⇪ ' + (state.lang === 'el' ? 'Κοινοποίηση' : 'Share'), `aria-label="${state.lang === 'el' ? 'Κοινοποίηση πρόγνωσης' : 'Share forecast'}"`) : ''}${btn('reload', '↻ ' + T('refresh'))}`);
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard(state.locating ? T('locating') : ''));
   // Do not flash the raw model temperature and then silently replace it with a station observation.
   if (!state.obsReady && !state.snapshot) return head + loadingCard(T('checkingStations'));
@@ -1453,7 +1493,7 @@ function nowPage() {
     ? '<div class="hero-station-report">📍 '+num(nearbyReport.dist,1)+' km · '+hhmm(nearbyReport.t)+' · '+esc(nearbyReport.src||'')+'</div>' : '';
   const hero = `<article class="card hero"><div class="hero-header"><div><div class="hero-place">${T('now')}</div><div class="hero-country">${esc(dt(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' }))} · ${hhmm(Date.now())}</div></div>${icon(cur.code ?? rows[iN]?.code ?? 3, cur.isDay, 'hero-icon')}</div>
     <div class="temperature" aria-label="${fin(cur.temp) ? num(Math.round(cur.temp)) + ' °C' : '—'}">${fin(cur.temp) ? num(Math.round(cur.temp)) : '—'}<span class="temp-unit">°C</span></div>
-    <div class="hero-bottom"><div><div class="condition">${condition}</div>${weatherSource}<div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div></div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
+    <div class="hero-bottom"><div><div class="condition">${condition}</div>${weatherSource}<div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div>${state.snapshot ? '' : (window.MONODayCompare?.render(window.MONODayCompare.compare({rows, daily:V.daily, now:Date.now(), zone:V.zone}), {lang:state.lang}) || '')}</div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
   const minis = `<div class="mini-grid">
     ${mini(T('rainChance'), pct(pop6), (state.lang === 'el' ? 'Μέγιστη ανά ώρα · επόμενες 6 ώρες' : 'Peak hourly chance · next 6 hours') + (today?.mm >= 0.1 ? ` · ${num(today.mm, 1)} mm ${T('today').toLowerCase()}` : ''), 'umbrella')}
     ${mini(T('wind'), `${num(cur.wind)} <small>km/h</small> ${dirArrow(cur.dir)}${fin(cur.wind) ? `<span class="wind-beaufort" title="${state.lang === 'el' ? 'Κλίμακα Μποφόρ για μέση ταχύτητα ανέμου' : 'Beaufort scale for mean wind speed'}">${windBft(cur.wind)}</span>` : ''}`, fin(cur.gust) ? `${T('gust')} ${num(cur.gust)} km/h` : '&nbsp;', 'wind')}
@@ -1478,11 +1518,17 @@ function nowPage() {
     <section class="section dual"><div class="card"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</div><div class="card">${engineSummary()}</div></section>`;
   return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + alertsStrip() +
     (window.MONOForecastConfidence?.render({view:V,lang:state.lang,train:state.train,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot}) || '') +
-    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + hours + summaryCard() +
+    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + rainAlertsCard() + hours + summaryCard() + yesterdayCard() +
     homeMore('rain',X('Βροχή και μετρήσεις','Rain and measurements'),X('Ποσότητες, σταθμοί και μηνιαία σύγκριση','Amounts, stations and monthly comparison'),rainDetail) +
     homeMore('charts',X('Γραφήματα και εβδομάδα','Charts and the week'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
     homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),MonoForecast.compact(forecastOptions())+MonoSky.render({...skyOptions(),compact:true})+todoCard()+weekendCard()) +
     homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),X('Ήλιος, αέρας, θάλασσα και ειδήσεις','Sun, air, sea and news'),newsCard()+holidaysCard()+environment()+glossary());
+}
+function yesterdayCard() {
+  const V = state.view, Y = window.MONOYesterdayCheck;
+  if (!Y || !V?.useStation || !state.yday?.forecast || state.snapshot) return '';
+  const result = Y.evaluate({ forecast: state.yday.forecast, obs: V.rows.map(r => ({ t: r.t, obs: r.obs })), now: Date.now(), zone: V.zone });
+  return Y.render(result, { lang: state.lang, station: `${V.station.id} · ${num(V.station.dist)} km` });
 }
 function ccTxt(c) { return Number.isFinite(c) ? Math.round(c) + '%' : '—'; } function hoursStrip(rows, cur) {
   return `<div class="scroll-hours">${rows.map((r, j) => `<div class="hourcard ${j === 0 ? 'active' : ''}"><span class="hourtime">${j === 0 ? T('now') : hh(r.t) + ':00'}</span>${icon(j === 0 && cur && fin(cur.code) ? cur.code : r.code, j === 0 && cur ? cur.isDay : r.isDay)}<span class="hourtemp">${deg(j === 0 && cur && fin(cur.temp) ? cur.temp : r.temp)}</span><span class="hoursub">☂ ${pct(r.pop)}</span><span class="hoursub cc" title="${T('clouds')}">☁ ${ccTxt(r.cloud)}</span>${(r.amount ?? 0) >= 0.1 ? `<span class="hoursub rn-hmm">${mm1(r.amount)} mm</span>` : ''}</div>`).join('')}</div>`;
@@ -1540,7 +1586,7 @@ function environment(full = false) {
     const i = D.time.findIndex(t => dayKey(t * 1000 + 12 * 3600e3, V.zone) === dayKey(Date.now(), V.zone)), j = i >= 0 ? i : 0;
     const sr = D.sunrise?.[j] * 1000, ss = D.sunset?.[j] * 1000, dl = D.daylight_duration?.[j];
     const ph = M.moonPhase(Date.now()), illum = (1 - Math.cos(2 * Math.PI * ph)) / 2, name = T('moonNames')[Math.round(ph * 8) % 8];
-    cards.push(`<div class="card env"><div class="minihead"><span class="label">${T('sun')}</span><img src="${iconSrc('sunrise')}" alt=""></div><div class="minivalue">${fin(sr) ? hhmm(sr) : '—'} <small>→ ${fin(ss) ? hhmm(ss) : '—'}</small></div><div class="mininote">${T('daylight')} ${fin(dl) ? `${Math.floor(dl / 3600)}h ${Math.round(dl % 3600 / 60)}′` : '—'} · ${T('uvMax')} ${num(D.uv_index_max?.[j], 1)}</div>
+    cards.push(`<div class="card env"><div class="minihead"><span class="label">${T('sun')}</span><img src="${iconSrc('sunrise')}" alt=""></div><div class="minivalue">${fin(sr) ? hhmm(sr) : '—'} <small>→ ${fin(ss) ? hhmm(ss) : '—'}</small></div><div class="mininote">${T('daylight')} ${fin(dl) ? `${Math.floor(dl / 3600)}h ${Math.round(dl % 3600 / 60)}′` : '—'} · ${T('uvMax')} ${num(D.uv_index_max?.[j], 1)}</div>${(() => { const dc = window.MONODayCompare?.daylight(D, Date.now(), V.zone); return dc ? `<div class="mininote dc-daylight">${esc(window.MONODayCompare.daylightPhrase(dc.delta, state.lang))}</div>` : ''; })()}
       <div class="moonrow"><span class="moon" style="--lit:${(ph < 0.5 ? 1 : -1) * Math.round(illum * 100)}"></span><div><b>${esc(name)}</b><small>${pct(illum)} ${T('illum')}</small></div></div></div>`);
   }
   const mr = state.marine && !state.marine.error ? state.marine.current : null;
@@ -1778,7 +1824,7 @@ function rainPage() {
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const eps = rainEpisodes();
   const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  return head + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city)}) || '') + (window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(state.city)}) || '') + rainMeaningCard() + communityRainCard() + communityStationsCard() + rainNowCard(false)
+  return head + rainAlertsCard() + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city)}) || '') + (window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(state.city)}) || '') + rainMeaningCard() + communityRainCard() + communityStationsCard() + rainNowCard(false)
     + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
        <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
     <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
@@ -3580,6 +3626,93 @@ function render() {
   if (state.page === 'earth') window.MONOEarth.mount(state.lang);
 }
 let toastT;
+/* ------------------------------------------------------------------ rain alerts */
+const RA_KEY = 'mono_rain_alerts';
+function rainAlertsPref() { try { const v = JSON.parse(localStorage.getItem(RA_KEY)); return v && typeof v === 'object' ? v : null; } catch { return null; } }
+function rainAlertsOn() { return !!rainAlertsPref()?.on && 'Notification' in window && Notification.permission === 'granted'; }
+async function showDeviceNotification(title, options) {
+  try {
+    const reg = 'serviceWorker' in navigator ? await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(r, 4000))]) : null;
+    if (reg?.showNotification) return await reg.showNotification(title, options);
+  } catch {}
+  try { return new Notification(title, options); } catch {}
+}
+let rainAlertTimer = 0;
+function runRainCheck() {
+  if (!rainAlertsOn() || !window.MONORainAlerts) return;
+  MONORainAlerts.check({ fetchJSON: u => getJSON(u, 15000), show: showDeviceNotification }).catch(() => {});
+}
+function startRainAlerts() {
+  clearInterval(rainAlertTimer); rainAlertTimer = 0;
+  if (!rainAlertsOn()) return;
+  setTimeout(runRainCheck, 4000);
+  // Runs while MONO is open or kept alive in the background; browsers may pause it.
+  rainAlertTimer = setInterval(runRainCheck, 10 * 60e3);
+}
+async function toggleRainAlerts() {
+  const el = state.lang === 'el', pref = rainAlertsPref();
+  if (!('Notification' in window)) { toast(el ? 'Ο browser δεν υποστηρίζει ειδοποιήσεις' : 'Notifications are not supported'); return; }
+  if (pref?.on) {
+    localStorage.setItem(RA_KEY, JSON.stringify({ ...pref, on: false }));
+    await MONORainAlerts?.setConfig({ on: false });
+    try { const reg = await navigator.serviceWorker?.getRegistration(); await reg?.periodicSync?.unregister('mono-rain'); } catch {}
+    startRainAlerts(); render(); toast(el ? 'Οι ειδοποιήσεις βροχής απενεργοποιήθηκαν' : 'Rain alerts turned off'); return;
+  }
+  const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (perm !== 'granted') { render(); toast(el ? 'Δεν δόθηκε άδεια για ειδοποιήσεις' : 'Notification permission was not granted'); return; }
+  const c = state.city, cfg = { on: true, lat: +c.lat, lon: +c.lon, name: cityName(c), lang: state.lang };
+  try { localStorage.setItem(RA_KEY, JSON.stringify(cfg)); } catch {}
+  await MONORainAlerts?.setConfig(cfg);
+  let background = false;
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    try {
+      await navigator.serviceWorker.register('./sw.js');
+      const reg = await navigator.serviceWorker.ready;
+      if (reg.periodicSync) {
+        const status = await navigator.permissions?.query({ name: 'periodic-background-sync' }).catch(() => null);
+        if (!status || status.state === 'granted') { await reg.periodicSync.register('mono-rain', { minInterval: 30 * 60e3 }); background = true; }
+      }
+    } catch {}
+  }
+  await showDeviceNotification(el ? 'MONO · ειδοποιήσεις βροχής ενεργές' : 'MONO · rain alerts on', {
+    body: el ? `Για ${cfg.name}: θα ειδοποιείσαι όταν η πρόγνωση 15λέπτου δείχνει βροχή μέσα στην επόμενη ώρα.` : `For ${cfg.name}: you will be alerted when the 15-minute forecast shows rain within the next hour.`,
+    tag: 'mono-rain-setup', icon: 'app-icon-192.png'
+  });
+  localStorage.setItem(RA_KEY, JSON.stringify({ ...cfg, background }));
+  startRainAlerts(); render();
+}
+function rainAlertsCard() {
+  if (!('Notification' in window) || state.snapshot) return '';
+  const el = state.lang === 'el', X = (a, b) => el ? a : b, pref = rainAlertsPref(), on = rainAlertsOn(), denied = Notification.permission === 'denied';
+  const where = on && pref?.name ? esc(pref.name) : esc(cityName(state.city));
+  const other = on && pref && ckey(pref) !== ckey(state.city);
+  const sub = denied ? X('Οι ειδοποιήσεις είναι μπλοκαρισμένες στις ρυθμίσεις του browser για το MONO.', 'Notifications are blocked in your browser settings for MONO.')
+    : on ? X(`Ενεργές για ${where}. `, `On for ${where}. `) + (pref?.background ? X('Ελέγχει και στο παρασκήνιο όποτε το επιτρέπει το κινητό.', 'Also checks in the background when the phone allows it.') : X('Ελέγχει κάθε 10′ όσο το MONO είναι ανοιχτό ή στο παρασκήνιο. Εγκατέστησε την εφαρμογή για περισσότερους ελέγχους.', 'Checks every 10 min while MONO is open or in the background. Install the app for more checks.'))
+      : X(`Ειδοποίηση σε αυτή τη συσκευή όταν έρχεται βροχή στην επόμενη ώρα, για ${where}.`, `Get a notification on this device when rain is due within the hour at ${where}.`);
+  const action = denied ? '' : `<button class="${on ? 'outline-btn' : 'solid-btn'}" data-action="rainAlerts">${on ? X('Απενεργοποίηση', 'Turn off') : X('🔔 Ενεργοποίηση', '🔔 Turn on')}</button>${other ? `<button class="outline-btn" data-action="rainAlertsHere">${X('Μεταφορά εδώ', 'Use this place')}</button>` : ''}`;
+  return `<section class="section ra-card"><div class="ra-text"><b>${on ? '🔔' : '🔕'} ${X('Ειδοποιήσεις βροχής', 'Rain alerts')}</b><span>${sub}</span></div><div class="ra-actions">${action}</div></section>`;
+}
+function shareText() {
+  const V = state.view; if (!V) return '';
+  const el = state.lang === 'el', cur = V.current, d = V.daily, S = plainSummary();
+  const lines = [`MONO Weather · ${cityName(state.city)} · ${hhmm(Date.now())}`];
+  lines.push(`${el ? 'Τώρα' : 'Now'} ${deg(cur.temp)}${cur.source === 'obs' ? (el ? ' (μέτρηση σταθμού)' : ' (station)') : ''} · ${T('high')} ${deg(d[0]?.hi)} · ${T('low')} ${deg(d[0]?.lo)}`);
+  if (S?.headline) lines.push(S.headline);
+  lines.push(rainSentence());
+  if (d[1]) lines.push(`${dayLabel(d[1].t, 1)}: ${deg(d[1].lo)} / ${deg(d[1].hi)} · ☂ ${pct(d[1].pop)}`);
+  return lines.filter(Boolean).join('\n');
+}
+async function shareForecast() {
+  const text = shareText(); if (!text) return;
+  const url = location.origin + location.pathname, title = 'MONO Weather · ' + cityName(state.city);
+  try {
+    if (navigator.share) { await navigator.share({ title, text, url }); return; }
+    await navigator.clipboard.writeText(text + '\n' + url);
+    toast(state.lang === 'el' ? 'Η πρόγνωση αντιγράφηκε' : 'Forecast copied');
+  } catch (err) {
+    if (err?.name !== 'AbortError') toast(state.lang === 'el' ? 'Η κοινοποίηση δεν είναι διαθέσιμη' : 'Sharing is not available');
+  }
+}
 function toast(m) { const n = $('#toast'); n.textContent = m; n.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => n.classList.remove('show'), 3200); }
 function goto(p) {
   if(p!=='earth'&&p!=='globe'&&window.MONOStormLens)window.MONOStormLens.pause();
@@ -3598,7 +3731,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, yday: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
   if (state.page === 'cities') state.page = 'now';
   restoreHistoricCache(c);
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
@@ -3689,6 +3822,9 @@ function onClick(e) {
   else if (a === 'menu') { closeMobileNavigation(); $('.sidebar').classList.toggle('open'); }
   else if (a === 'navGroup') { const key=b.dataset.v; if(NAV_GROUPS.some(g=>g.id===key)){navOpen[key]=!navOpen[key];write(NAV_OPEN_KEY,navOpen);navRender();} }
   else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); if(state.page==='space')window.MONOSpaceControl?.load(true); }
+  else if (a === 'share') shareForecast();
+  else if (a === 'rainAlerts') toggleRainAlerts();
+  else if (a === 'rainAlertsHere') { const pref = rainAlertsPref(); if (pref?.on) { localStorage.setItem(RA_KEY, JSON.stringify({ ...pref, on: false })); toggleRainAlerts(); } }
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
   else if (a === 'retrain') ensureTraining(state.city, state.gen, true);
    else if (a === 'historyPeriod') { const days=Number(b.dataset.days); if(![62,180,365].includes(days)||days===state.historyDays||state.trainStatus==='loading')return; state.historyDays=days; persistUI(); render(); ensureTraining(state.city,state.gen,true); }
@@ -3842,9 +3978,12 @@ function init() {
 }
 init();
 if (!cacheAllowed()) {
-  try { for (const k of ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain']) localStorage.removeItem(k); } catch {}
+  try { for (const k of ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain','mono31_yday']) localStorage.removeItem(k); } catch {}
   if ('caches' in window) caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('mono-weather-')).map(k => caches.delete(k)))).catch(() => {});
-  if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.filter(r => r.active?.scriptURL === new URL('sw.js',location.href).href).map(r => r.unregister()))).catch(() => {});
+  // Rain alerts need the service worker to show notifications (Android requires it).
+  if ('serviceWorker' in navigator && !rainAlertsOn()) navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.filter(r => r.active?.scriptURL === new URL('sw.js',location.href).href).map(r => r.unregister()))).catch(() => {});
 }
-if (cacheAllowed() && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
+if ((cacheAllowed() || rainAlertsOn()) && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data?.type === 'mono-goto' && NAV.some(n => n[0] === e.data.page)) goto(e.data.page); });
+startRainAlerts();
 })();

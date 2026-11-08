@@ -325,3 +325,33 @@
   }
   .topbar .topActions { gap: 2px; }
 }
+/* Day-over-day context in the home hero */
+.day-compare{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.dc-item{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:999px;padding:6px 10px;font-size:11px;font-weight:680;line-height:1.2}
+.dc-item i{font-style:normal;font-weight:850;font-size:12px}
+.dc-up i{color:var(--warm,#b4442c)}.dc-down i{color:var(--cold,#2f62a8)}.dc-flat i{color:var(--muted)}
+.dc-daylight{margin-top:4px}
+@media (max-width:560px){.day-compare{gap:5px}.dc-item{font-size:10.5px;padding:5px 9px}}
+/* Yesterday check: MONO day-ahead forecast vs station */
+.yc-card .panelhead{align-items:center}
+.yc-title{margin:6px 0 0;font-size:19px;letter-spacing:-.045em;font-weight:730}
+.yc-grade{font-size:11px;font-weight:780;border-radius:999px;padding:7px 11px;background:var(--soft);border:1px solid var(--line);white-space:nowrap}
+.yc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.yc-cell{border:1px solid var(--line);border-radius:14px;padding:14px 15px;display:flex;flex-direction:column;gap:9px;min-width:0}
+.yc-cell small{color:var(--sub);font-size:10.5px}
+.yc-pair{display:flex;gap:16px}
+.yc-pair span{display:flex;flex-direction:column;gap:3px}
+.yc-pair small{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:780}
+.yc-pair b{font-size:24px;letter-spacing:-.06em;font-weight:720;font-variant-numeric:tabular-nums}
+.yc-cell em{font-style:normal;font-size:11px;font-weight:780;font-variant-numeric:tabular-nums}
+.yc-cell em.ok{color:var(--good)}.yc-cell em.off{color:var(--warm)}
+.yc-big{font-size:30px;font-weight:720;letter-spacing:-.06em;font-variant-numeric:tabular-nums}
+.yc-note{margin:14px 0 0;font-size:12px}
+.yc-foot{margin:10px 0 0;color:var(--sub);font-size:10.5px;line-height:1.6}
+@media (max-width:640px){.yc-grid{grid-template-columns:1fr 1fr}.yc-grid .yc-cell:last-child{grid-column:1/-1}.yc-pair b{font-size:21px}}
+/* Rain alerts toggle */
+.ra-card{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:14px 16px}
+.ra-text{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 280px}
+.ra-text b{font-size:13px;letter-spacing:-.02em}
+.ra-text span{color:var(--sub);font-size:11px;line-height:1.55}
+.ra-actions{display:flex;gap:8px;flex-wrap:wrap}

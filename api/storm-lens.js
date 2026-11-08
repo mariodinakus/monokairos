@@ -1,6 +1,7 @@
 /* Regional precipitation-footprint forecast grid: Open-Meteo best_match.
    Gridded precipitation area is NOT tropical-cyclone wind radius. */
 'use strict';
+const {query}=require('../lib/server.cjs');
 const R=6371.0088;
 function wrap(n){return ((n+180)%360+360)%360-180;}
 function clamp(n,a,b){return Math.max(a,Math.min(b,n));}
@@ -9,7 +10,7 @@ module.exports=async function handler(req,res){
   res.setHeader('Content-Type','application/json; charset=utf-8');
   res.setHeader('Cache-Control','public, s-maxage=900, stale-while-revalidate=1800');
   if(req.method!=='GET'){res.setHeader('Allow','GET');return err(res,405,'Method not allowed');}
-  const lat=Number(req.query?.lat),lon=Number(req.query?.lon),radius=Number(req.query?.radius||600);
+  const q=query(req),lat=Number(q.lat),lon=Number(q.lon),radius=Number(q.radius||600);
   if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(radius)||Math.abs(lat)>76||Math.abs(lon)>180||radius<250||radius>1100)
     return err(res,400,'Use valid lat, lon and radius 250–1100 km (|lat| ≤ 76°).');
   const N=7,steps=3,stepLat=(radius/steps)/111.195,stepLon=stepLat/Math.cos(lat*Math.PI/180);
