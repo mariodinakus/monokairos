@@ -112,3 +112,20 @@ test('station correction learned from earlier days removes a station-vs-ERA5 off
   assert.equal(state.records.slice(0, 7).some(r => 'maeCor' in r), false, 'no correction before a week of earlier days exists');
   assert.equal(state.version, 2);
 });
+
+test('an empty (throttled) station archive is retried and then fails instead of saving an empty check', async () => {
+  V.setPause(0);
+  const now = Date.parse('2026-11-08T07:40:00Z'), city = V.nearestCity(40.64, 22.94), { io } = fakeIO(now);
+  let calls = 0;
+  await assert.rejects(V.update(city, null, now, { json: io.json, text: async () => { calls++; return 'station,valid,tmpc\n'; } }), /observations unavailable/);
+  assert.equal(calls, 2);
+  let n = 0;
+  const ok = await V.update(city, null, now, { json: io.json, text: async (...a) => (++n === 1 ? 'station,valid,tmpc\n' : io.text(...a)) });
+  assert.equal(ok.records.length, 30);
+});
+
+test('the daily job visits cities one at a time', () => {
+  const s = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'scripts/refresh-station-verification.cjs'), 'utf8');
+  assert.doesNotMatch(s, /Promise\.all\(CITIES/);
+  assert.match(s, /setTimeout\(r, 20000\)/);
+});
