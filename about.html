@@ -1,0 +1,29 @@
+<!doctype html><html lang="el"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MONO · Πώς δουλεύει η πρόγνωση</title>
+<meta name="description" content="Πώς φτιάχνει την πρόγνωση το MONO Weather: 35 μοντέλα, ensembles, σταθμοί, έξι αλγόριθμοι, ανεξάρτητος έλεγχος ακρίβειας και επαλήθευση με σταθμούς αεροδρομίων.">
+<link rel="canonical" href="https://monokairos.vercel.app/about">
+<link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="mono-plus.css"></head>
+<body><main class="legal-page"><a href="/">← MONO Weather</a>
+<h1>Πώς δουλεύει η πρόγνωση MONO</h1>
+<p>Το MONO δεν είναι ένα ακόμα μοντέλο καιρού. Παίρνει τις προγνώσεις των μεγάλων μετεωρολογικών κέντρων, μαθαίνει από το παρελθόν πόσο και πότε πέφτει έξω η καθεμία, και τις συνδυάζει. Μετά δείχνει, με αριθμούς, πόσο σωστό βγήκε.</p>
+
+<h2>1. Από πού έρχονται τα δεδομένα</h2>
+<p><b>Μοντέλα:</b> έως 35 παγκόσμια και περιοχικά μοντέλα (ECMWF IFS και AIFS, GFS, ICON, ARPEGE/AROME, UKMO, GEM, JMA κ.ά.) και 8 ensembles μέσω του Open-Meteo. <b>Μετρήσεις:</b> σταθμοί METAR (αεροδρόμια) και WMO SYNOP (ΕΜΥ και εθνικές υπηρεσίες), ραντάρ RainViewer. <b>Αναφορά για την εκπαίδευση:</b> η αναανάλυση ERA5 της ECMWF. <b>Προειδοποιήσεις:</b> Meteoalarm (για την Ελλάδα, ΕΜΥ).</p>
+
+<h2>2. Πώς μαθαίνει</h2>
+<p>Για κάθε σημείο το MONO κατεβάζει τις παλιές προγνώσεις κάθε μοντέλου (όπως είχαν βγει 0 έως 5 μέρες πριν) για τους τελευταίους 2, 6 ή 12 μήνες και τις συγκρίνει με το τι έγινε τελικά. Δοκιμάζει έξι μεθόδους: μέσο όρο, καλύτερο μεμονωμένο μοντέλο, διόρθωση μεροληψίας ανά μοντέλο (MOS), ridge stacking, φίλτρο Kalman και ανάλογες καταστάσεις του παρελθόντος.</p>
+<p>Τα δεδομένα χωρίζονται <b>χρονολογικά</b> σε 60% εκπαίδευση, 20% επιλογή μεθόδου και 20% ανεξάρτητο τεστ. Η μέθοδος διαλέγεται χωρίς να δει το τεστ, και όλα τα ποσοστά ακρίβειας που εμφανίζονται βγαίνουν από αυτό το τεστ.</p>
+<p>Όταν υπάρχει σταθμός σε απόσταση έως 30 km, οι μετρήσεις των τελευταίων 72 ωρών διορθώνουν την πρόγνωση για τη σταθερή διαφορά του σημείου και για το τρέχον λάθος, που σβήνει σταδιακά με τις ώρες.</p>
+
+<h2>3. Πόσο σωστή βγαίνει</h2>
+<p><b>Ιστορικό:</b> το ποσοστό «πόσο συχνά βγαίνει σωστή» μετράει τις ώρες του ανεξάρτητου τεστ όπου ταυτόχρονα η θερμοκρασία ήταν μέσα σε ±2 °C, ο άνεμος σε ±10 km/h και το «βρέχει / δεν βρέχει» σωστό, ξεχωριστά για κάθε μέρα πρόγνωσης.</p>
+<p><b>Σταθμός:</b> για 12 ελληνικές πόλεις, κάθε πρωί ο διακομιστής ξαναφτιάχνει την πρόγνωση MONO μίας μέρας πριν, στο σημείο του αεροδρομίου, και τη συγκρίνει με τις ωριαίες μετρήσεις METAR. Η εκπαίδευση τελειώνει πάντα πριν από κάθε μέρα που ελέγχεται. Τα αποτελέσματα δείχνονται όπως είναι, και όταν ο απλός μέσος όρος των μοντέλων τα πάει καλύτερα.</p>
+<p><b>Χθες:</b> η εφαρμογή συγκρίνει τη χθεσινή πρόγνωση του MONO, όπως είχε βγει μία μέρα πριν, με τον κοντινό σταθμό.</p>
+
+<h2>4. Τι δεν είναι</h2>
+<p>Το MONO δεν είναι επίσημη μετεωρολογική υπηρεσία. Για επικίνδυνα φαινόμενα ακολούθησε τις προειδοποιήσεις της ΕΜΥ, της Πολιτικής Προστασίας και του 112. Οι πιθανότητες και τα ποσοστά ακρίβειας περιγράφουν το παρελθόν· δεν εγγυώνται την επόμενη μέρα. Οι ειδοποιήσεις βροχής στη συσκευή στηρίζονται στην πρόγνωση 15λέπτου και όχι σε ραντάρ ή μέτρηση.</p>
+
+<h2>English summary</h2>
+<p>MONO combines up to 35 numerical weather models and 8 ensembles (via Open-Meteo) with live station observations. For each place it learns from each model's archived forecasts (0–5 days ahead) against ERA5, choosing among six methods (mean, best model, MOS, ridge stacking, Kalman filter, analog ensemble) on a chronological 60/20/20 split; every accuracy figure comes from the untouched test set. A nearby station corrects the near-term forecast. For 12 Greek cities, MONO's day-ahead forecast at the airport is re-run every morning and verified against hourly METAR, with training that always ends before the evaluated day. MONO is not an official warning service.</p>
+<footer><a href="privacy.html">Απόρρητο</a> · <a href="terms.html">Πηγές & όροι</a> · <a href="/">Επιστροφή</a></footer></main>
+<script defer src="/_vercel/insights/script.js"></script>
+</body></html>

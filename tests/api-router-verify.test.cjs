@@ -106,9 +106,9 @@ test('station correction learned from earlier days removes a station-vs-ERA5 off
   const state = await V.update(city, null, now, fakeIO(now, -1.2).io); // airport 1.2° colder than the ERA5 cell
   const s = V.summary(state);
   assert.ok(s.bias > 0.9, 'raw MONO inherits the ERA5 offset: ' + s.bias);
-  assert.ok(s.corrected && s.corrected.days >= 25);
+  assert.ok(s.corrected && s.corrected.days >= 20);
   assert.ok(s.corrected.mae < s.corrected.maeRaw - 0.5, JSON.stringify(s.corrected));
   assert.ok(Math.abs(s.corrected.bias) < 0.3);
-  assert.equal(state.records.slice(0, 3).some(r => 'maeCor' in r), false, 'no correction before 3 earlier days exist');
+  assert.equal(state.records.slice(0, 7).some(r => 'maeCor' in r), false, 'no correction before a week of earlier days exists');
   assert.equal(state.version, 2);
 });

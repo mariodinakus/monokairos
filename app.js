@@ -443,7 +443,7 @@ const state = {
   gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.globeTilesV1 ? (UI.gBase || 'detail') : 'detail', gLayers: UI.globeTilesV1 ? { radar: false, rain: false, grid: false, temps: true, ...(UI.gLayers || {}) } : { radar: false, rain: false, grid: false, temps: UI.gLayers?.temps ?? true }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
-  gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null, recentRain: null, yday: null
+  gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null, recentRain: null, yday: null, verify: null, trustTab: 'reliability'
 };
 const T = k => L[state.lang][k] ?? L.el[k] ?? k;
 const AN = k => ALG_NAMES[state.lang][k] || k;
@@ -545,13 +545,16 @@ async function chain(ids, make) {
 }
 const OM = 'https://api.open-meteo.com/v1/forecast', ENS = 'https://ensemble-api.open-meteo.com/v1/ensemble', PREV = 'https://previous-runs-api.open-meteo.com/v1/forecast', ARCH = 'https://archive-api.open-meteo.com/v1/archive';
 const ll = c => ({ latitude: (+c.lat).toFixed(4), longitude: (+c.lon).toFixed(4) });
+// Proxied model feeds go out from shared server IPs and count against one provider quota.
+// ~1 km rounding lets nearby visitors share the CDN-cached response (models are ≥1.3 km grids).
+const llp = c => ({ latitude: (+c.lat).toFixed(2), longitude: (+c.lon).toFixed(2) });
 const mainURL = c => q(OM, { ...ll(c), timezone: 'auto', timeformat: 'unixtime', past_days: 3, forecast_days: 7,
   current: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,visibility,is_day',
   hourly: 'temperature_2m,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility,wind_speed_10m,cloud_cover', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
-const modelURL = (c, id) => q('/proxy/mono-forecast', { ...ll(c), models: id, hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
-const modelBatchURL = (c, group) => q('/proxy/mono-forecast', { ...ll(c), models: group.map(m => m.id).join(','), hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
+const modelURL = (c, id) => q('/proxy/mono-forecast', { ...llp(c), models: id, hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
+const modelBatchURL = (c, group) => q('/proxy/mono-forecast', { ...llp(c), models: group.map(m => m.id).join(','), hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
 const rain15URL = c => q(OM, { ...ll(c), minutely_15: 'precipitation,rain,showers,snowfall,weather_code', forecast_minutely_15: 96, past_minutely_15: 4, timezone: 'auto', timeformat: 'unixtime' });
-const ensURL = (c, id, vars) => q('/proxy/mono-ensemble', { ...ll(c), models: id, hourly: vars, timeformat: 'unixtime', timezone: 'UTC', past_days: 1, forecast_days: 7 });
+const ensURL = (c, id, vars) => q('/proxy/mono-ensemble', { ...llp(c), models: id, hourly: vars, timeformat: 'unixtime', timezone: 'UTC', past_days: 1, forecast_days: 7 });
 
 /* ------------------------------------------------------------------ METAR */
 function parseMetar(raw) {
@@ -950,7 +953,7 @@ async function loadRecentRain(c, force = false) {
 
 async function loadAll(force = false) {
   loadSpace(force);
-  loadCosmic(force);
+  if (state.page === 'space') loadCosmic(force); // only the Space page shows cosmic events
   if (force) primaryRetryCount = 0;
   const c = state.city, gen = ++state.gen;
   if(state.sharedRainCity !== ckey(c)) {state.sharedRain = null;state.stationRain = null;state.communityStations = null;state.communityRain = null;state.stationBoxes=null;}
@@ -1055,6 +1058,7 @@ function schedule() {
     if (state.page === 'history') return;
     recompute(); render();
     if (state.trainStatus === 'done') ensureYesterdayCheck(state.city, state.gen);
+    if (state.view) ensureVerify(state.city, state.gen);
   }, 250);
 }
 function notifyHistoryTrainingProgress() {
@@ -1130,7 +1134,7 @@ function runTraining(payload) {
     };
     if (!workerOk || typeof Worker === 'undefined' || location.protocol === 'file:') return inline();
     try {
-      worker ||= new Worker('trainer.js');
+      worker ||= new Worker('trainer.js?v=23d659d556');
       const id = ++jobId;
       const on = e => { if (e.data.id !== id) return; worker.removeEventListener('message', on); e.data.ok ? resolve(e.data) : reject(new Error(e.data.error)); };
       worker.addEventListener('message', on);
@@ -1517,12 +1521,34 @@ function nowPage() {
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
     <section class="section dual"><div class="card"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</div><div class="card">${engineSummary()}</div></section>`;
   return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + alertsStrip() +
-    (window.MONOForecastConfidence?.render({view:V,lang:state.lang,train:state.train,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot}) || '') +
-    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + rainAlertsCard() + hours + summaryCard() + reliabilityCard() + yesterdayCard() +
+    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + (rainAlertsOn() ? '' : rainAlertsCard()) + hours + summaryCard() + trustCard() +
     homeMore('rain',X('Βροχή και μετρήσεις','Rain and measurements'),X('Ποσότητες, σταθμοί και μηνιαία σύγκριση','Amounts, stations and monthly comparison'),rainDetail) +
     homeMore('charts',X('Γραφήματα και εβδομάδα','Charts and the week'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
-    homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),MonoForecast.compact(forecastOptions())+MonoSky.render({...skyOptions(),compact:true})+todoCard()+weekendCard()) +
+    homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
     homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),X('Ήλιος, αέρας, θάλασσα και ειδήσεις','Sun, air, sea and news'),newsCard()+holidaysCard()+environment()+glossary());
+}
+function trustCard() {
+  const Tr = window.MONOTrust, V = state.view; if (!Tr || !V || state.snapshot) return '';
+  const el = state.lang === 'el', X = (a, b) => el ? a : b, c = state.city;
+  const strip = h => h ? h.replace(/^\s*<section class="section card [^"]*"[^>]*>/, '<div class="th-inner">').replace(/<\/section>\s*$/, '</div>') : '';
+  const verify = state.verify?.key === ckey(c) ? state.verify.data : null;
+  return Tr.render([
+    { id: 'reliability', label: X('Ιστορικό', 'History'), html: strip(reliabilityCard()) },
+    { id: 'station', label: X('Σταθμός', 'Station'), html: Tr.station(verify, { lang: state.lang }) },
+    { id: 'yesterday', label: X('Χθες', 'Yesterday'), html: strip(yesterdayCard()) },
+    { id: 'agreement', label: X('Συμφωνία μοντέλων', 'Model agreement'), html: strip(window.MONOForecastConfidence?.render({view:V,lang:state.lang,train:state.train,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot}) || '') }
+  ], { active: state.trustTab, lang: state.lang });
+}
+let verifyBusy = '';
+async function ensureVerify(c, gen) {
+  const key = ckey(c);
+  if (state.snapshot || verifyBusy === key || (state.verify?.key === key && Date.now() - state.verify.at < 3600e3)) return;
+  verifyBusy = key;
+  try {
+    const data = await getJSON(q('/api/verify', { lat: (+c.lat).toFixed(3), lon: (+c.lon).toFixed(3) }), 15000);
+    if (gen === state.gen) { state.verify = { key, at: Date.now(), data }; schedule(); }
+  } catch { if (gen === state.gen) state.verify = { key, at: Date.now(), data: null }; }
+  finally { if (verifyBusy === key) verifyBusy = ''; }
 }
 function reliabilityCard() {
   const R = window.MONOReliability; if (!R || state.snapshot) return '';
@@ -1585,7 +1611,6 @@ function environment(full = false) {
     cards.push(`<div class="card env"><span class="label">${T('aqi')}</span><div class="minivalue">${num(A.value('european_aqi'))} <small>EAQI</small></div><div class="mininote">${band === null ? T('noData') : T('aq')[band]}</div><div class="kvs"><span>CO₂ <b>${num(A.value('carbon_dioxide'))} ppm</b></span><span>PM2.5 <b>${num(A.value('pm2_5'), 1)} μg/m³</b></span></div><small class="env-meta">CAMS · ${T('modelNow')}</small></div>`);
     cards.push(`<div class="card env"><span class="label">${T('pollen')}</span><div class="env-summary-pollen">${pollen.map(p => `<span>${T('pol_' + p.key)} <b class="lv${p.level}">${T('lvl')[p.level]} · ${num(p.max, 1)}</b></span>`).join('') || T('noData')}</div><small class="env-meta">${state.lang === 'el' ? 'Μέγιστη συγκέντρωση · κόκκοι/m³. Όλα τα είδη στην πλήρη ανάλυση.' : 'Peak concentration · grains/m³. All species in the full analysis.'}</small></div>`);
     cards.push(`<div class="card env"><span class="label">${state.lang === 'el' ? 'Σύννεφα & πίεση' : 'Clouds & pressure'}</span><div class="minivalue">${num(B.value('cloud_cover'))}<small>%</small></div><div class="kvs"><span>${T('pressure')} <b>${num(B.value('pressure_msl'), 1)} hPa</b></span><span>Δ 3h <b>${num(B.delta, 1)} hPa</b></span></div><small class="env-meta">NOAA GFS · ${T('modelNow')}</small></div>`);
-    cards.push(MonoSpaceWeather.miniCard(state.space, { lang: state.lang }));
   }
   const D = W?.daily;
   if (D?.time?.length) {
@@ -3598,6 +3623,32 @@ function navRender() {
   $('#status').textContent = state.snapshot ? T('cached') : V ? `${T('live')} · ${T('updated')} ${hhmm(state.fetchedAt || V.at)}` : T('loading');
   mobileNavRender();
 }
+/* Heavy, page-specific modules load on first use instead of on every visit. */
+const LAZY_GROUPS = {
+  sky: ['vendor/astronomy.min.js?v=f41139a879', 'sky.js?v=6e83909e06', 'cosmic.js?v=462cffbdea', 'space-control.js?v=b7acaf3100', 'gravity-observatory.js?v=3dc1445258'],
+  history: ['history-backtest.js?v=28ac3f6bc8'],
+  insights: ['model-insights.js?v=5e5da5e749']
+};
+const LAZY_READY = { sky: () => !!(window.MonoSky && window.MonoCosmic), history: () => !!window.MONOHistoryBacktest, insights: () => !!window.MONOModelInsights };
+const PAGE_NEEDS = { space: ['sky'], history: ['history'], lab: ['insights', 'history'] };
+const lazyLoads = {};
+function lazyScript(src) {
+  return lazyLoads[src] ||= new Promise((resolve, reject) => {
+    const el = document.createElement('script'); el.src = src; el.async = false;
+    el.onload = resolve; el.onerror = () => { delete lazyLoads[src]; reject(new Error('load ' + src)); };
+    document.head.appendChild(el);
+  });
+}
+function loadLazyGroup(group) {
+  if (LAZY_READY[group]?.()) return Promise.resolve();
+  return (LAZY_GROUPS[group] || []).reduce((p, src) => p.then(() => lazyScript(src)), Promise.resolve());
+}
+function lazyPending(page) { return (PAGE_NEEDS[page] || []).filter(g => !LAZY_READY[g]?.()); }
+function warmLazyModules() {
+  // After the first paint, fetch the sky group quietly so the home "sky" panel can show it.
+  const go = () => loadLazyGroup('sky').then(() => { if (state.page === 'now') schedule(); }).catch(() => {});
+  if ('requestIdleCallback' in window) requestIdleCallback(go, { timeout: 8000 }); else setTimeout(go, 3000);
+}
 function render() {
   navRender();
   if (state.page === 'maps' && MonoForecast.isMounted(forecastOptions())) { MonoForecast.update(forecastOptions()); return; }
@@ -3611,7 +3662,9 @@ function render() {
   const explainOpen = !!document.querySelector('#content .fc-explain[open]');
   const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap')].map(el => [el.id, el.scrollLeft]);
   if (document.getElementById('sc-globe')) window.MONOSpaceControl?.destroy();
-  $('#content').innerHTML = (pages[state.page] || nowPage)();
+  const waiting = lazyPending(state.page);
+  if (waiting.length) { Promise.all(waiting.map(loadLazyGroup)).then(() => render(), () => render()); }
+  $('#content').innerHTML = waiting.length ? header(esc(T(state.page)), '', '') + loadingCard() : (pages[state.page] || nowPage)();
   if(state.page==='guide'){
     const q=$('#qs-panel');let start=null;
     q?.addEventListener('touchstart',e=>{const t=e.touches[0];if(t)start={x:t.clientX,y:t.clientY};},{passive:true});
@@ -3721,6 +3774,7 @@ async function shareForecast() {
 }
 function toast(m) { const n = $('#toast'); n.textContent = m; n.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => n.classList.remove('show'), 3200); }
 function goto(p) {
+  if (p === 'space') loadCosmic(false);
   if(p!=='earth'&&p!=='globe'&&window.MONOStormLens)window.MONOStormLens.pause();
   if (p !== 'maps') MonoForecast.destroy();
   if (p !== 'radar') killMap();
@@ -3737,7 +3791,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, yday: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, yday: null, verify: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
   if (state.page === 'cities') state.page = 'now';
   restoreHistoricCache(c);
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
@@ -3829,6 +3883,7 @@ function onClick(e) {
   else if (a === 'navGroup') { const key=b.dataset.v; if(NAV_GROUPS.some(g=>g.id===key)){navOpen[key]=!navOpen[key];write(NAV_OPEN_KEY,navOpen);navRender();} }
   else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); if(state.page==='space')window.MONOSpaceControl?.load(true); }
   else if (a === 'share') shareForecast();
+  else if (a === 'trustTab') { if (['reliability','station','yesterday','agreement'].includes(b.dataset.v)) { state.trustTab = b.dataset.v; render(); } }
   else if (a === 'rainAlerts') toggleRainAlerts();
   else if (a === 'rainAlertsHere') { const pref = rainAlertsPref(); if (pref?.on) { localStorage.setItem(RA_KEY, JSON.stringify({ ...pref, on: false })); toggleRainAlerts(); } }
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
@@ -3983,6 +4038,7 @@ function init() {
   setInterval(() => { if (state.page === 'globe' || state.page === 'earth') globeTick(); if (document.visibilityState === 'visible' && state.view && state.page !== 'radar' && state.page !== 'globe') { recompute(); render(); } }, 60e3);
 }
 init();
+warmLazyModules();
 if (!cacheAllowed()) {
   try { for (const k of ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain','mono31_yday']) localStorage.removeItem(k); } catch {}
   if ('caches' in window) caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('mono-weather-')).map(k => caches.delete(k)))).catch(() => {});
