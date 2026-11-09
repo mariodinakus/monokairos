@@ -81,7 +81,8 @@
         '<div><small>'+(en?'Precipitation':'Βροχοπτώσεις')+'</small><b>'+esc(trendWord(r.rain,'rain',opts.lang))+'</b><span>'+(finite(r.rain)?signed(r.rain,opts.lang,' mm'):(en?'Unavailable':'Μη διαθέσιμο'))+'</span></div></div></article>';
     }).join('');
     var notes=summary.signals.map(function(s){return '<li>'+esc(s)+'</li>';}).join('');
-    var html=shortForecast(opts.daily,opts.lang)+
+    var historyHtml=root.MONOMonthHistory?.render(opts.key,opts.lang,opts.historyEnabled)||'';
+    var html=shortForecast(opts.daily,opts.lang)+historyHtml+
       '<div class="mt-intro"><span class="mt-kicker">'+(en?'WHAT COULD BE COMING':'ΤΙ ΜΠΟΡΕΙ ΝΑ ΕΡΧΕΤΑΙ')+'</span><h3>'+esc(summary.title)+'</h3><p>'+esc(summary.detail)+'</p>'+
       (notes?'<ul class="mt-signals">'+notes+'</ul>':'')+'</div>'+
       '<div class="mt-grid">'+cards+'</div>'+
@@ -94,7 +95,7 @@
   function show(node,entry,opts){
     if(!node||!node.isConnected)return;
     var en=opts.lang==='en';
-    var result=entry.status==='ok'?body(entry.data,opts):
+    var result=entry.status==='ok'?body(entry.data,Object.assign({},opts,{key:node.dataset.key})):
       entry.status==='error'?{text:en?'Long-range data unavailable':'Μη διαθέσιμη μακρινή τάση',
         html:'<p class="mt-error">'+(en?'Unable to load EC46 weekly guidance right now. No long-range prediction is shown.':'Δεν φορτώθηκαν τα εβδομαδιαία δεδομένα EC46 αυτή τη στιγμή. Δεν εμφανίζεται μη τεκμηριωμένη μακρινή πρόγνωση.')+'</p>'}:
       {text:en?'Checking the next 6 weeks…':'Έλεγχος τάσης 6 εβδομάδων…',
@@ -111,6 +112,7 @@
       if(!response.ok)throw new Error('HTTP '+response.status);
       var data=await response.json();
       if(!rowsOf(data).length)throw new Error('Missing weekly anomalies');
+      root.MONOMonthHistory?.record(key,rowsOf(data),!!opts.historyEnabled);
       cache.set(key,{status:'ok',data:data,at:Date.now()});
     }catch(err){cache.set(key,{status:'error',at:Date.now()});}
     finally{clearTimeout(timeout);}
