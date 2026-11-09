@@ -14,8 +14,8 @@ function rowsOf(rows){
 function keyFor(city){return PREFIX+String(city||'').replace(/[^0-9.,-]/g,'').slice(0,35);}
 function read(city,allowStore){
   var key=keyFor(city),items=memory.get(key);
-  if(items)return items;
   if(!allowStore)return [];
+  if(items)return items;
   try{
     items=JSON.parse(root.localStorage.getItem(key));
     if(!Array.isArray(items))return [];
@@ -26,6 +26,7 @@ function read(city,allowStore){
 }
 function signature(rows){return JSON.stringify(rowsOf(rows).map(function(r){return [r.date,finite(r.temp)?Math.round(r.temp*100)/100:null,finite(r.rain)?Math.round(r.rain*100)/100:null];}));}
 function record(city,rows,allowStore,at){
+  if(!allowStore)return false;
   var clean=rowsOf(rows);
   if(!clean.length)return false;
   var key=keyFor(city),items=read(city,allowStore).slice(),latest=items[items.length-1];
