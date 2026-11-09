@@ -1523,7 +1523,7 @@ function nowPage() {
   const week = `<section class="section card home-week"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</section>`;
   const revisions = window.MONOForecastConfidence?.render({view:V,lang:state.lang,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot,mode:'changes'}) || '';
   return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + alertsStrip() +
-    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + (rainAlertsOn() ? '' : rainAlertsCard()) + hours + week + revisions + homeMore('trust',X('Ιστορικός έλεγχος και μοντέλα','Historical checks and models'),X('Ακρίβεια, σταθμός και συμφωνία μοντέλων','Accuracy, station and model agreement'),trustCard()) +
+    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + (rainAlertsOn() ? '' : rainAlertsCard()) + hours + week + homeMore('month',X('Τάση μήνα · 6 εβδομάδες','Monthly outlook · 6 weeks'),X('Τι αλλαγές δείχνουν τα μοντέλα στα βάθη του μήνα','Possible weather changes later this month'),'<div id="mono-month-trend" aria-live="polite"></div>') + revisions + homeMore('trust',X('Ιστορικός έλεγχος και μοντέλα','Historical checks and models'),X('Ακρίβεια, σταθμός και συμφωνία μοντέλων','Accuracy, station and model agreement'),trustCard()) +
     homeMore('rain',X('Βροχή και μετρήσεις','Rain and measurements'),X('Ποσότητες, σταθμοί και μηνιαία σύγκριση','Amounts, stations and monthly comparison'),rainDetail) +
     homeMore('charts',X('Γραφήματα και μοντέλο','Charts and model'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
     homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),summaryCard()+MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
@@ -3673,6 +3673,9 @@ function render() {
   const waiting = lazyPending(state.page);
   if (waiting.length) { Promise.all(waiting.map(loadLazyGroup)).then(() => render(), () => render()); }
   $('#content').innerHTML = waiting.length ? header(esc(T(state.page)), '', '') + loadingCard() : (pages[state.page] || nowPage)();
+  if (state.page === 'now' && !waiting.length && $('#mono-month-trend')) {
+    window.MONOMonthTrend?.mount({lat:+state.city.lat,lon:+state.city.lon,lang:state.lang,city:cityName(state.city),daily:state.view?.daily||[]});
+  }
   if(state.page==='guide'){
     const q=$('#qs-panel');let start=null;
     q?.addEventListener('touchstart',e=>{const t=e.touches[0];if(t)start={x:t.clientX,y:t.clientY};},{passive:true});
