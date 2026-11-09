@@ -11,7 +11,7 @@ function helpers(request){
   const start=app.indexOf('async function archivedJSON('),stop=app.indexOf('async function ensureTraining(',start);
   assert.ok(start>=0&&stop>start);
   const context={getJSON:request,Number,Array,Object};
-  return vm.runInNewContext(app.slice(start,stop)+'\n({archivedJSON,historicalReason,validArchivedForecast})',context);
+  return vm.runInNewContext(app.slice(start,stop)+'\n({archivedJSON,historicalReason,validArchivedForecast,splitArchivedModels})',context);
 }
 test('historical Open-Meteo endpoints use the same-origin cached proxies',()=>{
   const expected={'/proxy/mono-previous':'https://previous-runs-api.open-meteo.com/v1/forecast',
@@ -23,7 +23,8 @@ test('historical Open-Meteo endpoints use the same-origin cached proxies',()=>{
     assert.match(app,new RegExp(source.replaceAll('/','\\/')));
   }
   assert.match(app,/const noCloud = M\.LEADS/);
-  assert.match(app,/\.slice\(0,10\)/);
+  assert.match(app,/\.slice\(0,3\)/);
+  assert.match(app,/models:requested\.join\(','\)/);
   assert.match(app,/const base\s*=\s*\{\s*\.\.\.llp\(c\)/);
   assert.doesNotMatch(app,/return chain\(\[used\], id => q\(PREV/);
 });
@@ -63,4 +64,48 @@ test('historical UI explains provider errors and preserves the MONO models',()=>
   assert.match(app,/M\.fitVariable/);
   assert.match(app,/runTraining\(\{ temp:/);
   assert.match(app,/function historyPage\(\)/);
+});
+
+test('batched multi-model Previous Runs data are split into exactly observed series',()=>{
+  const {splitArchivedModels}=helpers(async()=>({}));
+  const ids=['ecmwf_ifs','ncep_gfs_seamless','dwd_icon_seamless'];
+  const time=Array.from({length:200},(_,i)=>i),hourly={time};
+  for(const [j,id] of ids.entries()){
+    hourly['temperature_2m_'+id]=time.map(i=>i*0.1+j);
+    hourly['temperature_2m_previous_day1_'+id]=time.map(i=>i*0.2+j);
+  }
+  const result=splitArchivedModels({hourly},ids,['temperature_2m','temperature_2m_previous_day1','precipitation']);
+  assert.equal(result.length,3);
+  for(let i=0;i<3;i++){
+    assert.equal(result[i].status,'fulfilled');
+    assert.equal(result[i].value.data.hourly.temperature_2m[10],1+i);
+    assert.equal(result[i].value.data.hourly.temperature_2m_previous_day1[10],2+i);
+    assert.equal(result[i].value.data.hourly.precipitation,undefined);
+  }
+  assert.equal(result[0].value.data.hourly.time.length,200);
+});
+test('missing or all-null archived models fail rather than fabricating a score',()=>{
+  const {splitArchivedModels}=helpers(async()=>({}));
+  const time=Array.from({length:150},(_,i)=>i);
+  const result=splitArchivedModels({hourly:{time,
+    temperature_2m_ecmwf_ifs:time.map(i=>i/10),
+    temperature_2m_ncep_gfs_seamless:time.map(()=>null)
+  }},['ecmwf_ifs','ncep_gfs_seamless'],['temperature_2m']);
+  assert.equal(result[0].status,'fulfilled');
+  assert.equal(result[1].status,'rejected');
+  assert.throws(()=>splitArchivedModels({hourly:{time:time.slice(0,30)}},['ecmwf_ifs'],['temperature_2m']),/Missing historical/);
+});
+test('one-model fallback accepts unsuffixed archive variables',()=>{
+  const {splitArchivedModels}=helpers(async()=>({}));
+  const time=Array.from({length:170},(_,i)=>i);
+  const r=splitArchivedModels({hourly:{time,temperature_2m:time.map(i=>i/3)}},['ecmwf_ifs'],['temperature_2m']);
+  assert.equal(r[0].status,'fulfilled');
+  assert.equal(r[0].value.data.hourly.temperature_2m[30],10);
+});
+test('a rate limit is not amplified by a second browser-side retry',async()=>{
+  const calls=[];const {archivedJSON}=helpers(async url=>{
+    calls.push(url);const e=new Error('Too many requests');e.status=429;throw e;
+  });
+  await assert.rejects(()=>archivedJSON('/proxy/mono-previous','https://previous-runs-api.open-meteo.com/v1/forecast'),/Too many requests/);
+  assert.equal(calls.length,1);
 });

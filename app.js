@@ -1148,7 +1148,10 @@ function runTraining(payload) {
 async function archivedJSON(local, direct, timeout = 32000) {
   try { return await getJSON(local,timeout); }
   catch(e) {
-    if (e.status && ![403,404,429,500,502,503,504].includes(e.status)) throw e;
+    // Retrying an explicitly rate-limited upstream on another endpoint
+    // doubles quota pressure and makes the outage worse.
+    if(e.status===429)throw e;
+    if (e.status && ![403,404,500,502,503,504].includes(e.status)) throw e;
     return getJSON(direct,timeout);
   }
 }
@@ -1163,6 +1166,24 @@ function validArchivedForecast(d) {
   if (!Array.isArray(h?.time)||h.time.length<120)return false;
   return Object.entries(h).some(([k,v])=>/^temperature_2m(?:_previous_day[0-7])?$/.test(k)&&
     Array.isArray(v)&&v.filter(Number.isFinite).length>=120);
+}
+/* Open-Meteo returns variable_modelId columns for a multi-model Previous Runs
+ * request, versus unsuffixed columns for a single model. Split by actual model
+ * identifier before fitting; never manufacture missing historical values. */
+function splitArchivedModels(payload, requested, variables) {
+  const h=payload?.hourly;
+  if(!Array.isArray(h?.time)||h.time.length<120) throw new Error('Missing historical hourly timestamps');
+  return requested.map(id=>{
+    const hourly={time:h.time};
+    for(const key of variables){
+      const suffixed=h[key+'_'+id];
+      const values=Array.isArray(suffixed)?suffixed:(requested.length===1?h[key]:null);
+      if(Array.isArray(values)&&values.length===h.time.length)hourly[key]=values;
+    }
+    return validArchivedForecast({hourly})
+      ? {status:'fulfilled',value:{id,data:{hourly}}}
+      : {status:'rejected',reason:new Error('Archived model lacks 120 temperature samples: '+id)};
+  });
 }
 async function ensureTraining(c, gen, force = false) {
   if (state.trainStatus === 'loading') return;
@@ -1183,31 +1204,37 @@ async function ensureTraining(c, gen, force = false) {
     const base = { ...llp(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
     const truthArgs={...base,models: 'era5', hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover'};
     const truthP=archivedJSON(q('/proxy/mono-archive',truthArgs),q(ARCH,truthArgs),40000).then(data=>({data}),error=>({error}));
-    // Bound historical requests independently of the full live model catalogue.
-    const priority=['ecmwf_ifs','ecmwf_ifs025','ncep_gfs_seamless','dwd_icon_seamless','meteofrance_seamless','ecmwf_aifs025_single'];
+    // The previous implementation made up to twenty historical requests per
+    // visitor/city; the free provider throttled them (HTTP 429). One multi-model
+    // request contains the exact archived forecasts used by MONO's fit methods.
+    // These three globally archived models have verified Previous Runs coverage.
+    const priority=['ecmwf_ifs','ncep_gfs_seamless','dwd_icon_seamless','ecmwf_ifs025','meteofrance_seamless'];
     const ms=MODELS.filter(m=>active.includes(m.id))
-      .sort((a,b)=>(priority.indexOf(a.id)<0?99:priority.indexOf(a.id))-(priority.indexOf(b.id)<0?99:priority.indexOf(b.id))).slice(0,10);
-    state.trainProgress = {complete:0,total:ms.length,phase:'download'}; notifyHistoryTrainingProgress();
-    const runs = await Promise.allSettled(ms.map(m => trainingSlot(() => {
-      if (gen !== state.gen) throw new Error('Stale training request');
-      const used = state.models[m.id]?.used || m.id;
-      // First request only essential variables; retry with temperature if unsupported.
-      // Shared CDN cache avoids repeated 60–365 day downloads on every visit.
-      const attempt=async hourly=>{
-        const args={...base,models:used,hourly};
-        const data=await archivedJSON(q('/proxy/mono-previous',args),q(PREV,args),32000);
-        if(!validArchivedForecast(data))throw new Error('No valid archived temperature series');
-        return {id:used,data};
-      };
-      return attempt(noCloud).catch(e=>{
-        if(e.status===429)throw e;
-        return attempt(tOnly);
-      });
-    }).finally(() => {
-      if (gen !== state.gen) return;
-      if (state.trainProgress) state.trainProgress.complete++;
-      notifyHistoryTrainingProgress();
-    })));
+      .sort((a,b)=>(priority.indexOf(a.id)<0?99:priority.indexOf(a.id))-(priority.indexOf(b.id)<0?99:priority.indexOf(b.id))).slice(0,3);
+    const requested=ms.map(m=>state.models[m.id]?.used||m.id);
+    if(!requested.length)throw new Error('No ready live model to compare');
+    state.trainProgress={complete:0,total:1,phase:'download'}; notifyHistoryTrainingProgress();
+    const batchArgs={...base,models:requested.join(','),hourly:noCloud};
+    let runs;
+    try{
+      const batch=await trainingSlot(()=>archivedJSON(
+        q('/proxy/mono-previous',batchArgs),q(PREV,batchArgs),32000));
+      runs=splitArchivedModels(batch,requested,noCloud.split(','));
+      if(runs.every(x=>x.status==='rejected'))throw runs[0].reason;
+    }catch(batchError){
+      if(batchError?.status===429)throw batchError; // Back off on 429; no retry storm.
+      // Unsupported combinations may reject a batch: retry one reliable model.
+      const single={...base,models:requested[0],hourly:tOnly};
+      const data=await trainingSlot(()=>archivedJSON(
+        q('/proxy/mono-previous',single),q(PREV,single),32000));
+      const recovered=splitArchivedModels(data,[requested[0]],tOnly.split(','));
+      runs=ms.map((m,i)=>i===0?recovered[0]:{
+        status:'rejected',reason:new Error('Batch unavailable: '+m.id)});
+    }finally{
+      if(gen===state.gen&&state.trainProgress){
+        state.trainProgress.complete=1;notifyHistoryTrainingProgress();
+      }
+    }
     const truthResult = await truthP;
     if (gen !== state.gen) return;
     if(truthResult.error)throw truthResult.error;
