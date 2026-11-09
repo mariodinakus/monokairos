@@ -33,7 +33,7 @@ test('only matching future calendar weeks are compared and no unavailable values
  assert.equal(result[0].significant,true);
  assert.equal(result[1].significant,false);
  assert.equal(api.comparisons(oldRows,[{date:'2099-02-03',temp:3,rain:10}],Date.parse('2099-01-01T00:00:00Z')).length,0);
- assert.equal(api.comparisons(oldRows,newRows,Date.parse('2099-02-06T00:00:00Z')).length,1);
+ assert.equal(api.comparisons(oldRows,newRows,Date.parse('2099-01-27T00:00:00Z')).length,1);
  assert.equal(api.comparisons([{date:'2099-02-02',temp:1,rain:null}],[{date:'2099-02-02',temp:1.3,rain:5}],Date.parse('2099-01-01T00:00:00Z'))[0].deltaRain,null);
 });
 test('history UI labels actual saved retrievals instead of pretending to verify model runs',()=>{
