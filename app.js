@@ -3129,6 +3129,7 @@ function modelsPage() {
 }
 
 /* ------------------------------------------------------------------ page: MONO lab */
+let equationMode = 'simple';
 function labPage() {
   const V = state.view, tr = state.train;
   const head = header(T('labTitle'), T('labSub'), btn('retrain', '↻ ' + T('retrain')));
@@ -3169,7 +3170,8 @@ function labPage() {
   const steps = `<section class="section card"><div class="panelhead"><b>${T('steps')}</b></div><ol class="steps">${T('stepsList').map(([a, b]) => `<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol></section>`;
   const insights = window.MONOModelInsights?.render({train:tr,view:V,stationLearning:state.stationRain,lead:k,lang:state.lang,algorithmName:AN}) || '';
    const history = window.MONOHistoryBacktest?.render({ train:tr, lead:k, lang:state.lang, days:state.historyDays, variable:state.historyVar, order:state.historyOrder, status:state.trainStatus, progress:state.trainProgress, modelsLoading:state.modelsLoading }) || '';
-  return head + chips + history + insights + body + liveCard() + steps;
+  const equations = window.MONOEquations?.render({train:tr,lead:k,lang:state.lang,mode:equationMode,city:cityName(state.city),algorithmName:AN,modelName:id=>MODELS.find(m=>m.id===id)?.name || id}) || '';
+  return head + chips + equations + history + insights + body + liveCard() + steps;
 }
 function stationCard() {
   const V = state.view, S = V.S;
@@ -3899,6 +3901,7 @@ function onClick(e) {
   else if (a === 'hours') { state.hours = +b.dataset.n; render(); }
   else if (a === 'mvar') { state.mvar = b.dataset.v; render(); }
   else if (a === 'lead') { state.lead = +b.dataset.n; render(); }
+  else if (a === 'equationMode') { if (['simple','equations'].includes(b.dataset.v)) { equationMode = b.dataset.v; render(); } }
   else if (a === 'region') { state.region = b.dataset.r; render(); loadCityLive(); }
   else if (a === 'station') { state.stationPick = b.dataset.id; recompute(); render(); }
   else if (a === 'stationNetworkFilter') { state.stationNetFilter=b.dataset.v;state.stationNetLimit=35;render(); }
