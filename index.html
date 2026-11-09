@@ -43,6 +43,36 @@
 <link rel="stylesheet" href="history-backtest.css?v=fb10018ec9">
 <link rel="stylesheet" href="forecast-confidence.css?v=6a58e26c2f">
 <link rel="stylesheet" href="mobile-polish.css?v=9f0705a968">
+<style id="mono-tidy-v1">
+/* Small, reversible readability pass. No routing, forecast or radar logic changes. */
+@media (min-width:931px){
+  .sidebar .brand{padding-bottom:36px}
+  .sidebar .nav{gap:8px;margin-bottom:24px}
+  .sidebar .nav-group{border-top:1px solid var(--line);padding-top:8px}
+  .sidebar .nav-group:first-child{border-top:0;padding-top:0}
+  .sidebar .nav-group-toggle{min-height:38px;border-radius:11px}
+  .sidebar .nav-group-toggle:hover{background:var(--soft)}
+  .sidebar .navbtn{min-height:38px;padding:9px 11px}
+  .sidebar .navbtn.active{font-weight:760}
+}
+#content .subtitle{max-width:76ch;font-size:13px;line-height:1.65}
+#content .guide-panel p,#content .radar-info p{font-size:13.5px;line-height:1.65}
+#content .guide-fact{line-height:1.6}
+#content .radar-controls{gap:10px}
+#content .radar-controls button{min-height:40px}
+#content .radar-timebar output{font-variant-numeric:tabular-nums}
+@media (max-width:640px){
+  #content .subtitle{font-size:13px;line-height:1.6}
+  #content .radar-info .card{padding:16px}
+  #content .radar-controls button{min-height:42px;padding-inline:11px}
+  #content .radar-timebar{min-width:0}
+  #content .radar-timebar output{min-width:110px}
+  #content .guide-panel p,#content .radar-info p{font-size:13px}
+}
+@media (prefers-reduced-motion:reduce){
+  .sidebar .navbtn,.sidebar .nav-group-toggle{transition:none}
+}
+</style>
 </head>
 <body>
 <div class="shell">
