@@ -983,6 +983,8 @@ async function loadAll(force = false) {
   // Cache the essential successful forecast as soon as it arrives, only if the
   // visitor explicitly opted into local caching. Optional models can take minutes.
   saveSnapshot();
+  // Shared historical verification no longer depends on finishing all live model feeds.
+  ensureTraining(c, gen);
   const jobs = [], modelJobs = [], ensembleJobs = [];
   let modelToken = null;
   // Prevent live forecast refreshes from invalidating still-running model data.
@@ -1042,7 +1044,6 @@ async function loadAll(force = false) {
     // A partial failure will be retried with the next ten-minute live refresh.
     state.modelsAt = incomplete ? Date.now() - REFRESH_MODELS + REFRESH_LIVE : Date.now();
     recompute(); render(); saveSnapshot();
-    ensureTraining(c, state.gen);
   });
   await Promise.allSettled([...jobs, ...modelJobs]);
   if (gen !== state.gen) return;
@@ -1173,7 +1174,7 @@ async function ensureTraining(c, gen, force = false) {
       days,zone:state.main?.timezone||'UTC'
     };
     const rec=await getJSON(q('/api/history',params),55000);
-    if(gen!==state.gen){state.trainStatus='idle';state.trainProgress=null;return;}
+    if(ckey(c)!==ckey(state.city)||days!==state.historyDays){state.trainStatus='idle';state.trainProgress=null;return;}
     if(rec?.v!==VERSION||rec.days!==days||!rec.temp?.leads||
        !Object.keys(rec.temp.leads).length||!Number.isFinite(rec.at))
       throw new Error('Invalid shared historical verification response');
@@ -1183,7 +1184,7 @@ async function ensureTraining(c, gen, force = false) {
     if(!write(K.train,Object.fromEntries(entries)))
       write(K.train,{[ckey(c)]:rec});
   } catch(e){
-    if(gen!==state.gen){state.trainStatus='idle';state.trainProgress=null;return;}
+    if(ckey(c)!==ckey(state.city)||days!==state.historyDays){state.trainStatus='idle';state.trainProgress=null;return;}
     state.trainStatus=state.train?'done':'error';
     state.trainError=historyErrorCode(e);state.trainProgress=null;
     console.warn('[MONO] Shared historical backtest unavailable:',historyErrorCode(e));
@@ -3076,8 +3077,8 @@ function historyPage() {
   }) || '<p class="notice">'+(el?'Δεν διατίθεται ο πίνακας ιστορικών.':'Historical dashboard unavailable.')+'</p>';
   return head + '<div class="mh-dashboard">'+intro+timeline+statusBlock+panel+
     '<p class="mh-footnote">'+(el?
-      'Μέθοδος: χρονολογικός διαχωρισμός 60/20/20. Η ERA5 είναι επανάλυση — όχι μέτρηση σταθμού. Τα δεδομένα του τελικού τεστ δεν επιλέγουν τον αλγόριθμο.':
-      'Method: chronological 60/20/20 split. ERA5 is reanalysis, not a station measurement. Holdout results are not used to select the algorithm.')+
+      'Μέθοδος: χρονολογικός διαχωρισμός 60/20/20. Η ERA5 είναι επανάλυση — όχι μέτρηση σταθμού. Τα δεδομένα του τελικού τεστ δεν επιλέγουν τον αλγόριθμο. Τα αποτελέσματα προέρχονται από έως 3 αρχειοθετημένα μοντέλα (ECMWF IFS, GFS, ICON), όχι ολόκληρο τον κατάλογο ζωντανών μοντέλων.':
+      'Method: chronological 60/20/20 split. ERA5 is reanalysis, not a station measurement. Holdout results are not used to select the algorithm. Scores use up to 3 archived global models (ECMWF IFS, GFS, ICON), not every live model.')+
     '</p></div>';
 }
 
