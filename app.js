@@ -1852,22 +1852,24 @@ function rainNowCard(compact) {
     ${strip}${compact ? `<div class="rn-more">${btn('goto', '↗ ' + T('rOpen'), 'data-page="rain"')}</div>` : ''}</section>`;
 }
 function rainPage() {
-  const V = state.view;
+  const V = state.view, el = state.lang === 'el', X = (a,b) => el ? a : b;
   const head = header(T('rainTitle'), T('rainSub'), btn('reload', '↻ ' + T('refresh')));
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
-  const eps = rainEpisodes();
-  const rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  return head + rainAlertsCard() + (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city)}) || '') + (window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(state.city)}) || '') + rainMeaningCard() + communityRainCard() + communityStationsCard() + rainNowCard(false)
-    + `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}
-       <div class="rn-legend">${T('rIntensity').slice(1).map((w, k) => `<span><i class="lv${k + 1}"></i>${esc(w)}</span>`).join('')}</div></section>
-    <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rEpisodes')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>
-      ${eps.length ? `<div class="rn-eps">${eps.map(episodeCard).join('')}</div>` : `<div class="card placeholder"><b>☀ ${T('rNoEpisodes')}</b></div>`}</section>
-    <section class="section card"><div class="panelhead"><div><b>${T('rChart')}</b><div class="section-sub">${T('rChartSub')}</div></div></div>${rain72Chart(rows72)}</section>
-    <section class="section dual"><div class="card"><div class="panelhead"><div><b>${T('rDaily')}</b><div class="section-sub">${T('rDailySub')}</div></div></div>${rainDaily()}</div>
-      <div class="card"><div class="panelhead"><b>${T('rWhatMm')}</b></div><p class="rn-text">${T('rMmExplain')}</p>
-        ${T('rIntensity').slice(1).map((w, k) => `<div class="kv rn-kv"><span><i class="rn-dot lv${k + 1}"></i> ${esc(w)} — ${esc(T('rPlain')[k + 1])}</span><b>${k === 5 ? '≥ 30' : `${num(RAIN_BINS[k], RAIN_BINS[k] < 1 ? 1 : 0)}–${num(RAIN_BINS[k + 1], RAIN_BINS[k + 1] < 1 ? 1 : 0)}`} ${T('rMmH')}</b></div>`).join('')}</div></section>
-    <section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rHourly')}</h2><div class="section-sub">${T('rHourlySub')}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${rainHourly(rows48)}</section>
-    <p class="notice">${T('rUpdated')} ${hhmm(state.fetchedAt || V.at)}${state.rain15 ? ` · 15′ ${hhmm(state.rain15.at)}` : ''} · MONO (${V.active.length} ${T('models')}, ${num(V.members)} ${T('members')})</p>`;
+  const eps = rainEpisodes(), rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
+  const firstEpisode = `<section class="section"><div class="sectionhead"><div><h2 class="h2">${X('Το επόμενο επεισόδιο βροχής','Next rain episode')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>${eps.length ? `<div class="rn-eps">${episodeCard(eps[0])}</div>` : `<div class="card placeholder"><b>☀ ${T('rNoEpisodes')}</b></div>`}</section>`;
+  const shortRange = `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}<div class="rn-legend">${T('rIntensity').slice(1).map((w,k)=>`<span><i class="lv${k+1}"></i>${esc(w)}</span>`).join('')}</div></section>`;
+  const days = `<section class="section card"><div class="panelhead"><div><b>${T('rDaily')}</b><div class="section-sub">${T('rDailySub')}</div></div></div>${rainDaily()}</section>`;
+  const future = `${eps.length > 1 ? `<section class="section"><div class="sectionhead"><h2 class="h2">${X('Υπόλοιπα επεισόδια','Further rain episodes')}</h2></div><div class="rn-eps">${eps.slice(1).map(episodeCard).join('')}</div></section>` : ''}<section class="section card"><div class="panelhead"><div><b>${T('rChart')}</b><div class="section-sub">${T('rChartSub')}</div></div></div>${rain72Chart(rows72)}</section><section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rHourly')}</h2><div class="section-sub">${T('rHourlySub')}</div></div>${btn('goto', '↗ '+T('hourly'), 'data-page="hourly"')}</div>${rainHourly(rows48)}</section>`;
+  const measurements = (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city),includeLive:false}) || '') + communityRainCard();
+  const monthly = window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(state.city)}) || '';
+  return head + rainNowCard(false) + firstEpisode + shortRange + days +
+    `<div class="rain-quick-actions">${btn('goto', '◎ '+X('Άνοιγμα ραντάρ','Open radar'), 'data-page="radar"')}</div>` +
+    homeMore('rain-future',X('Αναλυτική πρόγνωση','Detailed forecast'),X('72 ώρες, ωριαία βροχή και επόμενα επεισόδια','72 hours, hourly rain and further episodes'),future) +
+    homeMore('rain-observations',X('Μετρήσεις και έλεγχος βροχής','Rain measurements and evaluation'),X('Σταθμοί, πρόσφατη βροχή και ιστορικός έλεγχος','Stations, recent rain and historical evaluation'),measurements) +
+    homeMore('rain-monthly',X('Βροχή ανά μήνα','Monthly rainfall'),X('Μηνιαίες ποσότητες και ιστορική σύγκριση','Monthly amounts and historical comparison'),monthly) +
+    homeMore('rain-explain',X('Τι σημαίνουν τα mm;','What do mm mean?'),X('Ποσότητα, ένταση και παραδείγματα','Amount, intensity and examples'),rainMeaningCard()) +
+    homeMore('rain-alerts',X('Ειδοποιήσεις βροχής','Rain notifications'),X('Ρυθμίσεις ειδοποίησης για αυτή τη συσκευή','Notification settings for this device'),rainAlertsCard()) +
+    `<p class="notice">${T('rUpdated')} ${hhmm(state.fetchedAt || V.at)}${state.rain15 ? ` · 15′ ${hhmm(state.rain15.at)}` : ''} · MONO (${V.active.length} ${T('models')}, ${num(V.members)} ${T('members')})</p>`;
 }
 
 /* ------------------------------------------------------------------ page: weather events */
@@ -3564,8 +3566,8 @@ async function loadCityLive() {
 const NAV_GROUPS = [
   {id:'weather',el:'ΚΑΙΡΟΣ',en:'WEATHER',symbol:'◐',pages:['now','guide','hourly','rain','radar','maps']},
   {id:'earth',el:'ΓΗ & ΚΛΙΜΑ',en:'EARTH & CLIMATE',symbol:'◈',pages:['globe','earth','phen','climate','environment']},
-  {id:'data',el:'ΔΕΔΟΜΕΝΑ & ΕΡΓΑΛΕΙΑ',en:'DATA & TOOLS',symbol:'▤',pages:['history','models','lab','stations','news','cities']},
-  {id:'space',el:'ΔΙΑΣΤΗΜΑ',en:'SPACE',symbol:'☄',pages:['space']}
+  {id:'data',el:'MONO LAB',en:'MONO LAB',symbol:'▤',pages:['lab','history','models','stations']},
+  {id:'space',el:'ΠΕΡΙΣΣΟΤΕΡΑ',en:'MORE',symbol:'☄',pages:['space','news','cities']}
 ];
 const NAV_OPEN_KEY='mono-nav-groups-v1';
 let navOpen=read(NAV_OPEN_KEY,{weather:true,earth:true,data:false,space:false});
@@ -3575,8 +3577,8 @@ if(activeNavGroup)navOpen[activeNavGroup.id]=true;
 const NAV = [['now', '◐'], ['guide', '☷'], ['maps','▱'], ['rain', '☂'], ['hourly', '◷'], ['phen', '⚡'], ['environment', '♧'], ['space', '☄'], ['radar', '◎'], ['globe', '◍'], ['earth', '◈'], ['models', '≋'], ['history', '◎'], ['lab', '✳'], ['stations', '⌖'], ['news', '¶'], ['climate', '▦'], ['cities', '⊞']];
 /* Mobile navigation shows sections, never a crowded row of individual pages. */
 const MOBILE_NAV_LABELS={
-  el:{weather:'Καιρός',earth:'Γη',data:'Εργαλεία',space:'Διάστημα',choose:'Επίλεξε ενότητα',current:'Τώρα εδώ',close:'Κλείσιμο',open:'Άνοιγμα'},
-  en:{weather:'Weather',earth:'Earth',data:'Tools',space:'Space',choose:'Choose a section',current:'Current page',close:'Close',open:'Open'}
+  el:{weather:'Καιρός',earth:'Γη',data:'MONO Lab',space:'Περισσότερα',choose:'Επίλεξε ενότητα',current:'Τώρα εδώ',close:'Κλείσιμο',open:'Άνοιγμα'},
+  en:{weather:'Weather',earth:'Earth',data:'MONO Lab',space:'More',choose:'Choose a section',current:'Current page',close:'Close',open:'Open'}
 };
 let mobileCategoryOpen=null;
 function mobileNavRender(){

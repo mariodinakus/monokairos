@@ -66,3 +66,10 @@ test('SYNOP rain gauge totals survive merging into the matching METAR airport',(
  const o=Rain.observed([st],null,now);
  assert.equal(o.mm,3.2);assert.equal(o.name,'Thessaloniki Airport');assert.equal(o.covered,6);
 });
+
+test('rain detail can omit the duplicate current conditions while retaining station information', () => {
+ const view={rows:[{t:Date.now()+3600000,amount:0,cloud:10}],zone:'Europe/Athens'};
+ const html=Rain.render({view,stations:[],includeLive:false});
+ assert.doesNotMatch(html,/class="ri-live /);
+ assert.match(html,/Πραγματικές μετρήσεις από κοντινούς σταθμούς/);
+});
