@@ -1,0 +1,28 @@
+/* Regional monthly outlook: light footprint inside an existing home accordion. */
+#mono-month-trend{color:var(--ink)}
+#mono-month-trend .mt-kicker{display:block;font-size:10px;letter-spacing:.1em;font-weight:800;color:var(--muted)}
+#mono-month-trend .mt-near{padding:13px 16px;border:1px solid var(--line);border-radius:13px;background:var(--soft);margin-bottom:14px}
+#mono-month-trend .mt-near p{margin:6px 0 0;font-size:12.5px;line-height:1.6;color:var(--sub)}
+#mono-month-trend .mt-near strong{color:var(--ink);font-variant-numeric:tabular-nums}
+#mono-month-trend .mt-intro{padding:15px 17px 17px;border-radius:15px;border:1px solid var(--line);background:var(--panel);margin-bottom:12px}
+#mono-month-trend .mt-intro h3{font-size:clamp(18px,2.4vw,23px);line-height:1.25;letter-spacing:-.035em;margin:9px 0 7px;font-weight:780}
+#mono-month-trend .mt-intro p{font-size:13px;line-height:1.6;color:var(--sub);margin:0}
+#mono-month-trend .mt-signals{margin:12px 0 0;padding-left:20px;font-size:12.5px;line-height:1.65}
+#mono-month-trend .mt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#mono-month-trend .mt-week{padding:16px;border:1px solid var(--line);border-radius:15px;background:var(--panel);min-width:0}
+#mono-month-trend .mt-week-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:14px}
+#mono-month-trend .mt-week-head strong,#mono-month-trend .mt-week-number{display:block}
+#mono-month-trend .mt-week-number{font-size:10px;color:var(--muted);font-weight:760;margin-bottom:4px}
+#mono-month-trend .mt-week-head strong{font-size:14px;font-variant-numeric:tabular-nums}
+#mono-month-trend .mt-distance{font-size:9px;line-height:1.3;letter-spacing:.04em;color:var(--sub);border-radius:999px;background:var(--soft);padding:5px 7px;white-space:nowrap}
+#mono-month-trend .mt-week-pair{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+#mono-month-trend .mt-week-pair>div{min-width:0}
+#mono-month-trend .mt-week-pair small,#mono-month-trend .mt-week-pair b,#mono-month-trend .mt-week-pair span{display:block}
+#mono-month-trend .mt-week-pair small{font-size:10px;color:var(--muted);margin-bottom:5px}
+#mono-month-trend .mt-week-pair b{font-size:12px;line-height:1.4}
+#mono-month-trend .mt-week-pair span{font-size:17px;font-weight:750;letter-spacing:-.025em;margin-top:4px;font-variant-numeric:tabular-nums}
+#mono-month-trend .mt-disclaimer{font-size:11px;line-height:1.65;color:var(--sub);margin:13px 0 0}
+#mono-month-trend .mt-disclaimer a{text-decoration:underline;text-underline-offset:2px}
+#mono-month-trend .mt-error,#mono-month-trend .mt-loading{font-size:13px;line-height:1.6;color:var(--sub);padding:16px;border:1px solid var(--line);border-radius:12px}
+@media(max-width:700px){#mono-month-trend .mt-grid{grid-template-columns:1fr}}
+@media(max-width:390px){#mono-month-trend .mt-week-pair{grid-template-columns:1fr;gap:10px}#mono-month-trend .mt-distance{white-space:normal}}
