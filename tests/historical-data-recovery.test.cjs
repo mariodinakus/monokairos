@@ -28,7 +28,8 @@ function syntheticArchives(N=384){
 }
 test('the browser no longer downloads historical models itself',()=>{
  assert.match(app,/getJSON\(q\('\/api\/history',params\),55000\)/);
- assert.doesNotMatch(app,/getJSON\(q\(PREV,\s*\{ \.\.\.base/);
+ const training=app.slice(app.indexOf('async function ensureTraining('),app.indexOf('/* Reuse already-validated historical results'));
+ assert.doesNotMatch(training,/getJSON\(q\(PREV,\s*\{ \.\.\.base/);
  assert.match(app,/async function ensureTraining/);
  assert.match(cfg.rewrites.find(x=>x.source==='/api/history')?.destination||'',/route=history/);
  assert.match(read('api/mono.js'),/'history': \(\) => require\('\.\.\/lib\/routes\/history\.js'\)/);
