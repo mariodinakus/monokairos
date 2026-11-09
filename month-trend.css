@@ -26,3 +26,16 @@
 #mono-month-trend .mt-error,#mono-month-trend .mt-loading{font-size:13px;line-height:1.6;color:var(--sub);padding:16px;border:1px solid var(--line);border-radius:12px}
 @media(max-width:700px){#mono-month-trend .mt-grid{grid-template-columns:1fr}}
 @media(max-width:390px){#mono-month-trend .mt-week-pair{grid-template-columns:1fr;gap:10px}#mono-month-trend .mt-distance{white-space:normal}}
+
+
+/* EC46 run-to-run changes. Visual-only, within the existing monthly accordion. */
+#mono-month-trend .mt-changes-top{padding:15px 17px;border:1px solid var(--line);border-radius:15px;background:var(--soft);margin-bottom:13px}
+#mono-month-trend .mt-changes-top h3{font-size:clamp(16px,2vw,19px);margin:9px 0 6px;letter-spacing:-.025em}
+#mono-month-trend .mt-changes-note{margin:0;font-size:12.5px;line-height:1.65;color:var(--sub)}
+#mono-month-trend .mt-changes-time{display:block;margin-top:11px;color:var(--sub);font-size:10.5px;line-height:1.5}
+#mono-month-trend .mt-change-list{display:grid;gap:8px;margin-top:12px}
+#mono-month-trend .mt-change-item{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+#mono-month-trend .mt-change-item b{font-size:12px;line-height:1.4;font-variant-numeric:tabular-nums}
+#mono-month-trend .mt-change-item span{font-size:11.5px;line-height:1.5;color:var(--sub);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#mono-month-trend .mt-change-item .mt-change-description{font-weight:800;color:var(--ink)}
+#mono-month-trend .mt-changes-help{font-size:10.5px;color:var(--sub);line-height:1.6;margin:9px 0 0}

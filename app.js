@@ -3674,7 +3674,7 @@ function render() {
   if (waiting.length) { Promise.all(waiting.map(loadLazyGroup)).then(() => render(), () => render()); }
   $('#content').innerHTML = waiting.length ? header(esc(T(state.page)), '', '') + loadingCard() : (pages[state.page] || nowPage)();
   if (state.page === 'now' && !waiting.length && $('#mono-month-trend')) {
-    window.MONOMonthTrend?.mount({lat:+state.city.lat,lon:+state.city.lon,lang:state.lang,city:cityName(state.city),daily:state.view?.daily||[]});
+    window.MONOMonthTrend?.mount({lat:+state.city.lat,lon:+state.city.lon,lang:state.lang,city:cityName(state.city),daily:state.view?.daily||[],historyEnabled:cacheAllowed()});
   }
   if(state.page==='guide'){
     const q=$('#qs-panel');let start=null;
