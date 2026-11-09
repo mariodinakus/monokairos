@@ -15,6 +15,10 @@
       "destination": "/api/mono?route=earth-signals"
     },
     {
+      "source": "/api/history",
+      "destination": "/api/mono?route=history"
+    },
+    {
       "source": "/api/netatmo",
       "destination": "/api/mono?route=netatmo"
     },
