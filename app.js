@@ -1181,7 +1181,7 @@ async function ensureTraining(c, gen, force = false) {
     const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
     const noCloud = M.LEADS.flatMap(k => vars(k).slice(0,3)).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
     const base = { ...llp(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
-    const truthArgs={...base,models:'era5',hourly:'temperature_2m,precipitation,wind_speed_10m,cloud_cover'};
+    const truthArgs={...base,models: 'era5', hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover'};
     const truthP=archivedJSON(q('/proxy/mono-archive',truthArgs),q(ARCH,truthArgs),40000).then(data=>({data}),error=>({error}));
     // Bound historical requests independently of the full live model catalogue.
     const priority=['ecmwf_ifs','ecmwf_ifs025','ncep_gfs_seamless','dwd_icon_seamless','meteofrance_seamless','ecmwf_aifs025_single'];
