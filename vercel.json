@@ -63,6 +63,14 @@
       "destination": "https://ensemble-api.open-meteo.com/v1/ensemble"
     },
     {
+      "source": "/proxy/mono-previous",
+      "destination": "https://previous-runs-api.open-meteo.com/v1/forecast"
+    },
+    {
+      "source": "/proxy/mono-archive",
+      "destination": "https://archive-api.open-meteo.com/v1/archive"
+    },
+    {
       "source": "/proxy/awc/:path*",
       "destination": "https://aviationweather.gov/:path*"
     },
@@ -113,6 +121,24 @@
         {
           "key": "Cache-Control",
           "value": "public, s-maxage=900, stale-while-revalidate=1800"
+        }
+      ]
+    },
+    {
+      "source": "/proxy/mono-previous",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=14400, stale-while-revalidate=28800"
+        }
+      ]
+    },
+    {
+      "source": "/proxy/mono-archive",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=21600, stale-while-revalidate=43200"
         }
       ]
     },
