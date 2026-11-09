@@ -1709,14 +1709,16 @@ function rainEpisodes(hours = 168) {
     }
     if (start < now && span[0].t > now) start = Math.max(start, now - 3600e3);
     const peak = span.reduce((a, r) => (condRate(r) > condRate(a) ? r : a), span[0]);
-    const mm = span.reduce((a, r) => a + (fin(r.amount) ? r.amount : 0), 0);
+    const amountsAvailable = span.every(r => fin(r.amount));
+    const mm = amountsAvailable ? span.reduce((a, r) => a + r.amount, 0) : null;
     const mt = memberTotals(span.map(r => r.i));
     return { start, end, refined, ongoing: start <= now, rows: span, wetHours: wet.length, pmax: Math.max(...span.map(r => r.pop ?? 0)), mm, mt, peak,
-      peakRate: condRate(peak), storm: Math.max(0, ...span.map(r => r.pStorm ?? 0)), snow: span.some(r => rIsSnow(r) && (r.amount ?? 0) >= 0.1) };
+      peakRate: amountsAvailable ? condRate(peak) : null, storm: Math.max(0, ...span.map(r => r.pStorm ?? 0)), snow: span.some(r => rIsSnow(r) && (r.amount ?? 0) >= 0.1) };
   }).filter(e => e.end > now);
 }
 function totalWord(mm) { return T('rTotalWords').find(([lim]) => mm < lim)[1]; }
 function episodeText(e) {
+  if (!fin(e.mm) || !fin(e.peakRate)) return state.lang === 'el' ? `Πιθανότητα βροχής έως ${pct(e.pmax)}. Η ποσότητα και η ένταση δεν είναι διαθέσιμες για όλο το διάστημα.` : `Rain chance up to ${pct(e.pmax)}. Amount and intensity are not available for the whole period.`;
   const levels = e.rows.map(r => rLevel(condRate(r))), steady = Math.max(...levels) - Math.min(...levels.filter(Boolean)) <= 1;
   const snow = rIsSnow(e.peak);
   const shape = steady ? T('rShapeSteady')(rWord(e.peakRate, snow), mm1(e.peakRate)) : T('rShapePeak')(hhmm(e.peak.t - 1800e3), rWord(e.peakRate, snow), mm1(e.peakRate));
@@ -1805,7 +1807,7 @@ function episodeCard(e) {
       <span class="rn-pill ${probCls(e.pmax)}">${pct(e.pmax)}</span></div>
     <div class="rn-epbars">${bars}</div>
     <div class="rn-stats"><div><span class="label">${T('rTotal')}</span><b>${mm1(e.mm)} <small>mm</small></b>${e.mt && e.mt.q90 - e.mt.q10 >= 0.5 ? `<small>${T('rRange')} ${mm1(e.mt.q10)}–${mm1(e.mt.q90)}</small>` : ''}</div>
-      <div><span class="label">${T('rPeak')}</span><b>${mm1(e.peakRate)} <small>${T('rMmH')}</small></b><small>${hhmm(e.peak.t - 3600e3)}–${hhmm(e.peak.t)}</small></div>
+      <div><span class="label">${T('rPeak')}</span><b>${mm1(e.peakRate)} <small>${T('rMmH')}</small></b><small>${fin(e.peakRate) ? `${hhmm(e.peak.t - 3600e3)}–${hhmm(e.peak.t)}` : (state.lang === 'el' ? 'Μη διαθέσιμο' : 'Unavailable')}</small></div>
       <div><span class="label">${T('rProb')}</span><b>${pct(e.pmax)}</b><small>${esc(probWord(e.pmax))}</small></div>
       ${e.storm >= 0.15 ? `<div><span class="label">${T('rStorm')}</span><b>${pct(e.storm)}</b><small>⚡</small></div>` : ''}</div>
     <p class="rn-text">${esc(episodeText(e))}</p></article>`;
@@ -1818,13 +1820,13 @@ function rainHourly(rows) {
   for (const r of rows) {
     const d = dayKey(r.t - 3600e3, V.zone);
     if (d !== last) { flush(); out.push(`<div class="daydivider">${esc(dt(r.t - 3600e3, { weekday: 'long', day: 'numeric', month: 'long' }))}</div>`); last = d; }
-    if ((r.pop ?? 0) < 0.2 && (r.amount ?? 0) < 0.05) { dry.push(r); continue; }
+    if (fin(r.pop) && fin(r.amount) && r.pop < 0.2 && r.amount < 0.05) { dry.push(r); continue; }
     flush();
     const cr = condRate(r), lv = rLevel(cr), snow = rIsSnow(r);
     out.push(`<div class="rn-row"><strong>${hhmm(r.t - 3600e3)}–${hhmm(r.t)}</strong>
       <div class="rn-mmcell"><div class="rn-mmbar"><span class="lv${Math.max(1, lv)}" style="width:${Math.round(100 * Math.min(1, (r.amount ?? 0) / mxA))}%"></span>${fin(r.mmHi) && r.mmHi > (r.amount ?? 0) ? `<em style="width:${Math.round(100 * Math.min(1, r.mmHi / mxA))}%"></em>` : ''}</div><b>${mm1(r.amount)} <small>mm</small></b></div>
       <span class="rn-pill ${probCls(r.pop ?? 0)}">${pct(r.pop)}</span>
-      <span class="rn-word">${icon(r.code, r.isDay)}<span><b>${esc(rWord(cr, snow))}${(r.pStorm ?? 0) >= 0.3 ? ' ⚡' : ''}</b><small>${esc(lv ? T('rPlain')[lv] : '')}</small></span></span></div>`);
+      <span class="rn-word">${icon(r.code, r.isDay)}<span><b>${fin(r.amount) ? esc(rWord(cr, snow)) : (state.lang === 'el' ? 'Ποσότητα μη διαθέσιμη' : 'Amount unavailable')}${(r.pStorm ?? 0) >= 0.3 ? ' ⚡' : ''}</b><small>${fin(r.amount) ? esc(lv ? T('rPlain')[lv] : '') : ''}</small></span></span></div>`);
   }
   flush();
   return out.join('');
@@ -1834,10 +1836,10 @@ function rainDaily() {
   return V.daily.map((d, i) => {
     const rows = V.rows.filter(r => r.t > now && dayKey(r.t - 3600e3, V.zone) === d.key), mt = memberTotals(rows.map(r => r.i));
     let best = null; for (let k = 0; k + 2 < rows.length; k++) { const s = rows.slice(k, k + 3).reduce((a, r) => a + (r.amount ?? 0), 0); if (!best || s > best.s) best = { s, a: rows[k].t - 3600e3, b: rows[k + 2].t }; }
-    const mm = rows.reduce((a, r) => a + (r.amount ?? 0), 0);
+    const mm = rows.length && rows.every(r => fin(r.amount)) ? rows.reduce((a, r) => a + r.amount, 0) : null;
     return `<div class="rn-day"><strong>${esc(dayLabel(d.t, i))}</strong><span class="rn-pill ${probCls(d.pop ?? 0)}">${pct(d.pop)}</span>
       <b>${mm1(mm)} <small>mm</small></b><span class="muted hide-sm">${mt && mt.q90 >= 0.2 ? `${mm1(mt.q10)}–${mm1(mt.q90)} mm` : '—'}</span>
-      <span class="rn-daynote">${mm >= 0.2 && best && best.s >= 0.1 ? `${hhmm(best.a)}–${hhmm(best.b)} · ${esc(totalWord(mm))}` : esc(T('rDry'))}</span></div>`;
+      <span class="rn-daynote">${!fin(mm) ? (state.lang === 'el' ? 'Ποσότητα μη διαθέσιμη' : 'Amount unavailable') : mm >= 0.2 && best && best.s >= 0.1 ? `${hhmm(best.a)}–${hhmm(best.b)} · ${esc(totalWord(mm))}` : esc(T('rDry'))}</span></div>`;
   }).join('');
 }
 function rainNowCard(compact) {
@@ -1858,7 +1860,7 @@ function rainPage() {
   const eps = rainEpisodes(), rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
   const firstEpisode = `<section class="section"><div class="sectionhead"><div><h2 class="h2">${X('Το επόμενο επεισόδιο βροχής','Next rain episode')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>${eps.length ? `<div class="rn-eps">${episodeCard(eps[0])}</div>` : `<div class="card placeholder"><b>☀ ${T('rNoEpisodes')}</b></div>`}</section>`;
   const shortRange = `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}<div class="rn-legend">${T('rIntensity').slice(1).map((w,k)=>`<span><i class="lv${k+1}"></i>${esc(w)}</span>`).join('')}</div></section>`;
-  const days = `<section class="section card"><div class="panelhead"><div><b>${T('rDaily')}</b><div class="section-sub">${T('rDailySub')}</div></div></div>${rainDaily()}</section>`;
+  const days = `<section class="section card"><div class="panelhead"><div><b>${T('rDaily')}</b><div class="section-sub">${X('Προβλεπόμενη βροχή στις υπόλοιπες ώρες κάθε ημέρας · εύρος ensemble 10%–90%.','Forecast rain in the remaining hours of each day · ensemble 10%–90% range.')}</div></div></div>${rainDaily()}</section>`;
   const future = `${eps.length > 1 ? `<section class="section"><div class="sectionhead"><h2 class="h2">${X('Υπόλοιπα επεισόδια','Further rain episodes')}</h2></div><div class="rn-eps">${eps.slice(1).map(episodeCard).join('')}</div></section>` : ''}<section class="section card"><div class="panelhead"><div><b>${T('rChart')}</b><div class="section-sub">${T('rChartSub')}</div></div></div>${rain72Chart(rows72)}</section><section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rHourly')}</h2><div class="section-sub">${T('rHourlySub')}</div></div>${btn('goto', '↗ '+T('hourly'), 'data-page="hourly"')}</div>${rainHourly(rows48)}</section>`;
   const measurements = (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city),includeLive:false}) || '') + communityRainCard();
   const monthly = window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(state.city)}) || '';
