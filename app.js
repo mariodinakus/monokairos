@@ -1174,15 +1174,15 @@ async function ensureTraining(c, gen, force = false) {
   const all = read(K.train, {}), hit = all[ckey(c)];
   if (!force && hit && Date.now() - hit.at < TRAIN_TTL && hit.v === VERSION && hit.days === state.historyDays) { state.train = hit; state.trainStatus = 'done'; notifyTrainingFinished(); return; }
   const active = state.view?.active || [];
-  if (!active.length) { state.trainStatus = 'error'; notifyTrainingFinished(); return; }
+  if (!active.length) { state.trainStatus = 'error'; state.trainError = 'unavailable'; notifyTrainingFinished(); return; }
   state.trainStatus = 'loading'; state.trainError = null; state.trainProgress = {complete:0,total:0,phase:'start'}; state.train = hit && hit.v === VERSION && hit.days === state.historyDays ? hit : (state.train?.v === VERSION ? state.train : null); notifyTrainingFinished();
   try {
     const trainingDays = state.historyDays; const start = isoDate(-trainingDays), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
     const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
     const noCloud = M.LEADS.flatMap(k => vars(k).slice(0,3)).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
-    const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
+    const base = { ...llp(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
     const truthArgs={...base,models:'era5',hourly:'temperature_2m,precipitation,wind_speed_10m,cloud_cover'};
-    const truthP=archivedJSON(q('/proxy/mono-archive',truthArgs),q(ARCH,truthArgs),40000);
+    const truthP=archivedJSON(q('/proxy/mono-archive',truthArgs),q(ARCH,truthArgs),40000).then(data=>({data}),error=>({error}));
     // Bound historical requests independently of the full live model catalogue.
     const priority=['ecmwf_ifs','ecmwf_ifs025','ncep_gfs_seamless','dwd_icon_seamless','meteofrance_seamless','ecmwf_aifs025_single'];
     const ms=MODELS.filter(m=>active.includes(m.id))
@@ -1208,8 +1208,10 @@ async function ensureTraining(c, gen, force = false) {
       if (state.trainProgress) state.trainProgress.complete++;
       notifyHistoryTrainingProgress();
     })));
-    const truth = await truthP;
+    const truthResult = await truthP;
     if (gen !== state.gen) return;
+    if(truthResult.error)throw truthResult.error;
+    const truth = truthResult.data;
     if(!Array.isArray(truth?.hourly?.time)||!Array.isArray(truth.hourly.temperature_2m))
       throw new Error('Missing ERA5 reference');
     if(runs.every(r=>r.status==='rejected')){
@@ -1235,7 +1237,7 @@ async function ensureTraining(c, gen, force = false) {
     if (gen !== state.gen) return;
     if (!Object.keys(res.temp.leads).length) throw new Error('nothing to train');
     const rec = { v: VERSION, days: trainingDays, at: Date.now(), start, end, hours: times.length, models: used, temp: res.temp, wind: res.wind, precip: res.precip, cloud: res.cloud };
-    state.train = rec; state.trainStatus = 'done'; state.trainProgress = null;
+    state.train = rec; state.trainStatus = 'done'; state.trainError = null; state.trainProgress = null;
     const keep = Object.entries({ ...all, [ckey(c)]: rec }).sort((a, b) => b[1].at - a[1].at).slice(0, 3);
     if (!write(K.train, Object.fromEntries(keep))) write(K.train, { [ckey(c)]: rec });
   } catch (e) {
