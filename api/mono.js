@@ -7,6 +7,7 @@ const ROUTES = {
   'atmosphere': () => require('../lib/routes/atmosphere.js'),
   'cosmic-events': () => require('../lib/routes/cosmic-events.js'),
   'earth-signals': () => require('../lib/routes/earth-signals.js'),
+  'history': () => require('../lib/routes/history.js'),
   'netatmo': () => require('../lib/routes/netatmo.js'),
   'news': () => require('../lib/routes/news.js'),
   'nexus': () => require('../lib/routes/nexus.js'),

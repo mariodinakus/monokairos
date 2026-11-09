@@ -1,111 +1,91 @@
 'use strict';
-const {test}=require('node:test');
+const test=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const vm=require('node:vm');
-const path=require('node:path');
-const root=path.resolve(__dirname,'..');
-const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const fs=require('node:fs'),path=require('node:path');
+const root=path.join(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const Core=require('../lib/history-backtest-core.cjs');
 const app=read('app.js'),cfg=JSON.parse(read('vercel.json'));
-function helpers(request){
-  const start=app.indexOf('async function archivedJSON('),stop=app.indexOf('async function ensureTraining(',start);
-  assert.ok(start>=0&&stop>start);
-  const context={getJSON:request,Number,Array,Object};
-  return vm.runInNewContext(app.slice(start,stop)+'\n({archivedJSON,historicalReason,validArchivedForecast,splitArchivedModels})',context);
-}
-test('historical Open-Meteo endpoints use the same-origin cached proxies',()=>{
-  const expected={'/proxy/mono-previous':'https://previous-runs-api.open-meteo.com/v1/forecast',
-   '/proxy/mono-archive':'https://archive-api.open-meteo.com/v1/archive'};
-  for(const [source,dest] of Object.entries(expected)){
-    assert.equal(cfg.rewrites.find(r=>r.source===source)?.destination,dest);
-    const header=cfg.headers.find(r=>r.source===source)?.headers?.find(h=>h.key==='Cache-Control')?.value;
-    assert.match(header||'',/s-maxage=/);
-    assert.match(app,new RegExp(source.replaceAll('/','\\/')));
-  }
-  assert.match(app,/const noCloud = M\.LEADS/);
-  assert.match(app,/\.slice\(0,3\)/);
-  assert.match(app,/models:requested\.join\(','\)/);
-  assert.match(app,/const base\s*=\s*\{\s*\.\.\.llp\(c\)/);
-  assert.doesNotMatch(app,/return chain\(\[used\], id => q\(PREV/);
-});
-test('proxy outage falls back to direct provider with genuinely available data',async()=>{
-  const calls=[];
-  const {archivedJSON}=helpers(async url=>{
-    calls.push(url);
-    if(url==='/proxy/example'){const e=new Error('bad gateway');e.status=502;throw e;}
-    return {hourly:{time:[1,2,3]}};
-  });
-  const result=await archivedJSON('/proxy/example','https://previous-runs-api.open-meteo.com/test');
-  assert.equal(result.hourly.time.length,3);
-  assert.equal(calls.length,2);
-  assert.match(calls[1],/previous-runs-api/);
-});
-test('client request mistakes are not retried against providers',async()=>{
-  const calls=[];
-  const {archivedJSON}=helpers(async url=>{calls.push(url);const e=new Error('invalid variable');e.status=400;throw e;});
-  await assert.rejects(()=>archivedJSON('/proxy/bad','https://example.invalid'),/invalid variable/);
-  assert.equal(calls.length,1);
-});
-test('real archived temperatures must cover enough hours; no fake data',()=>{
-  const {validArchivedForecast,historicalReason}=helpers(async()=>({}));
-  const time=Array.from({length:150},(_,i)=>i),temp=Array.from({length:150},(_,i)=>i/10);
-  assert.equal(validArchivedForecast({hourly:{time,temperature_2m_previous_day1:temp}}),true);
-  assert.equal(validArchivedForecast({hourly:{time,temperature_2m:temp.map(()=>null)}}),false);
-  assert.equal(validArchivedForecast({hourly:{time:time.slice(0,30),temperature_2m:temp.slice(0,30)}}),false);
-  assert.equal(historicalReason({status:429}),'rate');
-  assert.equal(historicalReason({status:503}),'provider');
-  assert.equal(historicalReason({name:'AbortError'}),'timeout');
-});
-test('historical UI explains provider errors and preserves the MONO models',()=>{
-  assert.match(app,/trainError==='rate'/);
-  assert.match(app,/trainError==='provider'/);
-  assert.match(app,/state\.trainError = historicalReason\(e\)/);
-  assert.match(app,/if\(truthResult\.error\)throw truthResult\.error/);
-  assert.match(app,/M\.fitVariable/);
-  assert.match(app,/runTraining\(\{ temp:/);
-  assert.match(app,/function historyPage\(\)/);
-});
 
-test('batched multi-model Previous Runs data are split into exactly observed series',()=>{
-  const {splitArchivedModels}=helpers(async()=>({}));
-  const ids=['ecmwf_ifs','ncep_gfs_seamless','dwd_icon_seamless'];
-  const time=Array.from({length:200},(_,i)=>i),hourly={time};
-  for(const [j,id] of ids.entries()){
-    hourly['temperature_2m_'+id]=time.map(i=>i*0.1+j);
-    hourly['temperature_2m_previous_day1_'+id]=time.map(i=>i*0.2+j);
-  }
-  const result=splitArchivedModels({hourly},ids,['temperature_2m','temperature_2m_previous_day1','precipitation']);
-  assert.equal(result.length,3);
-  for(let i=0;i<3;i++){
-    assert.equal(result[i].status,'fulfilled');
-    assert.equal(result[i].value.data.hourly.temperature_2m[10],1+i);
-    assert.equal(result[i].value.data.hourly.temperature_2m_previous_day1[10],2+i);
-    assert.equal(result[i].value.data.hourly.precipitation,undefined);
-  }
-  assert.equal(result[0].value.data.hourly.time.length,200);
+function syntheticArchives(N=384){
+ const time=Array.from({length:N},(_,i)=>Math.floor(Date.UTC(2026,8,1)/1000)+3600*i);
+ const truth={time,temperature_2m:[],wind_speed_10m:[],precipitation:[],cloud_cover:[]};
+ for(let i=0;i<N;i++){
+  const h=i%24;
+  truth.temperature_2m.push(18+5*Math.sin(h*Math.PI/12)+Math.cos(i/29));
+  truth.wind_speed_10m.push(9+4*Math.sin(i/17));
+  truth.precipitation.push(i%17<4?1.2:0);
+  truth.cloud_cover.push(40+25*Math.sin(i/15));
+ }
+ const forecast={time};
+ for(let m=0;m<3;m++)for(let k=0;k<=5;k++)for(const [key,src] of [
+  ['temperature_2m',truth.temperature_2m],
+  ['wind_speed_10m',truth.wind_speed_10m],
+  ['precipitation',truth.precipitation]
+ ]){
+   forecast[key+(k?'_previous_day'+k:'')+'_'+Core.IDS[m]]=src.map((x,i)=>x+((m-1)*.4)+(Math.sin(i/5+k)*.15));
+ }
+ return {truth:{hourly:truth},forecast:{hourly:forecast}};
+}
+test('the browser no longer downloads historical models itself',()=>{
+ assert.match(app,/getJSON\(q\('\/api\/history',params\),55000\)/);
+ const training=app.slice(app.indexOf('async function ensureTraining('),app.indexOf('/* Reuse already-validated historical results'));
+ assert.doesNotMatch(training,/getJSON\(q\(PREV,\s*\{ \.\.\.base/);
+ assert.match(app,/async function ensureTraining/);
+ assert.match(cfg.rewrites.find(x=>x.source==='/api/history')?.destination||'',/route=history/);
+ assert.match(read('api/mono.js'),/'history': \(\) => require\('\.\.\/lib\/routes\/history\.js'\)/);
 });
-test('missing or all-null archived models fail rather than fabricating a score',()=>{
-  const {splitArchivedModels}=helpers(async()=>({}));
-  const time=Array.from({length:150},(_,i)=>i);
-  const result=splitArchivedModels({hourly:{time,
-    temperature_2m_ecmwf_ifs:time.map(i=>i/10),
-    temperature_2m_ncep_gfs_seamless:time.map(()=>null)
-  }},['ecmwf_ifs','ncep_gfs_seamless'],['temperature_2m']);
-  assert.equal(result[0].status,'fulfilled');
-  assert.equal(result[1].status,'rejected');
-  assert.throws(()=>splitArchivedModels({hourly:{time:time.slice(0,30)}},['ecmwf_ifs'],['temperature_2m']),/Missing historical/);
+test('server selects real archived model runs against ERA5, not live predictions',()=>{
+ const s=read('lib/history-backtest-core.cjs');
+ assert.match(s,/previous-runs-api\.open-meteo\.com/);
+ assert.match(s,/archive-api\.open-meteo\.com/);
+ assert.match(s,/models:'era5'/);
+ assert.match(s,/M\.fitVariable/);
+ assert.match(s,/M\.fitRain/);
+ assert.deepEqual(Core.IDS,['ecmwf_ifs','ncep_gfs_seamless','dwd_icon_seamless']);
+ assert.equal(Core.hourlyFields().length,18);
 });
-test('one-model fallback accepts unsuffixed archive variables',()=>{
-  const {splitArchivedModels}=helpers(async()=>({}));
-  const time=Array.from({length:170},(_,i)=>i);
-  const r=splitArchivedModels({hourly:{time,temperature_2m:time.map(i=>i/3)}},['ecmwf_ifs'],['temperature_2m']);
-  assert.equal(r[0].status,'fulfilled');
-  assert.equal(r[0].value.data.hourly.temperature_2m[30],10);
+test('server rejects invalid coordinate and history horizons',async()=>{
+ await assert.rejects(()=>Core.compute({lat:999,lon:22,days:62,fetcher:()=>{throw Error('should not fetch')}}),/Invalid/);
+ await assert.rejects(()=>Core.compute({lat:40,lon:22,days:200,fetcher:()=>{throw Error('should not fetch')}}),/Invalid/);
+ assert.equal(Core.isoZone('Europe/Athens'),'Europe/Athens');
+ assert.equal(Core.isoZone('../../private'),'UTC');
 });
-test('a rate limit is not amplified by a second browser-side retry',async()=>{
-  const calls=[];const {archivedJSON}=helpers(async url=>{
-    calls.push(url);const e=new Error('Too many requests');e.status=429;throw e;
-  });
-  await assert.rejects(()=>archivedJSON('/proxy/mono-previous','https://previous-runs-api.open-meteo.com/v1/forecast'),/Too many requests/);
-  assert.equal(calls.length,1);
+test('archive alignment preserves missingness, never invents temperatures',()=>{
+ const a=Core.align({time:[1,3,4]},[10,30,null],[1,2,3,4]);
+ assert.deepEqual(a,[10,null,30,null]);
+ const {truth,forecast}=syntheticArchives();
+ const parsed=Core.extract(truth,forecast);
+ assert.equal(parsed.covered,3);
+ assert.equal(parsed.result.times.length,384);
+ assert.equal(Object.keys(parsed.result.models.temp).length,3);
+ const bad=structuredClone(forecast);
+ for(const key of Object.keys(bad.hourly))if(key!=='time')bad.hourly[key]=bad.hourly[key].map(()=>null);
+ assert.throws(()=>Core.extract(truth,bad),/No usable/);
+});
+test('entire shared API training pipeline produces real holdout MAE and all lead days',async()=>{
+ const {truth,forecast}=syntheticArchives();
+ const calls=[];
+ const fetcher=async url=>{
+  calls.push(url);
+  return {ok:true,status:200,json:async()=>url.includes('previous-runs-api')?forecast:truth};
+ };
+ const now=Date.UTC(2026,10,9);
+ const result=await Core.compute({lat:40.64,lon:22.94,days:62,zone:'Europe/Athens',now,fetcher});
+ assert.equal(calls.length,2);
+ assert.equal(result.v,'4.6');
+ assert.equal(result.days,62);
+ assert.equal(result.models,3);
+ assert.equal(result.source,'Open-Meteo Previous Runs / ERA5');
+ assert.equal(result.start,'2026-09-08');
+ assert.equal(result.end,'2026-11-03');
+ assert.equal(result.temp.leads[0].n.test>0,true);
+ assert.equal(Number.isFinite(result.temp.leads[0].test.mean.mae),true);
+ assert.equal(Object.keys(result.temp.leads).length,6);
+ assert.equal(Object.keys(result.wind.leads).length,6);
+ assert.equal(Object.keys(result.precip.leads).length,6);
+});
+test('upstream rate limiting surfaces as an error and never generates success scores',async()=>{
+ const fetcher=async()=>({ok:false,status:429});
+ await assert.rejects(()=>Core.compute({lat:40.64,lon:22.94,days:62,zone:'UTC',fetcher}),
+  e=>e.status===429);
 });
