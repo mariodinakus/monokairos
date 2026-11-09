@@ -440,7 +440,7 @@ const state = {
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
   page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, historyDays: [62,180,365].includes(Number(UI.historyDays)) ? Number(UI.historyDays) : 62, historyVar: 'temp', historyOrder: 'latest', trainProgress: null, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   windyStatus: 'idle', windyHtml: '', windySelected: null,
-  gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle',
+  gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', trainError: null,
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
   gBase: UI.globeTilesV1 ? (UI.gBase || 'detail') : 'detail', gLayers: UI.globeTilesV1 ? { radar: false, rain: false, grid: false, temps: true, ...(UI.gLayers || {}) } : { radar: false, rain: false, grid: false, temps: UI.gLayers?.temps ?? true }, gSpin: true, gStatus: 'idle', gNotes: [], radarSat: !!UI.radarSat, radarBasemap: UI.radarBasemap === 'satellite' ? 'satellite' : 'street', radarForecastBase:UI.radarClearMapV2&&UI.radarForecastBase==='satellite'?'satellite':'street',
   gGrid: UI.gGrid || 'temp', gSrc: {}, grid: null, gridBusy: false, probe: null, rain15: null, monthlyRain: null, recentRain: null, yday: null, verify: null, trustTab: 'reliability'
@@ -1143,6 +1143,27 @@ function runTraining(payload) {
     } catch { workerOk = false; inline(); }
   });
 }
+/* Cached historical sources with direct-provider fallback.
+ * Historical runs are never synthesized if a provider is unavailable. */
+async function archivedJSON(local, direct, timeout = 32000) {
+  try { return await getJSON(local,timeout); }
+  catch(e) {
+    if (e.status && ![403,404,429,500,502,503,504].includes(e.status)) throw e;
+    return getJSON(direct,timeout);
+  }
+}
+function historicalReason(e) {
+  if (e?.status===429) return 'rate';
+  if ([502,503,504].includes(e?.status)) return 'provider';
+  if (e?.name==='AbortError') return 'timeout';
+  return 'unavailable';
+}
+function validArchivedForecast(d) {
+  const h=d?.hourly;
+  if (!Array.isArray(h?.time)||h.time.length<120)return false;
+  return Object.entries(h).some(([k,v])=>/^temperature_2m(?:_previous_day[0-7])?$/.test(k)&&
+    Array.isArray(v)&&v.filter(Number.isFinite).length>=120);
+}
 async function ensureTraining(c, gen, force = false) {
   if (state.trainStatus === 'loading') return;
   if (!force && state.train && state.train.v === VERSION && state.train.days === state.historyDays && Date.now() - state.train.at < TRAIN_TTL) {
@@ -1153,29 +1174,50 @@ async function ensureTraining(c, gen, force = false) {
   const all = read(K.train, {}), hit = all[ckey(c)];
   if (!force && hit && Date.now() - hit.at < TRAIN_TTL && hit.v === VERSION && hit.days === state.historyDays) { state.train = hit; state.trainStatus = 'done'; notifyTrainingFinished(); return; }
   const active = state.view?.active || [];
-  if (!active.length) { state.trainStatus = 'error'; notifyTrainingFinished(); return; }
-  state.trainStatus = 'loading'; state.trainProgress = {complete:0,total:0,phase:'start'}; state.train = hit && hit.v === VERSION && hit.days === state.historyDays ? hit : (state.train?.v === VERSION ? state.train : null); notifyTrainingFinished();
+  if (!active.length) { state.trainStatus = 'error'; state.trainError = 'unavailable'; notifyTrainingFinished(); return; }
+  state.trainStatus = 'loading'; state.trainError = null; state.trainProgress = {complete:0,total:0,phase:'start'}; state.train = hit && hit.v === VERSION && hit.days === state.historyDays ? hit : (state.train?.v === VERSION ? state.train : null); notifyTrainingFinished();
   try {
     const trainingDays = state.historyDays; const start = isoDate(-trainingDays), end = isoDate(-6), zone = state.main?.timezone || 'UTC';
     const vars = k => (k === 0 ? ['temperature_2m', 'precipitation', 'wind_speed_10m', 'cloud_cover'] : [`temperature_2m_previous_day${k}`, `precipitation_previous_day${k}`, `wind_speed_10m_previous_day${k}`, `cloud_cover_previous_day${k}`]);
-    const full = M.LEADS.flatMap(vars).join(','), noCloud = M.LEADS.flatMap(k => vars(k).slice(0,3)).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
-    const base = { ...ll(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
-    const truthP = getJSON(q(ARCH, { ...base, models: 'era5', hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover' }), 40000);
-    const ms = MODELS.filter(m => active.includes(m.id));
+    const noCloud = M.LEADS.flatMap(k => vars(k).slice(0,3)).join(','), tOnly = M.LEADS.map(k => vars(k)[0]).join(',');
+    const base = { ...llp(c), start_date: start, end_date: end, timeformat: 'unixtime', timezone: 'UTC' };
+    const truthArgs={...base,models: 'era5', hourly: 'temperature_2m,precipitation,wind_speed_10m,cloud_cover'};
+    const truthP=archivedJSON(q('/proxy/mono-archive',truthArgs),q(ARCH,truthArgs),40000).then(data=>({data}),error=>({error}));
+    // Bound historical requests independently of the full live model catalogue.
+    const priority=['ecmwf_ifs','ecmwf_ifs025','ncep_gfs_seamless','dwd_icon_seamless','meteofrance_seamless','ecmwf_aifs025_single'];
+    const ms=MODELS.filter(m=>active.includes(m.id))
+      .sort((a,b)=>(priority.indexOf(a.id)<0?99:priority.indexOf(a.id))-(priority.indexOf(b.id)<0?99:priority.indexOf(b.id))).slice(0,10);
     state.trainProgress = {complete:0,total:ms.length,phase:'download'}; notifyHistoryTrainingProgress();
     const runs = await Promise.allSettled(ms.map(m => trainingSlot(() => {
       if (gen !== state.gen) throw new Error('Stale training request');
       const used = state.models[m.id]?.used || m.id;
-      return chain([used], id => q(PREV, { ...base, models: id, hourly: full }))
-        .catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: noCloud })))
-        .catch(() => chain([used], id => q(PREV, { ...base, models: id, hourly: tOnly })));
+      // First request only essential variables; retry with temperature if unsupported.
+      // Shared CDN cache avoids repeated 60–365 day downloads on every visit.
+      const attempt=async hourly=>{
+        const args={...base,models:used,hourly};
+        const data=await archivedJSON(q('/proxy/mono-previous',args),q(PREV,args),32000);
+        if(!validArchivedForecast(data))throw new Error('No valid archived temperature series');
+        return {id:used,data};
+      };
+      return attempt(noCloud).catch(e=>{
+        if(e.status===429)throw e;
+        return attempt(tOnly);
+      });
     }).finally(() => {
       if (gen !== state.gen) return;
       if (state.trainProgress) state.trainProgress.complete++;
       notifyHistoryTrainingProgress();
     })));
-    const truth = await truthP;
+    const truthResult = await truthP;
     if (gen !== state.gen) return;
+    if(truthResult.error)throw truthResult.error;
+    const truth = truthResult.data;
+    if(!Array.isArray(truth?.hourly?.time)||!Array.isArray(truth.hourly.temperature_2m))
+      throw new Error('Missing ERA5 reference');
+    if(runs.every(r=>r.status==='rejected')){
+      const errors=runs.map(r=>r.reason);
+      throw errors.find(e=>e?.status===429)||errors.find(e=>[502,503,504].includes(e?.status))||errors[0]||new Error('No archive feeds');
+    }
     const times = truth.hourly.time.map(s => s * 1000), idx = new Map(times.map((t, i) => [t, i]));
     const hours = times.map(t => localHour(t, zone));
     const sets = { temp: {}, precip: {}, wind: {}, cloud: {} }; let used = 0;
@@ -1195,12 +1237,12 @@ async function ensureTraining(c, gen, force = false) {
     if (gen !== state.gen) return;
     if (!Object.keys(res.temp.leads).length) throw new Error('nothing to train');
     const rec = { v: VERSION, days: trainingDays, at: Date.now(), start, end, hours: times.length, models: used, temp: res.temp, wind: res.wind, precip: res.precip, cloud: res.cloud };
-    state.train = rec; state.trainStatus = 'done'; state.trainProgress = null;
+    state.train = rec; state.trainStatus = 'done'; state.trainError = null; state.trainProgress = null;
     const keep = Object.entries({ ...all, [ckey(c)]: rec }).sort((a, b) => b[1].at - a[1].at).slice(0, 3);
     if (!write(K.train, Object.fromEntries(keep))) write(K.train, { [ckey(c)]: rec });
   } catch (e) {
     if (gen !== state.gen) return;
-    state.trainStatus = state.train ? 'done' : 'error'; state.trainProgress = null;
+    state.trainStatus = state.train ? 'done' : 'error'; state.trainError = historicalReason(e); state.trainProgress = null;
   }
   notifyTrainingFinished();
 }
@@ -3073,8 +3115,16 @@ function historyPage() {
     '<div class="mh-segments" role="group" aria-label="'+(el?'Ημέρες πρόγνωσης':'Forecast days')+'">'+lead+'</div></section>';
   const statusBlock = state.trainStatus==='error' && !tr
     ? '<p class="notice mono-history-warning" role="status">'+(el?
-      (state.modelsLoading?'Φορτώνονται πρώτα τα μοντέλα· θα γίνει νέα προσπάθεια εκπαίδευσης.':'Δεν φορτώθηκαν αρκετά ιστορικά runs. Δοκίμασε επανεκπαίδευση ή μικρότερο ιστορικό.')
-      :(state.modelsLoading?'Loading forecast models before training.':'Not enough historical model runs loaded. Retry or try a shorter window.'))+'</p>'
+      (state.modelsLoading?'Φορτώνονται πρώτα τα μοντέλα· θα γίνει νέα προσπάθεια εκπαίδευσης.':
+       state.trainError==='rate'?'Ο πάροχος ιστορικών δεδομένων περιορίζει τις αιτήσεις (429). Δοκίμασε ξανά αργότερα.':
+       state.trainError==='provider'?'Ο πάροχος ιστορικών δεδομένων δεν αποκρίνεται σωστά (502/503/504). Οι ζωντανές προβλέψεις λειτουργούν.':
+       state.trainError==='timeout'?'Η λήψη ιστορικών δεδομένων έληξε χρονικά. Δοκίμασε το ιστορικό 2 μηνών.':
+       'Δεν φορτώθηκαν αρκετά ιστορικά runs. Δοκίμασε επανεκπαίδευση ή μικρότερο ιστορικό.')
+      :(state.modelsLoading?'Loading forecast models before training.':
+       state.trainError==='rate'?'Historical provider is rate-limiting requests (429); retry later.':
+       state.trainError==='provider'?'Historical provider returned 502/503/504. Live forecasts are still available.':
+       state.trainError==='timeout'?'Historical downloads timed out. Try the 2-month window.':
+       'Not enough historical model runs loaded. Retry or try a shorter window.'))+'</p>'
     : '';
   const panel = window.MONOHistoryBacktest?.render({
     train:tr, lead:state.lead, lang:state.lang, days:state.historyDays, variable:state.historyVar,
@@ -3804,7 +3854,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, yday: null, verify: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, yday: null, verify: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', trainError: null, modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
   if (state.page === 'cities') state.page = 'now';
   restoreHistoricCache(c);
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
