@@ -24,7 +24,7 @@ test('historical Open-Meteo endpoints use the same-origin cached proxies',()=>{
   }
   assert.match(app,/const noCloud = M\.LEADS/);
   assert.match(app,/\.slice\(0,10\)/);
-  assert.match(app,/const base = \{ \.\.\.llp\(c\)/);
+  assert.match(app,/const base\s*=\s*\{\s*\.\.\.llp\(c\)/);
   assert.doesNotMatch(app,/return chain\(\[used\], id => q\(PREV/);
 });
 test('proxy outage falls back to direct provider with genuinely available data',async()=>{
