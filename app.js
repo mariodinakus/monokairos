@@ -174,7 +174,7 @@ el: {
   holLabel:'Αργίες', holTitle:'Ο καιρός στις αργίες', localHol:'τοπική', usually:'Συνήθως', inDays:n => `σε ${n} μέρες`, holClimBtn:'Δες τι καιρό κάνει συνήθως',
   holNote:'Έως 7 μέρες: πρόγνωση MONO. Έως 16 μέρες: πρόγνωση μεγάλου ορίζοντα (λιγότερο ακριβής). Πιο μακριά: τι καιρό κάνει συνήθως εκείνες τις μέρες, από ERA5 1991 και μετά.',
   plainTitle:'Με απλά λόγια', tdLabel:'Πρακτικά', tdTitle:'Τι να κάνω σήμερα', tdWear:'Τι να φορέσω', tdMove:'Μετακίνηση & αυτοκίνητο', tdHome:'Σπίτι & μπαλκόνι', tdHealth:'Υγεία', tdOut:'Έξοδος', todayL:'σήμερα', tomorrowL:'αύριο',
-  probWords:['απίθανη','λίγο πιθανή','πιθανή','σχεδόν σίγουρη'], feelWords:['παγωνιά','κρύο','δροσιά','ευχάριστη θερμοκρασία','ζέστη','πολλή ζέστη','καύσωνας'],
+  probWords:['απίθανη','λίγο πιθανή','πιθανή','πολύ πιθανή'], feelWords:['παγωνιά','κρύο','δροσιά','ευχάριστη θερμοκρασία','ζέστη','πολλή ζέστη','καύσωνας'],
   skyWords:{ storm:'Καταιγίδες', snow:'Χιονόπτωση', rain:'Βροχερή μέρα', mixed:'Άστατος καιρός με πιθανές μπόρες', fog:'Ομίχλη', cloudy:'Συννεφιά', partly:'Ήλιος και σύννεφα', mostly:'Κυρίως ηλιόλουστα', clear:'Λιακάδα' },
   bftWords:['άπνοια','σχεδόν άπνοια','ασθενής','ασθενής','μέτριος','λαμπρός','ισχυρός','σφοδρός','θυελλώδης','πολύ θυελλώδης','θύελλα','σφοδρή θύελλα','τυφώνας'],
   sNow:(t, f, c) => `Τώρα: ${t}${f ? ` (αισθάνεσαι ${f})` : ''}, ${c}.`,
@@ -194,7 +194,7 @@ el: {
   glossTitle:'Τι σημαίνουν αυτά;', glossSub:'Οι όροι της εφαρμογής, απλά',
   glossList:[
     ['Πιθανότητα βροχής','Πόσο πιθανό είναι να πέσει βροχή εκείνη την ώρα. 40% σημαίνει ότι σε 10 παρόμοιες μέρες θα έβρεχε περίπου στις 4.'],
-    ['Εύρος 80%','Η θερμοκρασία θα είναι μέσα σε αυτό το εύρος 8 φορές στις 10. Όσο πιο φαρδύ, τόσο πιο αβέβαιη η πρόγνωση.'],
+    ['Εύρος 80%','Εκτιμώμενο διάστημα 80% για τη θερμοκρασία. Η πραγματική συχνότητα κάλυψης χρειάζεται ανεξάρτητο έλεγχο. Όσο πιο φαρδύ, τόσο μεγαλύτερη η εκτιμώμενη αβεβαιότητα.'],
     ['Αίσθηση','Πόσο κρύο ή ζέστη νιώθει το σώμα, αφού υπολογιστούν ο αέρας, η υγρασία και ο ήλιος.'],
     ['Ριπή','Το πιο δυνατό φύσημα του αέρα για λίγα δευτερόλεπτα· πάντα πιο δυνατό από τον μέσο άνεμο.'],
     ['Μποφόρ','Κλίμακα 0–12 για την ένταση του ανέμου. Από 6 νιώθεις δυνατό αέρα, από 8 είναι θυελλώδης.'],
@@ -202,7 +202,7 @@ el: {
     ['UV','Δείκτης ηλιακής ακτινοβολίας. Από 6 χρειάζεται αντηλιακό, από 8 προστασία ακόμη και για λίγη ώρα.'],
     ['Ποιότητα αέρα (EAQI)','Ευρωπαϊκός δείκτης: 0–20 καλή, 20–40 μέτρια, 40–60 μέση, πάνω από 60 κακή.'],
     ['Μοντέλο καιρού','Πρόγραμμα σε υπερυπολογιστή που λύνει τις εξισώσεις της ατμόσφαιρας. Κάθε χώρα έχει το δικό της, γι’ αυτό συχνά διαφωνούν.'],
-    ['Ensemble','Το ίδιο μοντέλο τρέχει δεκάδες φορές με λίγο διαφορετική αφετηρία. Αν οι εκδοχές συμφωνούν, η πρόγνωση είναι σίγουρη.'],
+    ['Ensemble','Το ίδιο μοντέλο τρέχει δεκάδες φορές με λίγο διαφορετική αφετηρία. Η συμφωνία δείχνει μικρότερη διασπορά, αλλά τα μοντέλα μπορεί να κάνουν κοινό λάθος.'],
     ['MONO','Ο συνδυασμός της εφαρμογής: μαθαίνει από τα λάθη κάθε μοντέλου στην περιοχή σου και διορθώνεται ζωντανά από τον κοντινότερο σταθμό.'],
     ['Σταθμός METAR','Μετεωρολογικός σταθμός αεροδρομίου που στέλνει μετρήσεις κάθε μισή ώρα. Είναι πραγματική μέτρηση, όχι πρόγνωση.']
   ],
@@ -293,7 +293,7 @@ en: {
   holLabel:'Holidays', holTitle:'Weather on the holidays', localHol:'local', usually:'Usually', inDays:n => `in ${n} days`, holClimBtn:'See the usual weather',
   holNote:'Up to 7 days: MONO forecast. Up to 16 days: long-range forecast (less accurate). Further out: the usual weather on those days, from ERA5 since 1991.',
   plainTitle:'In plain words', tdLabel:'Practical', tdTitle:'What to do today', tdWear:'What to wear', tdMove:'Getting around', tdHome:'Home & balcony', tdHealth:'Health', tdOut:'Going out', todayL:'today', tomorrowL:'tomorrow',
-  probWords:['unlikely','possible','likely','almost certain'], feelWords:['freezing','cold','cool','pleasant','warm','hot','very hot'],
+  probWords:['unlikely','possible','likely','very likely'], feelWords:['freezing','cold','cool','pleasant','warm','hot','very hot'],
   skyWords:{ storm:'Thunderstorms', snow:'Snow', rain:'A rainy day', mixed:'Changeable with possible showers', fog:'Fog', cloudy:'Cloudy', partly:'Sun and clouds', mostly:'Mostly sunny', clear:'Sunny' },
   bftWords:['calm','light air','light','light','gentle','fresh','strong','near-gale','gale','strong gale','storm','violent storm','hurricane'],
   sNow:(t, f, c) => `Now: ${t}${f ? ` (feels like ${f})` : ''}, ${c}.`,
@@ -313,7 +313,7 @@ en: {
   glossTitle:'What does this mean?', glossSub:'The app’s terms, simply',
   glossList:[
     ['Chance of rain','How likely rain is in that hour. 40% means that on 10 similar days it would rain on about 4.'],
-    ['80% range','The temperature will fall inside this range 8 times out of 10. The wider it is, the less certain the forecast.'],
+    ['80% range','An estimated 80% temperature interval. Actual coverage requires independent evaluation. A wider range indicates greater estimated uncertainty.'],
     ['Feels like','How warm or cold your body feels once wind, humidity and sun are counted.'],
     ['Gust','The strongest burst of wind for a few seconds; always stronger than the average wind.'],
     ['Beaufort','A 0–12 scale of mean wind speed at 10 metres above ground. Gusts are separate, brief peaks.'],
@@ -321,7 +321,7 @@ en: {
     ['UV','Sun radiation index. From 6 use sunscreen; from 8 protect yourself even for short periods.'],
     ['Air quality (EAQI)','European index: 0–20 good, 20–40 fair, 40–60 moderate, above 60 poor.'],
     ['Weather model','A supercomputer program that solves the equations of the atmosphere. Each country has its own, so they often disagree.'],
-    ['Ensemble','The same model run dozens of times from slightly different starts. If the runs agree, the forecast is confident.'],
+    ['Ensemble','The same model run dozens of times from slightly different starts. Agreement indicates less spread, but models can share the same error.'],
     ['MONO','The app’s own blend: it learns each model’s mistakes at your location and corrects itself live from the nearest station.'],
     ['METAR station','An airport weather station that reports every half hour. It is a real measurement, not a forecast.']
   ],
@@ -1519,12 +1519,14 @@ function nowPage() {
     (window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(c)}) || '') + rainNowCard(true);
   const chartDetail = `<section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
       ${legend([['mono', T('legendMono')], ['band', T('legendBand')], ...(V.useStation ? [['obs', T('legendObs')]] : []), ['hind', T('legendHind')], ['bar', T('legendRain')]])}</section>
-    <section class="section dual"><div class="card"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</div><div class="card">${engineSummary()}</div></section>`;
+    <section class="section card">${engineSummary()}</section>`;
+  const week = `<section class="section card home-week"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</section>`;
+  const revisions = window.MONOForecastConfidence?.render({view:V,lang:state.lang,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot,mode:'changes'}) || '';
   return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + alertsStrip() +
-    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + (rainAlertsOn() ? '' : rainAlertsCard()) + hours + summaryCard() + trustCard() +
+    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + (rainAlertsOn() ? '' : rainAlertsCard()) + hours + week + revisions + homeMore('trust',X('Ιστορικός έλεγχος και μοντέλα','Historical checks and models'),X('Ακρίβεια, σταθμός και συμφωνία μοντέλων','Accuracy, station and model agreement'),trustCard()) +
     homeMore('rain',X('Βροχή και μετρήσεις','Rain and measurements'),X('Ποσότητες, σταθμοί και μηνιαία σύγκριση','Amounts, stations and monthly comparison'),rainDetail) +
-    homeMore('charts',X('Γραφήματα και εβδομάδα','Charts and the week'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
-    homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
+    homeMore('charts',X('Γραφήματα και μοντέλο','Charts and model'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
+    homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),summaryCard()+MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
     homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),X('Ήλιος, αέρας, θάλασσα και ειδήσεις','Sun, air, sea and news'),newsCard()+holidaysCard()+environment()+glossary());
 }
 function trustCard() {
@@ -1536,7 +1538,7 @@ function trustCard() {
     { id: 'reliability', label: X('Ιστορικό', 'History'), html: strip(reliabilityCard()) },
     { id: 'station', label: X('Σταθμός', 'Station'), html: Tr.station(verify, { lang: state.lang }) },
     { id: 'yesterday', label: X('Χθες', 'Yesterday'), html: strip(yesterdayCard()) },
-    { id: 'agreement', label: X('Συμφωνία μοντέλων', 'Model agreement'), html: strip(window.MONOForecastConfidence?.render({view:V,lang:state.lang,train:state.train,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot}) || '') }
+    { id: 'agreement', label: X('Συμφωνία μοντέλων', 'Model agreement'), html: strip(window.MONOForecastConfidence?.render({view:V,lang:state.lang,train:state.train,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot,mode:'agreement'}) || '') }
   ], { active: state.trustTab, lang: state.lang });
 }
 let verifyBusy = '';
@@ -1567,8 +1569,7 @@ function ccTxt(c) { return Number.isFinite(c) ? Math.round(c) + '%' : '—'; } f
 function dailyRows(d) {
   if (!d?.length) return `<p class="muted">—</p>`;
   const lo = Math.min(...d.map(x => x.lo)), hi = Math.max(...d.map(x => x.hi)), sp = Math.max(1, hi - lo);
-  const rel = state.snapshot ? null : window.MONOReliability?.compute(state.train);
-  return d.map((x, i) => `<div class="dailyrow"><strong>${esc(dayLabel(x.t, i))}${rel ? window.MONOReliability.badge(rel, i, state.lang) : ''}</strong>${icon(x.code, 1)}<div class="dailybar"><span style="left:${(100 * (x.lo - lo) / sp).toFixed(1)}%;width:${Math.max(4, 100 * (x.hi - x.lo) / sp).toFixed(1)}%"></span></div><div class="dailytemps"><span class="min">${deg(x.lo)}</span><span>${deg(x.hi)}</span></div><div class="dailycc" title="${T('clouds')}">☁ ${ccTxt(x.cloud)}</div><div class="dailywet">☂ ${pct(x.pop)}${x.mm >= 0.1 ? ` · ${num(x.mm, 1)}mm` : ''}</div></div>`).join('');
+  return d.map((x, i) => `<div class="dailyrow"><strong>${esc(dayLabel(x.t, i))}</strong>${icon(x.code, 1)}<div class="dailybar"><span style="left:${(100 * (x.lo - lo) / sp).toFixed(1)}%;width:${Math.max(4, 100 * (x.hi - x.lo) / sp).toFixed(1)}%"></span></div><div class="dailytemps"><span class="min">${deg(x.lo)}</span><span>${deg(x.hi)}</span></div><div class="dailycc" title="${T('clouds')}">☁ ${ccTxt(x.cloud)}</div><div class="dailywet">☂ ${pct(x.pop)}${x.mm >= 0.1 ? ` · ${num(x.mm, 1)}mm` : ''}</div></div>`).join('');
 }
 function periodText(p) {
   const V = state.view, lab = t => { const i = V.daily.findIndex(d => d.key === dayKey(t, V.zone)); return i >= 0 ? dayLabel(t, i) : dt(t, { weekday: 'short' }); };
@@ -1590,7 +1591,8 @@ const wdt = t => dt(t, { weekday: 'short', day: 'numeric', hour: '2-digit', minu
 function warningsBanner() {
   const w = state.warn; if (!Array.isArray(w) || !w.length) return '';
   const local = w.filter(x => x.local), show = (local.length ? local : w).slice(0, 2);
-  return `<div class="warnbanner">${show.map(x => `<button class="warn ${x.color}" data-action="goto" data-page="phen"><span class="wdot"></span><b>${esc(x.event)}</b><span>${esc(x.areas.slice(0, 2).join(', '))} · ${esc(wdt(x.onset))} → ${esc(wdt(x.expires))}</span></button>`).join('')}</div>`;
+  const scope = local.length ? (state.lang === 'el' ? 'Προειδοποιήσεις για την περιοχή σου' : 'Warnings for your area') : (state.lang === 'el' ? 'Προειδοποιήσεις για άλλες περιοχές' : 'Warnings for other areas');
+  return `<div class="warnbanner"><span class="label">${scope}</span>${show.map(x => `<button class="warn ${x.color}" data-action="goto" data-page="phen"><span class="wdot"></span><b>${esc(x.event)}</b><span>${esc(x.areas.slice(0, 2).join(', '))} · ${esc(wdt(x.onset))} → ${esc(wdt(x.expires))}</span></button>`).join('')}</div>`;
 }
 function engineSummary() {
   const V = state.view, L0 = state.train?.temp?.leads?.[0];
@@ -2379,7 +2381,7 @@ const BFT = [1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118];
 const beaufort = k => { const i = BFT.findIndex(x => k < x); return i < 0 ? 12 : i; };
 // Beaufort applies to sustained/mean 10 m wind, not short-lived gusts.
 const windBft = kmh => fin(kmh) && kmh >= 0 ? `${beaufort(kmh)} ${state.lang === 'el' ? 'Μποφόρ' : 'Bft'}` : '—';
-function probWord(p) { const w = T('probWords'); return p < 0.1 ? w[0] : p < 0.3 ? w[1] : p < 0.6 ? w[2] : w[3]; }
+function probWord(p) { const w = T('probWords'); return p < 0.1 ? w[0] : p < 0.3 ? w[1] : p < 0.8 ? w[2] : w[3]; }
 function feelWord(t) { const w = T('feelWords'); return t < 0 ? w[0] : t < 8 ? w[1] : t < 15 ? w[2] : t < 23 ? w[3] : t < 29 ? w[4] : t < 35 ? w[5] : w[6]; }
 function skyWord(code, pop) {
   const w = T('skyWords');
@@ -2525,7 +2527,7 @@ function todoGroups() {
   else if (fin(nMin) && nMin >= 24) add('home', 'thermometer', X('Ζεστή νύχτα: κλιματιστικό ή ανεμιστήρας για ύπνο', 'Warm night: A/C or a fan for sleeping'));
   if (fin(fMax) && fMax >= 30) add('home', 'sun', X('Κλείσε παντζούρια και κουρτίνες από το πρωί', 'Close shutters and curtains from the morning'));
   if (fin(nMin) && nMin <= 1) add('home', 'snow', X('Βάλε τις ευαίσθητες γλάστρες μέσα', 'Bring sensitive plants indoors'), 1);
-  if (rainSoon) add('home', 'drizzle', X('Μην ποτίσεις τον κήπο, θα το κάνει η βροχή', 'Skip watering; the rain will do it'));
+  if (rainSoon) add('home', 'drizzle', X('Έλεγξε τη βροχή πριν ποτίσεις τον κήπο', 'Check the rainfall forecast before watering the garden'));
   else if (dryDays >= 4 && (fMax ?? 0) >= 25) add('home', 'sun', X('Πότισε τα φυτά· δεν φαίνεται βροχή για μέρες', 'Water the plants; no rain for days'));
   const airSnapshot = MonoEnvironment.snapshot(state.aq), pollenKnown = airSnapshot.pollen.every(p => p.max !== null), pollenElevated = airSnapshot.pollen.some(p => p.level >= 1);
   if (pop14 < 0.2 && fin(fMax) && fMax >= 15 && fMax <= 28 && fin(eaqi) && eaqi <= 40 && fin(dust) && dust <= 20 && pollenKnown && !pollenElevated) add('home', 'partly-day', X('Αέρισε σύντομα, ελέγχοντας τον αέρα και τη γύρη εκείνη την ώρα', 'Air out briefly, checking air quality and pollen at that time'));

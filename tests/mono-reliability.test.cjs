@@ -64,7 +64,7 @@ test('rain flags stored as booleans are accepted', () => {
 test('card and day badges are labelled as a historical rate, in Greek and English', () => {
   const rel = R.compute(train({ tempMiss: 10 }));
   const el = R.render(rel, { lang: 'el', dayLabels: ['Σήμερα', 'Αύριο'] });
-  assert.match(el, /Πιθανότητα να πέσει μέσα η πρόγνωση για αύριο/);
+  assert.match(el, /Ιστορικό ποσοστό επιτυχίας στον ορίζοντα αύριο/);
   assert.match(el, /ERA5/);
   assert.match(el, /όχι εγγύηση/);
   assert.match(R.render(rel, { lang: 'en' }), /How often the forecast is right/);

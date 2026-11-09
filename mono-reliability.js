@@ -48,7 +48,7 @@
   function badge(rel, i, lang = 'el') {
     const L = forLead(rel, i); if (!L) return '';
     const p = Math.round(L.joint.p), el = lang !== 'en';
-    const title = el ? `Πιθανότητα να βγει σωστή η πρόγνωση MONO για αυτή τη μέρα: ${p}% (ιστορικό τεστ)` : `Chance MONO's forecast is right for this day: ${p}% (historical test)`;
+    const title = el ? `Ιστορικό ποσοστό επιτυχίας για αυτόν τον ορίζοντα: ${p}% (ωριαίο τεστ, ERA5)` : `Historical hourly hit rate at this lead: ${p}% (ERA5 test)`;
     return `<span class="rel-badge rel-${level(p)}" title="${title}">✓ ${p}%</span>`;
   }
 
@@ -68,7 +68,7 @@
       : X('θερμοκρασία ±2 °C', 'temperature ±2 °C');
     return `<section class="section card rel-card" aria-label="${X('Αξιοπιστία πρόγνωσης MONO', 'MONO forecast reliability')}">
   <div class="panelhead"><div><span class="label">MONO / ${X('ΑΞΙΟΠΙΣΤΙΑ', 'RELIABILITY')}</span><h2 class="rel-title">${X('Πόσο συχνά βγαίνει σωστή η πρόγνωση', 'How often the forecast is right')}</h2></div></div>
-  <div class="rel-hero"><div class="rel-big rel-${level(head.joint.p)}">${n0(head.joint.p)}</div><p>${X(`Πιθανότητα να πέσει μέσα η πρόγνωση για ${headDay}`, `Chance the forecast for ${headDay} is right`)}<small>${what}</small></p></div>
+  <div class="rel-hero"><div class="rel-big rel-${level(head.joint.p)}">${n0(head.joint.p)}</div><p>${X(`Ιστορικό ποσοστό επιτυχίας στον ορίζοντα ${headDay}`, `Historical hit rate at the ${headDay} lead`)}<small>${what}</small></p></div>
   <div class="rel-days">${days}</div>
   <div class="rel-parts">${part(X('Θερμοκρασία ±2°', 'Temperature ±2°'), head.temp, vsMean)}${part(X('Άνεμος ±10 km/h', 'Wind ±10 km/h'), head.wind)}${part(X('Βρέχει / δεν βρέχει', 'Rain / no rain'), head.rain)}${fin(head.pod) ? part(X('Εντόπισε τη βροχή', 'Caught the rain'), { p: head.pod }, X('από τις ώρες που έβρεξε', 'of the hours it rained')) : ''}</div>
   <p class="rel-foot">${X(`Ανεξάρτητο τεστ: το τελευταίο 20% των ${rel.days || ''} ημερών εκπαίδευσης, που δεν χρησιμοποιήθηκε ούτε για εκπαίδευση ούτε για επιλογή μεθόδου, ${head.joint.n} ώρες για ${headDay}. Αναφορά: ERA5 (πλέγμα), όχι τοπικός σταθμός. Ποσοστό από το παρελθόν, όχι εγγύηση για την τωρινή κατάσταση.`, `Independent test: the last 20% of ${rel.days || ''} training days, never used to fit or choose a method; ${head.joint.n} hours for ${headDay}. Reference: ERA5 (grid), not a local station. A past rate, not a guarantee for the current situation.`)}</p>

@@ -32,11 +32,12 @@ test('station tab reports MONO honestly, including when the model average wins',
   assert.equal(Trust.station({ available: false }), '');
 });
 
-test('home uses the single trust card instead of separate confidence cards', () => {
+test('home separates forecast changes from the historical trust card', () => {
   const app = read('app.js'), start = app.indexOf('function nowPage()'), now = app.slice(start, app.indexOf('\nfunction ', start + 10));
   assert.match(now, /trustCard\(\)/);
   assert.doesNotMatch(now, /reliabilityCard\(\) \+ yesterdayCard\(\)/);
-  assert.doesNotMatch(now, /MONOForecastConfidence\?\.render/);
+  assert.match(now, /mode:'changes'/);
+  assert.match(app, /mode:'agreement'/);
 });
 
 test('space code is loaded on demand and not shown on the home screen', () => {

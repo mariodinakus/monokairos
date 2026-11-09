@@ -598,3 +598,6 @@ html[data-theme=dark]{--r1:#46648c;--r2:#3f7fd8;--r3:#5b9cf0;--r4:#9cc6ff;--r5:#
 .mr-table-scroll tbody th{font-weight:650}
 .mr-compare-note{margin:15px 0 0;font-size:11px;line-height:1.65;color:var(--sub)}
 @media(max-width:700px){.mr-compare{padding:17px}.mr-chart{min-width:700px}.mr-summary{gap:9px}.mr-highlight{min-width:120px}.mr-legend{font-size:10px}.mr-bar{width:19px}}
+
+/* Keep incomplete rainfall coverage visible next to the amount. */
+.mr-bar-value:has(.mr-coverage){height:34px}.mr-coverage{display:block;font-size:9px;font-weight:500;opacity:.72}.fc-changes .fc-revision{margin-top:0;border-top:0;padding-top:0}

@@ -61,3 +61,13 @@ test('history selects an approximately hour-old same-device capture',()=>{
  const shorter=samples.slice(1);assert.equal(F.selectHistory(shorter,now).previous.at,now-45*60e3);
  assert.equal(F.selectHistory([samples.at(-1)],now),null);
 });
+
+
+test('forecast changes and model agreement can be displayed independently', () => {
+  const changes = F.render({mode:'changes', view:{zone:'UTC',rows:[],active:[]}});
+  assert.match(changes, /Τι άλλαξε στην πρόγνωση/);
+  assert.doesNotMatch(changes, /Πόσο συμφωνούν τα μοντέλα/);
+  const agreement = F.render({mode:'agreement', view:{zone:'UTC',rows:[],active:[]}});
+  assert.match(agreement, /Πόσο συμφωνούν τα μοντέλα/);
+  assert.doesNotMatch(agreement, /Τι άλλαξε στην πρόγνωση/);
+});

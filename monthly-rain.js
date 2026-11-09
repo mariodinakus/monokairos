@@ -188,8 +188,9 @@
     const columns=observations.map(r=>{
       const partial=!r.complete && fin(r.amount);
       const amountText=fin(r.amount)?number(r.amount)+(partial?'*':''):'—';
+      const coverageText=partial?'<small class="mr-coverage">'+r.coverage+'/'+r.days+' '+X('ημέρες','days')+'</small>':'';
       const tip=label(r)+' · '+(r.complete?X('Πλήρης μήνας','Full month'):X('Μερική κάλυψη','Partial coverage')+' '+r.coverage+'/'+r.days);
-      return '<div class="mr-column"><div class="mr-bar-value">'+amountText+'</div><div class="mr-bars">'+
+      return '<div class="mr-column"><div class="mr-bar-value">'+amountText+coverageText+'</div><div class="mr-bars">'+
         bar(r.amount,partial?'mr-partial':'mr-actual',tip+' · '+amountText+' mm')+
         bar(r.normal,'mr-normal',X('Ιστορικός μέσος','Historical average')+' '+number(r.normal)+' mm')+
         '</div><span class="mr-xlabel">'+esc(months[r.month-1])+'<small>'+r.year+'</small></span></div>';

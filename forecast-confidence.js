@@ -76,7 +76,7 @@ function compare(history,now=Date.now()){
   temp:calc('temp',avg),wind:calc('wind',a=>Math.max(...a)),cloud:calc('cloud',avg),
   liquid:calc('liquid',a=>a.reduce((s,x)=>s+x,0),24),pop:calc('pop',a=>Math.max(...a)),firstRain};
 }
-function render({view,lang='el',history=[],train=null,snapshot=false,now=Date.now()}={}){
+function render({view,lang='el',history=[],train=null,snapshot=false,now=Date.now(),mode='all'}={}){
  const el=lang!=='en', X=(a,b)=>el?a:b;
  const zone=view?.zone||'UTC', locale=el?'el-GR':'en-GB';
  const stamp=t=>{try{return new Date(t).toLocaleString(locale,{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:zone});}catch{return '—';}};
@@ -111,12 +111,14 @@ function render({view,lang='el',history=[],train=null,snapshot=false,now=Date.no
   <p class="fc-rain-timing"><b>☂ ${X('Χρονισμός βροχής','Rain timing')}</b> ${rain}</p>
   <p class="fc-note">${X('Αφορά την πρώτη ωριαία ένδειξη ≥0,2 mm βροχής/μπόρας, όχι ακριβές λεπτό έναρξης. Η σύγκριση προέρχεται από τη βασική πρόγνωση Open-Meteo που έλαβε αυτή η συσκευή· οι ώρες είναι ώρες λήψης, όχι έκδοσης μοντέλου.','First hourly indication ≥0.2 mm of rain/showers, not an exact start minute. Comparison uses the Open-Meteo base forecast retrieved by this device; times are fetch times, not model issue times.')}</p>`:
   `<p class="fc-empty">${X('Μόλις ληφθεί επόμενη πρόγνωση για την ίδια περιοχή, θα εμφανιστούν εδώ οι αλλαγές σε σχέση με την προηγούμενη.','Once another forecast for this location is fetched, changes from the earlier forecast appear here.')}</p>`;
+ const revision = `<div class="fc-revision"><div class="fc-revision-head"><div><span class="fc-eyebrow">MONO / ${X('ΑΛΛΑΓΕΣ ΠΡΟΓΝΩΣΗΣ','FORECAST UPDATES')}</span><h3>${X('Τι άλλαξε στην πρόγνωση;','What changed in the forecast?')}</h3></div><span>${X('Επόμενο 24ωρο','Next 24 hours')}</span></div>${changes}</div>`;
+ if(mode==='changes') return snapshot ? '' : `<section class="section card fc-panel fc-changes">${revision}</section>`;
  return `<section class="section card fc-panel" aria-label="${X('Συμφωνία και αλλαγές πρόγνωσης','Forecast agreement and changes')}">
  <div class="fc-heading"><div><span class="fc-eyebrow">MONO / ${X('ΕΛΕΓΧΟΣ ΠΡΟΓΝΩΣΗΣ','FORECAST CHECK')}</span><h2>${X('Πόσο συμφωνούν τα μοντέλα;','How closely do the models agree?')}</h2><p>${X('Μια καθαρή εικόνα για την πρόγνωση των επόμενων 6 ωρών.','A clear view of the forecast for the next 6 hours.')}</p></div><div class="fc-score"><strong>${score}</strong><span>${X('ΣΥΜΦΩΝΙΑ','AGREEMENT')}</span></div></div>
  <p class="fc-data">${scoreText}</p><p class="fc-caveat">${X('Συμφωνία μοντέλων, όχι μετρημένη πιθανότητα επαλήθευσης.','Model agreement, not a measured probability of forecast success.')}</p><div class="fc-breakdown">${metrics}</div>
  <details class="fc-explain"><summary>${X('Τι σημαίνει το ποσοστό;','What does the percentage mean?')}</summary><p>${X('Ποσοστό συγκρίσεων μοντέλου–ώρας που συμφωνούν ταυτόχρονα με το MONO σε θερμοκρασία ±2 °C, άνεμο ±10 km/h, νέφωση ±20 μονάδες και ένδειξη υετού ≥0,2 mm. Τα επιμέρους ποσοστά έχουν δικά τους διαθέσιμα δείγματα. Τα μοντέλα μπορεί να κάνουν κοινό λάθος: αυτό δεν είναι πιθανότητα να επαληθευτεί η πρόγνωση.','Share of model-hour comparisons matching MONO simultaneously for temperature ±2 °C, wind ±10 km/h, cloud cover ±20 points and precipitation ≥0.2 mm. Individual percentages use their own available samples. Models may share errors: this is not the probability that the forecast will verify.')}</p></details>
  <p class="fc-history">${historical} <button type="button" data-action="goto" data-page="history">${X('Δες τον έλεγχο','View evaluation')} ↗</button></p>
- <div class="fc-revision"><div class="fc-revision-head"><div><span class="fc-eyebrow">MONO / ${X('ΑΛΛΑΓΕΣ ΠΡΟΓΝΩΣΗΣ','FORECAST UPDATES')}</span><h3>${X('Τι άλλαξε στην πρόγνωση;','What changed in the forecast?')}</h3></div><span>${X('Επόμενο 24ωρο','Next 24 hours')}</span></div>${changes}</div></section>`;
+ ${mode === 'agreement' ? '' : revision}</section>`;
 }
 root.MONOForecastConfidence={agreement,capture,selectHistory,compare,render};
 if(typeof module!=='undefined'&&module.exports)module.exports=root.MONOForecastConfidence;
