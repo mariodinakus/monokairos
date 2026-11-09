@@ -42,7 +42,7 @@ test('Statistical Lab uses forecast data and held-out scores separately',()=>{
  assert.match(html,/Spearman/);
  assert.match(html,/1,20°/);
  assert.match(html,/Brier score/);
- assert.match(html,/όχι πραγματικές μετρήσεις/i);
+ assert.match(html,/ΟΧΙ πραγματικές μετρήσεις/);
 });
 test('native MathML renders the MONO formula cards without remote dependencies',()=>{
  const html=MathTypeset.render('01','ŷ = (1 / M) Σ fₘ');
