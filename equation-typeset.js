@@ -25,7 +25,7 @@ const formulas={
        r(mi('P'),op('←'),op('('),n('1'),minus,mi('K'),op(')'),mi('P'))],
  '05':[r(yh,equals,frac(r(sum(mi('a'),mi('A')),sub(mi('w'),mi('a')),op('['),sub(mi('y'),mi('a')),plus,n('0.5'),op('('),mi('f̄'),minus,sub(mi('f̄'),mi('a')),op(')'),op(']')),r(sum(mi('a'),mi('A')),sub(mi('w'),mi('a'))))),
         r(sub(mi('w'),mi('a')),equals,frac(n('1'),r(sub(mi('d'),mi('a')),plus,n('0.05'))))],
- '05b':[r(sub(mi('w'),mi('j')),op('∝'),frac(n('1'),sup(r(mi('max'),op('('),sub(mi('MAE'),mi('j')),op(','),n('0.05'),op(')')),n('2'))),
+ '05b':[r(sub(mi('w'),mi('j')),op('∝'),frac(n('1'),sup(r(mi('max'),op('('),sub(mi('MAE'),mi('j')),op(','),n('0.05'),op(')')),n('2')))),
          r(yh,equals,frac(r(sum(mi('j'),mi('J')),sub(mi('w'),mi('j')),sub(yh,mi('j'))),r(sum(mi('j'),mi('J')),sub(mi('w'),mi('j')))))],
  '06':[r(mi('p'),equals,frac(n('1'),r(n('1'),plus,exp(r(minus,op('('),sub(mi('w'),n('0')),plus,sub(mi('w'),n('1')),mi('φ'),plus,sub(mi('w'),n('2')),mi('ln'),op('('),n('1'),plus,mi('ā'),op(')'),op(')'))))))],
  '06b':[r(mi('p'),equals,n('0.5'),sub(mi('p'),mi('MONO')),plus,n('0.5'),sub(mi('p'),mi('ensemble')))],
