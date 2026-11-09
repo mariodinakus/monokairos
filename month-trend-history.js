@@ -67,6 +67,7 @@ function describe(c,lang){
 function render(city,lang,allowStore){
   var en=lang==='en',items=read(city,allowStore),last=items[items.length-1],prior=items[items.length-2];
   var heading='<div class="mt-changes-top"><span class="mt-kicker">'+(en?'HOW THE MONTHLY TREND CHANGED':'ΠΩΣ ΑΛΛΑΞΕ Η ΜΗΝΙΑΙΑ ΤΑΣΗ')+'</span>';
+  if(!allowStore)return heading+'<h3>'+(en?'History is off':'Η καταγραφή αλλαγών είναι ανενεργή')+'</h3><p class="mt-changes-note">'+(en?'Enable optional caching in privacy settings to compare forecasts across visits.':'Ενεργοποίησε την προαιρετική αποθήκευση στις ρυθμίσεις απορρήτου, ώστε να συγκρίνονται διαδοχικές προβλέψεις.')+' <a href="privacy.html">'+(en?'Privacy settings':'Ρυθμίσεις απορρήτου')+'</a>.</p></div>';
   if(!last)return heading+'<p class="mt-changes-note">'+(en?'No valid comparison has been saved yet.':'Δεν υπάρχουν ακόμη αποθηκευμένα δεδομένα για σύγκριση.')+'</p></div>';
   if(!prior)return heading+'<h3>'+(en?'First forecast snapshot saved':'Πρώτη καταγραφή πρόγνωσης')+'</h3><p class="mt-changes-note">'+(en?'MONO will compare new data with this baseline when the forecast changes on a future visit.':'Στην επόμενη επίσκεψη με νέα δεδομένα, το MONO θα συγκρίνει τη μακρινή τάση με αυτή την πρώτη καταγραφή.')+'</p><small class="mt-changes-time">'+esc(when(last.at,lang))+'</small></div>';
   var same=comparisons(prior.rows,last.rows,Date.now()),changed=same.filter(function(x){return x.significant;});
