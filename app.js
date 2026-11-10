@@ -1157,10 +1157,10 @@ function historyErrorCode(e) {
 async function ensureTraining(c, gen, force = false) {
   if(state.trainStatus==='loading')return;
   const days=state.historyDays,all=read(K.train,{}),hit=all[ckey(c)];
-  if(!force&&state.train&&state.train.v===VERSION&&state.train.experimentalML&&state.train.days===days&&Date.now()-state.train.at<TRAIN_TTL){
+  if(!force&&state.train&&state.train.v===VERSION&&state.train.experimentalML?.rain&&state.train.days===days&&Date.now()-state.train.at<TRAIN_TTL){
     state.trainStatus='done';state.trainError=null;notifyTrainingFinished();return;
   }
-  if(!force&&hit&&hit.v===VERSION&&hit.experimentalML&&hit.days===days&&Date.now()-hit.at<TRAIN_TTL){
+  if(!force&&hit&&hit.v===VERSION&&hit.experimentalML?.rain&&hit.days===days&&Date.now()-hit.at<TRAIN_TTL){
     state.train=hit;state.trainStatus='done';state.trainError=null;notifyTrainingFinished();return;
   }
   state.trainStatus='loading';state.trainError=null;
@@ -1171,7 +1171,7 @@ async function ensureTraining(c, gen, force = false) {
   try {
     const params={
       lat:Number(c.lat).toFixed(2),lon:Number(c.lon).toFixed(2),
-      days,ml:'rf1',zone:state.main?.timezone||'UTC'
+      days,ml:'events1',zone:state.main?.timezone||'UTC'
     };
     const rec=await getJSON(q('/api/history',params),55000);
     if(ckey(c)!==ckey(state.city)||days!==state.historyDays){state.trainStatus='idle';state.trainProgress=null;return;}
