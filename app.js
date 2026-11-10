@@ -550,7 +550,7 @@ const ll = c => ({ latitude: (+c.lat).toFixed(4), longitude: (+c.lon).toFixed(4)
 const llp = c => ({ latitude: (+c.lat).toFixed(2), longitude: (+c.lon).toFixed(2) });
 const mainURL = c => q(OM, { ...ll(c), timezone: 'auto', timeformat: 'unixtime', past_days: 3, forecast_days: 7,
   current: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,visibility,is_day',
-  hourly: 'temperature_2m,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility,wind_speed_10m,cloud_cover', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
+  hourly: 'temperature_2m,dew_point_2m,cape,precipitation,precipitation_probability,rain,showers,snowfall,weather_code,is_day,uv_index,visibility,wind_speed_10m,cloud_cover', daily: 'sunrise,sunset,uv_index_max,daylight_duration' });
 const modelURL = (c, id) => q('/proxy/mono-forecast', { ...llp(c), models: id, hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
 const modelBatchURL = (c, group) => q('/proxy/mono-forecast', { ...llp(c), models: group.map(m => m.id).join(','), hourly: HV, timeformat: 'unixtime', timezone: 'UTC', past_days: 3, forecast_days: 7 });
 const rain15URL = c => q(OM, { ...ll(c), minutely_15: 'precipitation,rain,showers,snowfall,weather_code', forecast_minutely_15: 96, past_minutely_15: 4, timezone: 'auto', timeformat: 'unixtime' });
@@ -1268,7 +1268,7 @@ function recompute() {
       dir: nd ? (Math.atan2(u, v) * 180 / Math.PI + 360) % 360 : null,
       rh: M.mean(Object.values(vals('relative_humidity_2m', i))), cloud: fin(pc.value) ? M.clamp(pc.value + (!tr?.cloud?.leads?.[k] && fin(state.sharedRain?.cloud?.bias) ? state.sharedRain.cloud.bias : 0), 0, 100) : rowC.mean, cloudChoice: pc.choice, pres: M.mean(Object.values(vals('pressure_msl', i))),
       pMono: pr.prob, rainChoice: fin(stationAmount)?'station-calibrated':pr.choice, stationAdjusted:fin(stationAmount), amount: fin(stationAmount)?stationAmount:(fin(pr.amount) && !tr?.precip?.leads?.[k] && fin(state.sharedRain?.rain?.scale) ? Math.max(0,pr.amount*state.sharedRain.rain.scale) : pr.amount), codes: Object.values(vals('weather_code', i)),
-      isDay: W.hourly.is_day?.[i] ?? 1, uv: W.hourly.uv_index?.[i], visMain: W.hourly.visibility?.[i],
+      isDay: W.hourly.is_day?.[i] ?? 1, uv: W.hourly.uv_index?.[i], visMain: W.hourly.visibility?.[i], dew: meanAt('dew_point_2m', i), dewMain: W.hourly.dew_point_2m?.[i], capeMain: W.hourly.cape?.[i], snowMain: W.hourly.snowfall?.[i],
       vi: { cape: vals('cape', i), prec: vals('precipitation', i), snowf: vals('snowfall', i), vis: vals('visibility', i), gust: vals('wind_gusts_10m', i), code: vals('weather_code', i) },
       models: Object.fromEntries(order.map(id => [id, { T: md[id].temperature_2m[i], P: md[id].precipitation[i], W: md[id].wind_speed_10m[i], C: md[id].cloud_cover[i] }]))
     });
@@ -3672,7 +3672,7 @@ function render() {
   if (state.page === 'now' && !waiting.length && $('#mono-month-trend')) {
     window.MONOMonthTrend?.mount({lat:+state.city.lat,lon:+state.city.lon,lang:state.lang,city:cityName(state.city),daily:state.view?.daily||[],historyEnabled:cacheAllowed()});
   }
-  if(state.page==='lab' && !waiting.length)window.MONOStats?.mount({view:state.view,lang:state.lang});
+  if(state.page==='lab' && !waiting.length)window.MONOStats?.mount({view:state.view,train:state.train,lead:state.lead,lang:state.lang});
   if(state.page==='guide'){
     const q=$('#qs-panel');let start=null;
     q?.addEventListener('touchstart',e=>{const t=e.touches[0];if(t)start={x:t.clientX,y:t.clientY};},{passive:true});
