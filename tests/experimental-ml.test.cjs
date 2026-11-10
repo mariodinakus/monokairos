@@ -1,0 +1,6 @@
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');const ml=require('../lib/experimental-ml.cjs');
+function fixture(){const n=960,times=Array.from({length:n},(_,i)=>i*3600000),truth=times.map((_,i)=>10+5*Math.sin(i/24)+i/400),forecast=truth.map((v,i)=>v+Math.sin(i/20));return {times,truth:{temp:truth},models:{temp:{a:{0:forecast}},wind:{}}};}
+test('forest and regression are evaluated on identical unseen chronological hours',()=>{const d=fixture(),hours=d.times.map((_,i)=>i%24),r=ml.run(d,'temp',0,hours);assert.equal(r.train,576);assert.equal(r.trees,12);assert.equal(r.test.mean.n,192);assert.equal(r.test.forest.n,r.test.mean.n);assert.equal(r.test.ridge.n,r.test.mean.n);assert.ok(Number.isFinite(r.test.forest.mae));});
+test('test targets cannot change training or validation scores',()=>{const d=fixture(),hours=d.times.map((_,i)=>i%24),a=ml.run(d,'temp',0,hours);d.truth.temp.fill(999,768);const b=ml.run(d,'temp',0,hours);assert.deepEqual(a.validation,b.validation);assert.notEqual(a.test.forest.mae,b.test.forest.mae);});
+test('insufficient or missing aligned values never fabricate scores',()=>{const d=fixture();d.models.temp.a[0].fill(null,0,800);assert.equal(ml.run(d,'temp',0,d.times.map((_,i)=>i%24)),null);});
