@@ -8,15 +8,22 @@ const VARS=[
  {id:'pres',el:'Πίεση',en:'Pressure',unit:'hPa'},
  {id:'cloud',el:'Νέφη',en:'Clouds',unit:'%'},
  {id:'wind',el:'Άνεμος',en:'Wind',unit:'km/h'},
- {id:'amount',el:'Υετός',en:'Precipitation',unit:'mm/h'}
+ {id:'amount',el:'Υετός',en:'Precipitation',unit:'mm/h'},
+ {id:'feels',el:'Αίσθηση',en:'Feels like',unit:'°C'},
+ {id:'gust',el:'Ριπές',en:'Wind gusts',unit:'km/h'},
+ {id:'uv',el:'Δείκτης UV',en:'UV index',unit:'UV'},
+ {id:'vis',el:'Ορατότητα',en:'Visibility',unit:'km'},
+ {id:'cape',el:'CAPE',en:'CAPE',unit:'J/kg'},
+ {id:'snow',el:'Χιονόπτωση',en:'Snowfall',unit:'cm/h'},
+ {id:'rainprob',el:'Πιθανότητα υετού MONO',en:'MONO rain probability',unit:'%'}
 ];
-const CHOICES=[
- {id:'pressure-rain',x:'pres',y:'amount',el:'Πίεση / υετός',en:'Pressure / rain'},
- {id:'temp-humidity',x:'temp',y:'rh',el:'Θερμοκρασία / υγρασία',en:'Temperature / humidity'},
- {id:'cloud-rain',x:'cloud',y:'amount',el:'Νέφη / υετός',en:'Clouds / rain'},
- {id:'wind-cloud',x:'wind',y:'cloud',el:'Άνεμος / νέφη',en:'Wind / clouds'}
-];
-let active=CHOICES[0].id;
+const CHOICES=[];
+for(let i=0;i<VARS.length;i++) for(let j=i+1;j<VARS.length;j++) {
+ const x=VARS[i],y=VARS[j];
+ CHOICES.push({id:x.id+'-'+y.id,x:x.id,y:y.id,el:x.el+' / '+y.el,en:x.en+' / '+y.en});
+}
+
+let active='pres-amount';
 const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(x,lang,d=2)=>fin(x)?new Intl.NumberFormat(lang==='en'?'en-GB':'el-GR',{minimumFractionDigits:d,maximumFractionDigits:d}).format(x):'—';
 function dataset(view){
@@ -25,6 +32,10 @@ function dataset(view){
  return rows.slice(start,start+120).filter(x=>fin(x?.t)).map(row=>{
   const o={t:row.t};
   VARS.forEach(v=>{o[v.id]=fin(row[v.id])?row[v.id]:null;});
+  const avg=x=>{const a=Object.values(x||{}).filter(fin);return a.length?a.reduce((u,v)=>u+v,0)/a.length:null;};
+  o.vis=fin(row.visMain)?row.visMain/1000:null;
+  o.cape=avg(row.vi?.cape); o.snow=avg(row.vi?.snowf);
+  o.rainprob=fin(row.pMono)?100*row.pMono:null;
   return o;
  });
 }
@@ -63,7 +74,7 @@ function matrix(data){
  }));
 }
 function heatmap(mat,lang){
- const en=lang==='en',cw=58,x0=105,y0=84,W=475,H=465;
+ const en=lang==='en',cw=58,x0=155,y0=155,W=x0+VARS.length*cw+12,H=y0+VARS.length*cw+12;
  let s='<svg viewBox="0 0 '+W+' '+H+'" class="sl-svg" role="img" aria-label="'+(en?'Forecast Pearson correlation matrix':'Πίνακας συσχετίσεων προγνωστικών μεταβλητών')+'">';
  VARS.forEach((v,i)=>{
   s+='<text class="sl-axis" x="'+(x0-8)+'" y="'+(y0+i*cw+33)+'" text-anchor="end">'+esc(v[en?'en':'el'])+'</text>';
@@ -97,7 +108,21 @@ function scatter(data,choice,lang){
  s+='<line class="sl-fit" x1="'+sx(minx)+'" y1="'+sy(reg.intercept+reg.slope*minx)+'" x2="'+sx(maxx)+'" y2="'+sy(reg.intercept+reg.slope*maxx)+'"/>'+
   '<text class="sl-axis-title" x="'+(L+(W-L-R)/2)+'" y="'+(H-6)+'" text-anchor="middle">'+esc(xm[en?'en':'el'])+' ('+xm.unit+')</text>'+
   '<text class="sl-axis-title" transform="translate(15 '+(T+(H-T-B)/2)+') rotate(-90)" text-anchor="middle">'+esc(ym[en?'en':'el'])+' ('+ym.unit+')</text></svg>';
- return s+'<div class="sl-metrics"><span>Pearson r <b>'+fmt(reg.r,lang)+'</b></span><span>Spearman ρ <b>'+fmt(spearman(a),lang)+'</b></span><span>R² <b>'+fmt(reg.r2,lang)+'</b></span><span>n <b>'+reg.n+'</b></span></div>';
+ const direction=reg.r>0?(en?'move in the same direction':'τείνουν να κινούνται προς την ίδια κατεύθυνση'):reg.r<0?(en?'move in opposite directions':'τείνουν να κινούνται προς αντίθετες κατευθύνσεις'):(en?'show no linear relationship':'δεν εμφανίζουν γραμμική σχέση');
+ return s+'<div class="sl-metrics"><span>Pearson r <b>'+fmt(reg.r,lang)+'</b></span><span>Spearman ρ <b>'+fmt(spearman(a),lang)+'</b></span><span>R² <b>'+fmt(reg.r2,lang)+'</b></span><span>n <b>'+reg.n+'</b></span></div>'+
+ '<p class="sl-note">'+(en?'In this forecast, the variables ':'Σε αυτή την πρόγνωση, οι μεταβλητές ')+direction+'. '+(en?'Linear slope: ':'Γραμμική κλίση: ')+fmt(reg.slope,lang,3)+' '+esc(ym.unit)+' / '+esc(xm.unit)+'.</p>';
+}
+function rankedPairs(mat,lang){
+ const en=lang==='en', pairs=[];
+ for(let i=0;i<VARS.length;i++) for(let j=i+1;j<VARS.length;j++) {
+  const c=mat[i][j]; if(c.r!==null) pairs.push(c);
+ }
+ pairs.sort((a,b)=>Math.abs(b.r)-Math.abs(a.r));
+ if(!pairs.length)return '';
+ const name=id=>VARS.find(v=>v.id===id)[en?'en':'el'];
+ return '<article class="sl-panel"><h3>'+(en?'Strongest forecast relationships':'Οι ισχυρότερες σχέσεις της πρόγνωσης')+'</h3><div class="sl-bars">'+
+ pairs.slice(0,5).map(c=>'<div class="sl-bar-row"><div class="sl-bar-name"><b>'+esc(name(c.x))+' ↔ '+esc(name(c.y))+'</b><small>n='+c.n+' · Spearman ρ '+fmt(c.rho,lang)+'</small></div><div class="sl-track"><span style="width:'+(100*Math.abs(c.r)).toFixed(1)+'%"></span></div><strong>r '+fmt(c.r,lang)+'</strong></div>').join('')+
+ '</div><p class="sl-note">'+(en?'Ranked by absolute Pearson correlation; the sign shows direction.':'Κατάταξη με βάση την απόλυτη τιμή Pearson· το πρόσημο δείχνει την κατεύθυνση.')+'</p></article>';
 }
 function benchmarks(train,lead,lang){
  const en=lang==='en',T=train?.temp?.leads?.[lead],P=train?.precip?.leads?.[lead];
@@ -125,30 +150,36 @@ function render({view,train,lead=0,lang='el'}={}){
  const en=lang==='en',data=dataset(view),m=matrix(data),best=m.flat().filter(c=>c.x!==c.y&&c.r!==null&&c.n>=MIN).sort((a,b)=>Math.abs(b.r)-Math.abs(a.r))[0];
  const name=id=>VARS.find(v=>v.id===id)?.[en?'en':'el']||id;
  const pair=CHOICES.find(c=>c.id===active)||CHOICES[0];
- const buttons=CHOICES.map(c=>'<button type="button" class="sl-pair '+(c.id===active?'active':'')+'" data-sl-pair="'+c.id+'" aria-pressed="'+(c.id===active)+'">'+esc(c[en?'en':'el'])+'</button>').join('');
+ const options=(chosen)=>VARS.map(v=>'<option value="'+v.id+'" '+(v.id===chosen?'selected':'')+'>'+esc(v[en?'en':'el'])+'</option>').join('');
+ const buttons='<label>'+(en?'Variable X':'Μεταβλητή Χ')+' <select data-sl-x>'+options(pair.x)+'</select></label> <label>'+(en?'Variable Y':'Μεταβλητή Υ')+' <select data-sl-y>'+options(pair.y)+'</select></label>';
  return '<section class="section card sl-root" id="mono-statistical-lab">'+
   '<header class="sl-heading"><div><span class="sl-overline">MONO / STATISTICAL OBSERVATORY</span><h2>'+(en?'Correlations & statistical models':'Συσχετίσεις & στατιστικά μοντέλα')+'</h2>'+
   '<p>'+(en?'Explore relationships in the model forecast; compare methods using separate test scores.':'Εξερεύνησε τις συσχετίσεις της πρόγνωσης και σύγκρινε τις μεθόδους με ξεχωριστά αποτελέσματα ελέγχου.')+'</p></div>'+
   '<div class="sl-count">'+data.length+' '+(en?'forecast hours':'ώρες πρόγνωσης')+' · ≤120 h</div></header>'+
   '<div class="sl-highlights"><div><small>'+(en?'STRONGEST PAIR':'ΙΣΧΥΡΟΤΕΡΟ ΖΕΥΓΟΣ')+'</small><b>'+(best?esc(name(best.x))+' ↔ '+esc(name(best.y)):(en?'Not enough data':'Ανεπαρκή δεδομένα'))+'</b><span>'+(best?'Pearson r = '+fmt(best.r,lang)+' · n='+best.n:'—')+'</span></div>'+
   '<div><small>'+(en?'STATISTICAL METHODS':'ΣΤΑΤΙΣΤΙΚΕΣ ΜΕΘΟΔΟΙ')+'</small><b>Pearson · Spearman · OLS</b><span>'+(en?'Minimum 24 paired hours':'Τουλάχιστον 24 κοινές ώρες')+'</span></div></div>'+
-  '<div class="sl-layout"><article class="sl-panel"><h3>'+(en?'Correlation matrix':'Πίνακας συσχετίσεων')+'</h3>'+heatmap(m,lang)+
+  '<div class="sl-layout"><article class="sl-panel"><h3>'+(en?'Correlation matrix':'Πίνακας συσχετίσεων')+'</h3>'+'<div style="overflow-x:auto"><div style="min-width:920px">'+heatmap(m,lang)+'</div></div>'+ 
   '<p class="sl-note">'+(en?'Pairwise Pearson correlation, from hourly model forecasts only.':'Συσχέτιση Pearson ανά ζεύγος, μόνο από ωριαίες προβλέψεις.')+'</p></article>'+
-  '<article class="sl-panel"><h3>'+(en?'Scatter & linear fit':'Διασπορά και γραμμική τάση')+'</h3><div class="sl-choices">'+buttons+'</div><div id="sl-scatter">'+scatter(data,pair,lang)+'</div>'+
+  '<article class="sl-panel"><h3>'+(en?'Scatter & linear fit':'Διασπορά και γραμμική τάση')+'</h3><p class="sl-note">'+(en?'Choose any two of the 13 forecast variables.':'Επίλεξε οποιεσδήποτε δύο από τις 13 μεταβλητές πρόγνωσης.')+'</p><div class="sl-choices">'+buttons+'</div><div id="sl-scatter">'+scatter(data,pair,lang)+'</div>'+
   '<p class="sl-note">'+(en?'OLS is descriptive; R² is not forecast accuracy.':'Η παλινδρόμηση OLS είναι περιγραφική· το R² δεν είναι ακρίβεια πρόγνωσης.')+'</p></article></div>'+
-  benchmarks(train,lead,lang)+
-  '<p class="sl-caution">'+(en?'Interpretation: these correlations arise from predicted values, NOT observed measurements. Shared model inputs and serial dependence affect the correlations. No causal claim, p-value, or calibrated success probability is inferred.':'Ερμηνεία: οι συσχετίσεις προέρχονται από προβλέψεις, ΟΧΙ πραγματικές μετρήσεις. Οι κοινές είσοδοι και η χρονική αυτοσυσχέτιση επηρεάζουν τις τιμές. Δεν τεκμηριώνεται αιτιότητα, στατιστική σημαντικότητα ή πιθανότητα επιτυχίας.')+'</p></section>';
+  rankedPairs(m,lang)+benchmarks(train,lead,lang)+
+  '<p class="sl-caution">'+(en?'Interpretation: these correlations arise from predicted values, NOT observed measurements. Some variables are mathematically related (e.g. feels-like and temperature); many zero rain or snowfall values can affect correlations. Visibility and UV come from the main forecast; CAPE and snowfall are averages of available models, and rain probability is MONO before the final ensemble blend. Shared inputs and serial dependence affect correlations. No causal claim, p-value, or calibrated success probability is inferred.':'Ερμηνεία: οι συσχετίσεις προέρχονται από προβλέψεις, ΟΧΙ πραγματικές μετρήσεις. Ορισμένες μεταβλητές συνδέονται μαθηματικά (π.χ. αίσθηση και θερμοκρασία), ενώ πολλές μηδενικές τιμές υετού ή χιονιού μπορεί να επηρεάσουν τις συσχετίσεις. Η ορατότητα και ο UV προέρχονται από την κύρια πρόγνωση· CAPE και χιονόπτωση είναι μέσοι όροι διαθέσιμων μοντέλων, ενώ η πιθανότητα υετού είναι η εκτίμηση MONO πριν από τον τελικό συνδυασμό ensemble. Οι κοινές είσοδοι και η χρονική αυτοσυσχέτιση επηρεάζουν τις τιμές. Δεν τεκμηριώνεται αιτιότητα, στατιστική σημαντικότητα ή πιθανότητα επιτυχίας.')+'</p></section>';
 }
 function mount({view,lang='el'}={}){
  const rootNode=typeof document==='undefined'?null:document.getElementById('mono-statistical-lab');
  if(!rootNode)return;
  const data=dataset(view),host=rootNode.querySelector('#sl-scatter');
- rootNode.querySelectorAll('[data-sl-pair]').forEach(btn=>btn.addEventListener('click',()=>{
-  const c=CHOICES.find(x=>x.id===btn.dataset.slPair);if(!c||!host)return;
-  active=c.id;rootNode.querySelectorAll('[data-sl-pair]').forEach(b=>{const yes=b.dataset.slPair===active;b.classList.toggle('active',yes);b.setAttribute('aria-pressed',String(yes));});
+ const x=rootNode.querySelector('[data-sl-x]'),y=rootNode.querySelector('[data-sl-y]');
+ const update=()=>{
+  if(!x||!y||!host)return;
+  if(x.value===y.value){host.innerHTML='<p class="sl-empty">'+(lang==='en'?'Choose two different variables.':'Επίλεξε δύο διαφορετικές μεταβλητές.')+'</p>';return;}
+  const c={x:x.value,y:y.value};
+  const forward=CHOICES.find(z=>z.x===c.x&&z.y===c.y);if(forward)active=forward.id;
   host.innerHTML=scatter(data,c,lang);
- }));
+ };
+ x?.addEventListener('change',update);y?.addEventListener('change',update);
 }
 const api={render,mount,dataset,paired,pearson,spearman,regression,matrix,benchmarks};
 root.MONOStats=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
+
