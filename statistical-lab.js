@@ -116,6 +116,24 @@ function scatter(data,choice,lang){
  return s+'<div class="sl-metrics"><span>Pearson r <b>'+fmt(reg.r,lang)+'</b></span><span>Spearman ρ <b>'+fmt(spearman(a),lang)+'</b></span><span>R² <b>'+fmt(reg.r2,lang)+'</b></span><span>n <b>'+reg.n+'</b></span></div>'+
  '<p class="sl-note">'+(en?'In this forecast, the variables ':'Σε αυτή την πρόγνωση, οι μεταβλητές ')+direction+'. '+(en?'Linear slope: ':'Γραμμική κλίση: ')+fmt(reg.slope,lang,3)+' '+esc(ym.unit)+' / '+esc(xm.unit)+'.</p>';
 }
+function observations(data,lang){
+ const en=lang==='en';
+ const pairs=[['rh','amount'],['cloud','amount'],['pres','amount'],['pressure3','amount'],['wind','gust'],['temp','rh'],['cape','amount']];
+ const name=id=>VARS.find(v=>v.id===id)?.[en?'en':'el']||id;
+ const findings=pairs.map(([x,y])=>{const a=paired(data,x,y);return {x,y,n:a.length,r:pearson(a)};}).filter(p=>p.r!==null&&Math.abs(p.r)>=.2).sort((a,b)=>Math.abs(b.r)-Math.abs(a.r)).slice(0,3);
+ let h='<section class="sl-panel sl-observations"><div class="sl-sectiontitle"><span>MONO / WEATHER INSIGHTS</span><h3>'+(en?'What MONO observes':'Τι παρατηρεί το MONO')+'</h3><p>'+(en?'Patterns in the selected hourly forecast window.':'Μοτίβα στο επιλεγμένο χρονικό διάστημα ωριαίας πρόγνωσης.')+'</p></div>';
+ if(!findings.length)h+='<p class="sl-empty">'+(en?'No notable linear relationship with enough paired hours in this window.':'Δεν εντοπίστηκε αξιοσημείωτη γραμμική συσχέτιση με επαρκείς κοινές ώρες σε αυτό το διάστημα.')+'</p>';
+ else h+='<div class="sl-insight-list">'+findings.map(p=>{const direction=p.r>0?(en?'tend to rise and fall together':'τείνουν να ανεβαίνουν και να πέφτουν μαζί'):(en?'tend to move in opposite directions':'τείνουν να κινούνται αντίθετα');return '<div class="sl-insight"><b>'+esc(name(p.x))+' ↔ '+esc(name(p.y))+'</b><p>'+(en?'In this forecast they ':'Σε αυτή την πρόγνωση ')+direction+'.</p><small>r = '+fmt(p.r,lang)+' · '+(en?'paired hours':'κοινές ώρες')+' '+p.n+'</small></div>';}).join('')+'</div>';
+ const valid=data.filter(r=>fin(r.rh)&&fin(r.amount));
+ if(valid.length>=24){
+  const sorted=valid.map(r=>r.rh).sort((a,b)=>a-b),mid=sorted.length>>1,median=sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2;
+  const low=valid.filter(r=>r.rh<=median),high=valid.filter(r=>r.rh>median);
+  if(low.length>=12&&high.length>=12){const avg=a=>a.reduce((s,r)=>s+r.amount,0)/a.length;
+   h+='<div class="sl-comparison"><b>'+(en?'Humidity and forecast precipitation':'Υγρασία και προβλεπόμενος υετός')+'</b><p>'+(en?'Using this window’s median humidity':'Με όριο τη διάμεση υγρασία του διαστήματος')+' ('+fmt(median,lang,1)+'%): '+(en?'at or below the median, average':'στις ώρες με υγρασία έως το όριο, ο μέσος υετός είναι')+' '+fmt(avg(low),lang,3)+' mm/h (n='+low.length+'); '+(en?'above the median, average':'στις ώρες πάνω από το όριο')+' '+fmt(avg(high),lang,3)+' mm/h (n='+high.length+').</p></div>';
+  }
+ }
+ return h+'<p class="sl-note">'+(en?'These are descriptions of forecasts, not observations or causal effects. Hourly values are time-dependent; derived variables and shared model inputs can create strong relationships.':'Οι παρατηρήσεις περιγράφουν προβλέψεις, όχι μετρήσεις ή σχέσεις αιτίας–αποτελέσματος. Οι διαδοχικές ώρες συνδέονται μεταξύ τους και οι κοινές ή παράγωγες μεταβλητές μπορούν να ενισχύουν τις συσχετίσεις.')+'</p></section>';
+}
 function rankedPairs(mat,lang){
  const en=lang==='en', pairs=[];
  for(let i=0;i<VARS.length;i++) for(let j=i+1;j<VARS.length;j++) {
@@ -189,7 +207,7 @@ function render({view,train,lead=0,lang='el'}={}){
   '<p class="sl-note">'+(en?'Pairwise Pearson correlations from hourly forecasts. Select a cell to explore it; scroll horizontally to see all variables.':'Pearson ανά ζεύγος από ωριαίες προβλέψεις. Πάτησε ένα κελί για να δεις το διάγραμμα. Σύρε οριζόντια για όλες τις μεταβλητές.')+'</p></article>'+
   '<article class="sl-panel"><h3>'+(en?'Scatter & linear fit':'Διασπορά και γραμμική τάση')+'</h3><p class="sl-note">'+(en?'Choose any two of the 17 forecast variables.':'Επίλεξε οποιεσδήποτε δύο από τις 17 μεταβλητές πρόγνωσης.')+'</p><div class="sl-choices">'+buttons+'</div><div id="sl-scatter">'+scatter(data,pair,lang)+'</div>'+
   '<p class="sl-note">'+(en?'OLS is descriptive; R² is not forecast accuracy.':'Η παλινδρόμηση OLS είναι περιγραφική· το R² δεν είναι ακρίβεια πρόγνωσης.')+'</p></article></div>'+
-  rankedPairs(m,lang)+experimental(train,lead,lang)+benchmarks(train,lead,lang)+
+  observations(data,lang)+rankedPairs(m,lang)+experimental(train,lead,lang)+benchmarks(train,lead,lang)+
   '<p class="sl-caution">'+(en?'Interpretation: these correlations arise from predicted values, NOT observed measurements. Some variables are mathematically related (e.g. feels-like and temperature); many zero rain or snowfall values can affect correlations. Visibility and UV come from the main forecast; CAPE, snowfall and dew point use model averages where available, otherwise the main forecast, and rain probability is MONO before the final ensemble blend. Shared inputs and serial dependence affect correlations. No causal claim, p-value, or calibrated success probability is inferred.':'Ερμηνεία: οι συσχετίσεις προέρχονται από προβλέψεις, ΟΧΙ πραγματικές μετρήσεις. Ορισμένες μεταβλητές συνδέονται μαθηματικά (π.χ. αίσθηση και θερμοκρασία), ενώ πολλές μηδενικές τιμές υετού ή χιονιού μπορεί να επηρεάσουν τις συσχετίσεις. Η ορατότητα και ο UV προέρχονται από την κύρια πρόγνωση· CAPE, χιονόπτωση και σημείο δρόσου προέρχονται από τον μέσο όρο των διαθέσιμων μοντέλων ή, εναλλακτικά, από την κύρια πρόγνωση, η πιθανότητα MONO είναι πριν από τον τελικό συνδυασμό ensemble. Η διαφορά σημείου δρόσου και η τρίωρη μεταβολή πίεσης είναι παράγωγοι δείκτες. Οι κοινές είσοδοι και η χρονική αυτοσυσχέτιση επηρεάζουν τις τιμές. Δεν τεκμηριώνεται αιτιότητα, στατιστική σημαντικότητα ή πιθανότητα επιτυχίας.')+'</p></section>';
 }
 function mount({view,train,lead=0,lang='el'}={}){
