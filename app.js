@@ -1315,6 +1315,13 @@ function recompute() {
     r.pHeat = fin(r.temp) ? 1 - M.ncdf((35 - r.temp) / sigma) : 0;
     r.code = M.synthCode({ temp: r.temp, prob: r.pop ?? 0, amount: r.amount ?? 0, cloud: r.cloud, codes: r.codes, pStorm: r.pStorm, pSnow: r.pSnow, pFog: r.pFog });
     if (!r.nModels && fin(W.hourly.weather_code?.[i])) r.code = W.hourly.weather_code[i];
+    r.eventAvailable = {
+      storm: fin(eStorm) || fin(dCape) || Object.values(r.vi.code).some(fin),
+      snow: fin(eSnow) || Object.values(r.vi.snowf).some(fin),
+      fog: Object.values(r.vi.vis).some(fin) || Object.values(r.vi.code).some(fin) || fin(r.visMain),
+      wind: fin(eGust) || fin(dGust), heavy: Object.values(r.vi.prec).some(fin) || famP.some(f => f.members?.some(m => fin(m[i]))),
+      frost: fin(r.temp), heat: fin(r.temp)
+    };
     delete r.vi;
   }
 
@@ -1331,11 +1338,11 @@ function recompute() {
     const pop = fin(ensDay) && fin(det) ? 0.6 * ensDay + 0.4 * det : fin(ensDay) ? ensDay : det;
     const wettest = fut.reduce((a, r) => (!a || (r.amount ?? 0) > (a.amount ?? 0) ? r : a), null);
     const noon = rows.find(r => r.H === 13) || rows[Math.floor(rows.length / 2)];
-    const mx = f => (fut.length ? Math.max(0, ...fut.map(f).filter(fin)) : 0);
+    const mx = (k, f) => { const v = fut.filter(r => r.eventAvailable?.[k]).map(f).filter(fin); return v.length ? Math.max(...v) : null; };
     const heavy = M.ensembleDailyWet(famP, idxs, 20);
     return { key: d, t: noon.t, cloud: (() => { const all = rows.filter(r => fin(r.cloud)), day = all.filter(r => r.isDay); const s = day.length ? day : all; return s.length ? s.reduce((a, r) => a + r.cloud, 0) / s.length : null; })(), hi: temps.length ? Math.max(...temps) : null, lo: temps.length ? Math.min(...temps) : null, pop,
       mm: fut.reduce((a, r) => a + (fin(r.amount) ? r.amount : 0), 0), code: pop >= 0.5 && wettest ? wettest.code : noon.code,
-      ev: { rain: pop, heavy: fin(heavy) ? heavy : mx(r => r.pHeavy), storm: mx(r => r.pStorm), snow: mx(r => r.pSnow), fog: mx(r => r.pFog), wind: mx(r => r.pWind), frost: mx(r => r.pFrost), heat: mx(r => r.pHeat) } };
+      ev: { rain: pop, heavy: fin(heavy) ? heavy : mx('heavy', r => r.pHeavy), storm: mx('storm', r => r.pStorm), snow: mx('snow', r => r.pSnow), fog: mx('fog', r => r.pFog), wind: mx('wind', r => r.pWind), frost: mx('frost', r => r.pFrost), heat: mx('heat', r => r.pHeat) } };
   });
 
   // ---- rain periods in the next 72 h
@@ -1868,18 +1875,49 @@ function phenPage() {
   const head = header(T('phenTitle'), T('phenSub'));
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const days = V.daily;
+  const el = state.lang === 'el';
+  const X = (a, b) => el ? a : b;
+  const confidence = window.MONOForecastConfidence?.render({view:V, lang:state.lang, history:forecastHistory[ckey(state.city)] || [], train:state.train, snapshot:state.snapshot}) || '';
+  const upcoming = V.rows.slice(V.iNow, V.iNow + 48).filter(r => r.t >= Date.now());
+  const windows = (test) => {
+    const groups = []; let group = null;
+    for (const r of upcoming) {
+      if (!test(r)) { group = null; continue; }
+      if (group && r.t - group.end === 3600e3) group.end = r.t;
+      else { group = {start:r.t, end:r.t}; groups.push(group); }
+    }
+    return groups.filter(g => g.end > g.start).slice(0, 2).map(g => `${esc(dt(g.start, {weekday:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}))} – ${esc(dt(g.end + 3600e3, {hour:'2-digit', minute:'2-digit'}))}`).join(' · ') || X('Δεν βρέθηκε επαρκές παράθυρο', 'No suitable window found');
+  };
+  const dry = r => fin(r.pop) && r.pop < .3 && fin(r.wind) && r.wind < 25;
+  const activity = `<section class="section card"><div class="panelhead"><b>${X('Παράθυρα δραστηριοτήτων · επόμενες 48 ώρες','Activity windows · next 48 hours')}</b></div><div class="kv"><span>${X('Βόλτα','Walk')}</span><b>${windows(dry)}</b></div><div class="kv"><span>${X('Άπλωμα ρούχων','Drying clothes')}</span><b>${windows(r => dry(r) && fin(r.rh) && r.rh < 70 && fin(r.temp) && r.temp >= 10)}</b></div><div class="kv"><span>${X('Διαδρομή / εκδρομή','Journey / outing')}</span><b>${windows(r => fin(r.pop) && r.pop < .3 && fin(r.gust) && r.gust < 40 && fin(r.visMain) && r.visMain >= 5000)}</b></div><p class="notice">${X('Ενδεικτικά βάσει ωριαίας πρόγνωσης: βροχή κάτω από 30% και άνεμος κάτω από 25 km/h. Για ρούχα επιπλέον υγρασία κάτω από 70% και θερμοκρασία τουλάχιστον 10°C. Για διαδρομή: βροχή κάτω από 30%, ριπές κάτω από 40 km/h και ορατότητα τουλάχιστον 5 km στο σημείο. Δεν αποτελεί εγγύηση.', 'Indicative hourly forecast: rain below 30% and wind below 25 km/h. Drying also requires humidity below 70% and temperature of at least 10°C. Journey: rain below 30%, gusts below 40 km/h and visibility at least 5 km at this location. Not a guarantee.')}</p></section>`;
+  const status = `<section class="section card"><div class="panelhead"><b>${X('Ποιότητα δεδομένων','Data status')}</b></div><p class="notice">${state.snapshot ? X('Προβάλλεται αποθηκευμένη πρόγνωση, όχι ζωντανή ενημέρωση.', 'Showing a saved forecast, not a live update.') : X('Τελευταία λήψη πρόγνωσης:', 'Forecast last fetched:') + ' ' + (state.fetchedAt ? esc(dt(state.fetchedAt, {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})) : '—')} · ${esc(String(V.active.length))} ${X('μοντέλα','models')} · ${esc(String(V.members))} ${X('μέλη','members')}</p><p class="notice">${X('Οι πιθανότητες είναι εκτιμήσεις μοντέλων. Ορισμένα φαινόμενα χρησιμοποιούν εναλλακτικούς υπολογισμούς όταν λείπουν στοιχεία· το 0% δεν αποκλείει το φαινόμενο.', 'Probabilities are model estimates. Some events use fallback calculations when inputs are missing; 0% does not rule an event out.')}</p></section>`;
+  const eventDetail = (d, k) => {
+    const rows = V.rows.filter(r => dayKey(r.t, V.zone) === d.key && r.t >= Date.now() - 3600e3);
+    const items = k === 'rain' || k === 'heavy' ? V.order.map(id => {
+      const vals = rows.map(r => r.models?.[id]?.P).filter(fin);
+      if (!rows.length || vals.length < rows.length * .8) return null;
+      const total = vals.reduce ( (a,b) => a+b, 0);
+      return {name: MODELS.find(m => m.id === id)?.name || id, total};
+    }).filter(Boolean) : [];
+    const threshold = k === 'heavy' ? 20 : 1;
+    const wet = items.filter(m => m.total >= threshold).length;
+    const list = items.map(m => `<li>${esc(m.name)}: ${num(m.total,1)} mm</li>`).join('');
+    const agreement = items.length >= 3 ? (wet === 0 || wet === items.length ? X('Μεγάλη συμφωνία','Strong agreement') : X('Μικτή εικόνα','Mixed picture')) : X('Ανεπαρκή στοιχεία για σύγκριση','Insufficient data for comparison');
+    const detail = items.length ? `<p>${agreement} · ${wet}/${items.length} ${X('μοντέλα πάνω από το όριο','models above threshold')} ${threshold} mm</p><ul>${list}</ul><p>${X('Ενδεικτικά αθροίσματα διαθέσιμων ωρών, όχι τα μέλη που σχηματίζουν απευθείας την πιθανότητα.','Indicative totals from available hours, not the ensemble members directly forming the probability.')}</p>` : `<p>${X('Η ανάλυση ανά μέλος δεν είναι διαθέσιμη για αυτόν τον υπολογισμό.','Member-level attribution is unavailable for this calculation.')}</p>`;
+    return `<details><summary class="pcell ${fin(d.ev?.[k]) ? probCls(d.ev[k]) : ''}">${pct(d.ev?.[k])}</summary><div>${esc(T('phd_' + k))}${detail}</div></details>`;
+  };
   const grid = `<div class="card tablecard"><div class="tablewrap"><table class="phen-table"><thead><tr><th></th>${days.map((d, i) => `<th>${esc(dayLabel(d.t, i))}<br>${icon(d.code, 1, 'thicon')}</th>`).join('')}</tr></thead><tbody>
-    ${EVENTS.map(k => `<tr><td><div class="phname"><img src="${iconSrc(PH_ICON[k])}" alt=""><div><b>${T('ph_' + k)}</b><small>${T('phd_' + k)}</small></div></div></td>${days.map(d => { const p = d.ev[k] ?? 0; return `<td><span class="pcell ${probCls(p)}">${p < 0.05 ? '—' : pct(p)}</span></td>`; }).join('')}</tr>`).join('')}
-    </tbody></table></div></div>`;
+    ${EVENTS.map(k => `<tr><td><div class="phname"><img src="${iconSrc(PH_ICON[k])}" alt=""><div><b>${T('ph_' + k)}</b><small>${T('phd_' + k)}</small></div></div></td>${days.map(d => { return `<td>${eventDetail(d, k)}</td>`; }).join('')}</tr>`).join('')}
+    </tbody></table></div><p class="notice">${state.lang === 'el' ? '— = μη διαθέσιμος υπολογισμός. Το 0% είναι εκτίμηση από τα διαθέσιμα στοιχεία, όχι βεβαιότητα.' : '— = calculation unavailable. Some 0% values may also reflect missing inputs; they are not a guarantee.'}</p></div>`;
   const rows = V.rows.slice(V.iNow, V.iNow + 72);
   const hourly = `<section class="section card"><div class="panelhead"><b>${T('hourlyProb')}</b></div>
-    ${chart({ rows, unit: '%', series: [{ vals: rows.map(r => 100 * (r.pop ?? 0)), cls: 'mono' }, { vals: rows.map(r => 100 * r.pStorm), cls: 'storm' }, { vals: rows.map(r => 100 * r.pWind), cls: 'windl' }, { vals: rows.map(r => 100 * r.pFog), cls: 'fogl' }, { vals: rows.map(r => 100 * r.pSnow), cls: 'snowl' }] })}
+    ${chart({ rows, unit: '%', series: [{ vals: rows.map(r => fin(r.pop) ? 100 * r.pop : null), cls: 'mono' }, { vals: rows.map(r => r.eventAvailable?.storm ? 100 * r.pStorm : null), cls: 'storm' }, { vals: rows.map(r => r.eventAvailable?.wind ? 100 * r.pWind : null), cls: 'windl' }, { vals: rows.map(r => r.eventAvailable?.fog ? 100 * r.pFog : null), cls: 'fogl' }, { vals: rows.map(r => r.eventAvailable?.snow ? 100 * r.pSnow : null), cls: 'snowl' }] })}
     ${legend([['mono', T('ph_rain')], ['storm', T('ph_storm')], ['windl', T('ph_wind')], ['fogl', T('ph_fog')], ['snowl', T('ph_snow')]])}</section>`;
   const tl = V.periods.length ? V.periods.map(p => `<div class="kv"><span>${esc(periodText(p))}</span><b>${T('upTo')} ${pct(p.max)} · ${num(p.mm, 1)} mm</b></div>`).join('') : `<p class="notice">${T('noRain')}</p>`;
   const w = state.warn;
   const warn = !w ? loadingCard() : w.error ? `<p class="notice">${T('warnFail')}</p>` : !w.length ? `<p class="notice">${T('warnNone')}</p>`
     : w.slice(0, 8).map(x => `<div class="warnrow ${x.color}"><span class="wdot"></span><div><b>${esc(x.event)}</b> <small class="muted">${x.local ? T('warnRegion') : T('warnCountry')}</small><div class="compact">${esc(x.areas.slice(0, 4).join(', '))}${x.areas.length > 4 ? '…' : ''}</div><div class="compact">${esc(wdt(x.onset))} → ${esc(wdt(x.expires))}</div></div></div>`).join('');
-  return head + grid + hourly + `<section class="section dual"><div class="card"><div class="panelhead"><b>${T('rainTimeline')}</b></div>${tl}</div><div class="card"><div class="panelhead"><b>${T('warnTitle')}</b><span class="badge">Meteoalarm</span></div>${warn}</div></section>`;
+  return head + status + confidence + grid + activity + hourly + `<section class="section dual"><div class="card"><div class="panelhead"><b>${T('rainTimeline')}</b></div>${tl}</div><div class="card"><div class="panelhead"><b>${T('warnTitle')}</b><span class="badge">Meteoalarm</span></div>${warn}</div></section>`;
 }
 
 /* ------------------------------------------------------------------ page: radar */
@@ -3630,7 +3668,7 @@ function navRender() {
 /* Heavy, page-specific modules load on first use instead of on every visit. */
 const LAZY_GROUPS = {
   sky: ['vendor/astronomy.min.js?v=f41139a879', 'sky.js?v=6e83909e06', 'cosmic.js?v=462cffbdea', 'space-control.js?v=b7acaf3100', 'gravity-observatory.js?v=3dc1445258'],
-  history: ['history-backtest.js?v=28ac3f6bc8'],
+  history: ['history-backtest.js?v=09d403c008'],
   insights: ['model-insights.js?v=5e5da5e749']
 };
 const LAZY_READY = { sky: () => !!(window.MonoSky && window.MonoCosmic), history: () => !!window.MONOHistoryBacktest, insights: () => !!window.MONOModelInsights };

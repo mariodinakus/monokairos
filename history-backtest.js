@@ -143,6 +143,15 @@
       '</span><h4>'+choose(el,'Τι είχε προβλεφθεί και τι συνέβη','Forecast and reference over time')+'</h4></div>'+
       '<span class="hb-chart-type">'+(rain?choose(el,'Πιθανότητα βροχής','Rain probability'):variable==='temp'?'°C':'km/h')+'</span></div>';
     out += chart(rows,variable,o.lang);
+    if (rain) {
+      const valid = rows.filter(r => finite(r[1]) && r[1] >= 0 && r[1] <= 1 && (r[2] === 0 || r[2] === 1));
+      const buckets = [0, 20, 40, 60, 80].map(lo => {
+        const group = valid.filter(r => r[1] * 100 >= lo && (lo === 80 ? r[1] <= 1 : r[1] * 100 < lo + 20));
+        return {lo, n:group.length, observed:group.length ? 100 * group.reduce((sum,r) => sum+r[2],0)/group.length : null};
+      });
+      out += '<div class="hb-insight-bar"><b>'+choose(el,'Έλεγχος βαθμονόμησης βροχής','Rain probability calibration')+'</b></div><div class="tablewrap"><table class="metric-table"><thead><tr><th>'+choose(el,'Πρόγνωση','Forecast')+'</th><th>'+choose(el,'Δείγμα','Sample')+'</th><th>'+choose(el,'Βροχή στην αναφορά','Rain in reference')+'</th></tr></thead><tbody>'+buckets.map(b => '<tr><td>'+b.lo+'–'+(b.lo+20)+'%</td><td>'+b.n+'</td><td>'+(b.n>=20?fmt(b.observed,0)+'%':choose(el,'Ανεπαρκές δείγμα','Insufficient sample'))+'</td></tr>').join('')+'</tbody></table></div><p class="hb-method-note">'+choose(el,'Δειγματοληψία ανά 6 ώρες από το ανεξάρτητο τεστ. Ελάχιστο 20 περιπτώσεις ανά κατηγορία. Η αναφορά είναι ERA5 και οι ώρες δεν είναι απαραίτητα ανεξάρτητες.','Six-hourly samples from the holdout test. Minimum 20 cases per bin. ERA5 is the reference and hours are not necessarily independent.')+'</p>';
+    }
+
     const sortWorst = o.order==='worst';
     const sample = rows.slice().sort((a,b) => sortWorst ? (rain ? Math.abs(b[1]-b[2])-Math.abs(a[1]-a[2]) : Math.abs(b[1]-b[3])-Math.abs(a[1]-a[3])) : b[0]-a[0]).slice(0,12);
     out += '<div class="hb-table-controls"><div><span class="mh-section-label">04 / '+
