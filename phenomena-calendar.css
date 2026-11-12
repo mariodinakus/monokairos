@@ -1,0 +1,16 @@
+.mono-calendar{padding:22px}
+.mono-calendar .panelhead{margin-bottom:6px}
+.mono-calendar .h2{margin:5px 0 0}
+.mono-cal-intro{margin:8px 0 15px;color:var(--muted,#697277);font-size:13px}
+.mono-cal-days{border-top:1px solid var(--line,#ddd)}
+.mono-cal-row{display:grid;grid-template-columns:minmax(95px,140px) minmax(0,1fr) auto;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--line,#ddd)}
+.mono-cal-date{font-weight:700;font-size:13px}
+.mono-cal-conditions{display:flex;flex-wrap:wrap;gap:7px}
+.mono-cal-tag{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line,#ddd);border-radius:8px;padding:7px 10px;font-size:12px}
+.mono-cal-tag b{font-weight:600}
+.mono-cal-tag>span{font-variant-numeric:tabular-nums;font-weight:750}
+.mono-cal-neutral{color:var(--muted,#697277);font-size:12px}
+.mono-cal-numbers{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;font-size:13px}
+.mono-cal-numbers small{display:block;color:var(--muted,#697277);margin-top:3px}
+.mono-calendar>.notice{margin-top:14px}
+@media(max-width:620px){.mono-calendar{padding:16px}.mono-cal-row{grid-template-columns:1fr auto;gap:7px 12px}.mono-cal-conditions{grid-column:1/-1;grid-row:2}.mono-cal-date{font-size:13px}.mono-cal-numbers{grid-column:2;grid-row:1}}
