@@ -1482,6 +1482,43 @@ const loadingCard = txt => `<div class="card placeholder"><b><span class="spin">
 const errorCard = () => `<div class="card placeholder"><b>${T('noData')}</b>${T('loadFail')}<div class="spacer10"></div>${state.forecastErrors ? '<small style="display:block;overflow-wrap:anywhere;opacity:.8">' + esc(state.forecastErrors) + '</small>' : ''}<div class="spacer10"></div>${btn('reload', T('retry'))}</div>`;
 const probCls = p => (p >= 0.6 ? 'p-hi' : p >= 0.3 ? 'p-mid' : p >= 0.1 ? 'p-lo' : 'p-0');
 
+/* A concise, source-labelled overview and activity planner. */
+const monoPlan = { activity: 'walk', start: 8, end: 22, duration: 2 };
+function monoStory(V) {
+  const el=state.lang==='el', X=(a,b)=>el?a:b, days=V.daily||[], now=Date.now();
+  const future=(V.rows||[]).filter(r=>r.t>now && r.t<=now+48*3600e3);
+  const peak=future.filter(r=>fin(r.pop)).sort((a,b)=>b.pop-a.pop)[0];
+  const change=days.slice(1).filter(d=>fin(d.hi)&&fin(days[0]?.hi)).sort((a,b)=>Math.abs(b.hi-days[0].hi)-Math.abs(a.hi-days[0].hi))[0];
+  const delta=change ? change.hi-days[0].hi : null;
+  const lead=change&&Math.abs(delta)>=3 ? `${esc(dayLabel(change.t,days.indexOf(change)))}: ${delta>0?X('άνοδος','rise'):X('πτώση','fall')} ${num(Math.abs(delta),0)}°C ${X('στη μέγιστη σε σχέση με σήμερα','in the high compared with today')}` : X('Δεν φαίνεται μεγάλη αλλαγή στη μέγιστη των επόμενων ημερών.','No major change in daily highs is forecast in the coming days.');
+  const wet=peak?`${X('Υψηλότερη ωριαία πιθανότητα βροχής στις επόμενες 48 ώρες','Highest hourly rain chance in the next 48 hours')}: ${pct(peak.pop)} · ${esc(dt(peak.t,{weekday:'short',hour:'2-digit',minute:'2-digit'}))}`:X('Δεν υπάρχουν αρκετά στοιχεία για τη βροχή.','Rain data are unavailable.');
+  return `<section class="section card mono-story"><div class="label">MONO / WEATHER STORY</div><h2 class="h2">${X('Η ιστορία του καιρού σου','Your weather story')}</h2><div class="mono-story-grid"><div><small>${X('ΤΩΡΑ','NOW')}</small><b>${deg(V.current?.temp)}</b><span>${X('Τρέχουσα συνθήκη','Current conditions')}</span></div><div><small>${X('ΤΙ ΑΛΛΑΖΕΙ','WHAT CHANGES')}</small><b>${lead}</b></div><div><small>${X('ΒΡΟΧΗ','RAIN')}</small><b>${wet}</b></div></div><p class="notice">${X('Οι μελλοντικές τιμές είναι πρόγνωση και μπορεί να αλλάξουν. Η ωριαία πιθανότητα δεν είναι η πιθανότητα βροχής ολόκληρης ημέρας.','Future values are forecasts and may change. Hourly rain probability is not the probability for the entire day.')}</p></section>`;
+}
+function monoPlanCard(V) {
+  const el=state.lang==='el', X=(a,b)=>el?a:b, rows=(V.rows||[]).filter(r=>r.t>Date.now()&&r.t<Date.now()+48*3600e3);
+  const options=[['walk',X('Περπάτημα / βόλτα','Walk')],['bike',X('Ποδήλατο','Cycling')],['laundry',X('Άπλωμα','Drying laundry')],['outdoor',X('Καφές έξω','Outdoor coffee')]];
+  const valid=[];
+  for(let i=0;i+monoPlan.duration<=rows.length;i++){
+    const group=rows.slice(i,i+monoPlan.duration); if(group.some((r,j)=>j&&r.t-group[j-1].t!==3600e3))continue;
+    const hours=group.map(r=>Number(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',hourCycle:'h23',timeZone:V.zone}).format(r.t)));
+    if(hours.some(h=>h<monoPlan.start||h>=monoPlan.end)||group.some(r=>!fin(r.pop)||!fin(r.wind)||!fin(r.temp)||!fin(r.amount)))continue;
+    const rain=Math.max(...group.map(r=>r.pop)), wind=Math.max(...group.map(r=>r.wind)), temp=group.reduce((a,r)=>a+r.temp,0)/group.length, mm=group.reduce((a,r)=>a+r.amount,0);
+    const target=monoPlan.activity==='laundry'?20:monoPlan.activity==='bike'?17:20;
+    const score=rain*50+mm*8+wind*(monoPlan.activity==='bike'?1:0.35)+Math.abs(temp-target);
+    valid.push({group,rain,wind,temp,mm,score});
+  }
+  valid.sort((a,b)=>a.score-b.score);const best=valid[0];
+  const select=(name,values,current)=>`<select aria-label="${name}" data-mono-plan="${name}">${values.map(([v,l])=>`<option value="${v}" ${String(v)===String(current)?'selected':''}>${l}</option>`).join('')}</select>`;
+  const start=Array.from({length:24},(_,i)=>[i,`${String(i).padStart(2,'0')}:00`]); const end=Array.from({length:24},(_,i)=>[i+1,`${String(i+1).padStart(2,'0')}:00`]);
+  const output=best?`<div class="mono-plan-result"><b>${X('Προτεινόμενο παράθυρο','Suggested window')}: ${esc(dt(best.group[0].t,{weekday:'short',hour:'2-digit',minute:'2-digit'}))} – ${hhmm(best.group.at(-1).t+3600e3)}</b><p>${X('Μέγιστη ωριαία πιθανότητα βροχής','Peak hourly rain probability')} ${pct(best.rain)} · ${num(best.mm,1)} mm · ${X('άνεμος έως','wind up to')} ${num(best.wind,0)} km/h · ${deg(best.temp)}</p></div>`:`<p>${X('Δεν υπάρχουν αρκετές πλήρεις ωριαίες προβλέψεις για αυτό το ωράριο.','Not enough complete hourly forecasts in this time window.')}</p>`;
+  return `<section class="section card mono-plan"><div class="label">MONO / PLANNER</div><h2 class="h2">${X('Ο καιρός για το σχέδιό σου','Weather for your plans')}</h2><div class="mono-plan-controls"><label>${X('Δραστηριότητα','Activity')}${select('activity',options,monoPlan.activity)}</label><label>${X('Από','From')}${select('start',start,monoPlan.start)}</label><label>${X('Έως','Until')}${select('end',end,monoPlan.end)}</label><label>${X('Διάρκεια','Duration')}${select('duration',[[1,'1 h'],[2,'2 h'],[3,'3 h'],[4,'4 h']],monoPlan.duration)}</label></div>${output}<p class="notice">${X('Επιλογή βάσει βροχής, ανέμου και θερμοκρασίας στις επόμενες 48 ώρες. Δεν εγγυάται ξηρό καιρό.','Ranked by forecast rain, wind and temperature over the next 48 hours. Dry weather is not guaranteed.')}</p></section>`;
+}
+function monoStationsCard(V) {
+ const el=state.lang==='el',X=(a,b)=>el?a:b, stations=(V.stations||[]).filter(s=>s.last&&fin(s.last.temp)&&fin(s.dist)).slice(0,5);
+ if(!stations.length)return '';
+ return `<section class="section card"><div class="label">MONO / LOCAL NETWORK</div><h2 class="h2">${X('Σταθμοί γύρω σου','Nearby stations')}</h2><div class="mono-stations">${stations.map(s=>`<div><b>${esc(s.name||s.id)}</b><span>${deg(s.last.temp)} · ${num(s.dist,1)} km</span><small>${esc(s.srcName||s.source||'')} · ${hhmm(s.last.t)}</small></div>`).join('')}</div><p class="notice">${X('Κάθε τιμή είναι μέτρηση στη θέση και ώρα του σταθμού, όχι κατ’ ανάγκη στη γειτονιά σου. Οι ώρες μπορεί να διαφέρουν.','Each value is measured at the station and time shown, not necessarily in your neighbourhood. Times can differ.')}</p>${btn('goto',X('Όλοι οι σταθμοί ↗','All stations ↗'),'data-page="stations"')}</section>`;
+}
+
 /* ------------------------------------------------------------------ page: now */
 const homeOpen = new Set();
 function homeMore(id, title, hint, body) {
@@ -1535,11 +1572,11 @@ function nowPage() {
     <section class="section card">${engineSummary()}</section>`;
   const week = `<section class="section card home-week"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</section>`;
   const revisions = window.MONOForecastConfidence?.render({view:V,lang:state.lang,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot,mode:'changes'}) || '';
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + alertsStrip() +
+  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + monoStory(V) + alertsStrip() +
     (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + (rainAlertsOn() ? '' : rainAlertsCard()) + hours + week + homeMore('month',X('Τάση μήνα · 6 εβδομάδες','Monthly outlook · 6 weeks'),X('Τι αλλαγές δείχνουν τα μοντέλα στα βάθη του μήνα','Possible weather changes later this month'),'<div id="mono-month-trend" aria-live="polite"></div>') + revisions + homeMore('trust',X('Ιστορικός έλεγχος και μοντέλα','Historical checks and models'),X('Ακρίβεια, σταθμός και συμφωνία μοντέλων','Accuracy, station and model agreement'),trustCard()) +
     homeMore('rain',X('Βροχή και μετρήσεις','Rain and measurements'),X('Ποσότητες, σταθμοί και μηνιαία σύγκριση','Amounts, stations and monthly comparison'),rainDetail) +
     homeMore('charts',X('Γραφήματα και μοντέλο','Charts and model'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
-    homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),summaryCard()+MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
+    homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),monoPlanCard(V)+monoStationsCard(V)+summaryCard()+MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
     homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),X('Ήλιος, αέρας, θάλασσα και ειδήσεις','Sun, air, sea and news'),newsCard()+holidaysCard()+environment()+glossary());
 }
 function trustCard() {
@@ -3304,7 +3341,8 @@ function placeStems(c) {
   return [...new Set(names.map(n => (n.length > 6 && /[α-ω]$/.test(n) ? n.slice(0, -2) : n.length > 4 && /[α-ω]$/.test(n) ? n.slice(0, -1) : n)))].filter(n => n.length >= 3);
 }
 function newsFor(tab) {
-  const items = state.news?.items || [];
+  const weatherTerms = /καιρ|μετεωρολογ|βροχ|καταιγιδ|κακοκαιρ|χιόν|χιον|ανεμ|ανεμο|πλημμυρ|καυσων|θερμοκρασ|κλιμα|weather|forecast|rain|storm|flood|climate|heatwave|snow|wind|drought/i;
+  const items = (state.news?.items || []).filter(x => weatherTerms.test(fold(x.title + ' ' + (x.summary || ''))));
   if (tab === 'city') { const st = placeStems(state.city); return items.filter(x => { const t = fold(x.title + ' ' + x.summary); return st.some(s => t.includes(s)); }); }
   return items.filter(x => x.lang === (tab === 'gr' ? 'el' : 'en'));
 }
@@ -3783,6 +3821,7 @@ function render() {
   envScroll.forEach(([id, left]) => { const el = document.getElementById(id); if (el) el.scrollLeft = left; });
   window.scrollTo(0, y);
   const r = $('#selHour'); if (r) r.addEventListener('input', e => { state.sel = +e.target.value; const yy = window.scrollY; render(); window.scrollTo(0, yy); $('#selHour')?.focus(); });
+  document.querySelectorAll('[data-mono-plan]').forEach(input => input.addEventListener('change', e => { const k=e.target.dataset.monoPlan; if(k==='activity' && ['walk','bike','laundry','outdoor'].includes(e.target.value)) monoPlan.activity=e.target.value; else if(['start','end','duration'].includes(k)) monoPlan[k]=Number(e.target.value); render(); }));
   if (state.page === 'space') window.MONOSpaceControl?.mount(loadScript,skyOptions());
   if (state.page === 'maps') MonoForecast.mount(forecastOptions(),loadLeaflet);
   if (state.page === 'radar') mountRadar();
