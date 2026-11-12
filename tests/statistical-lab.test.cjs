@@ -27,7 +27,7 @@ test('forecast correlations do not replace missing values with zero and preserve
  assert.equal(d[1].amount,null);
  assert.equal(Stats.paired(d,'temp','amount').length,47);
  assert.equal(Stats.paired(d,'temp','rh').length,47);
- const matrix=Stats.matrix(d);assert.equal(matrix.length,6);
+ const matrix=Stats.matrix(d);assert.equal(matrix.length,17);
  assert.ok(matrix[0][1].r<-.99);
  assert.equal(matrix[0][5].n,47);
 });
@@ -36,7 +36,9 @@ test('Statistical Lab uses forecast data and held-out scores separately',()=>{
  const train={temp:{leads:{0:{test:{mean:{mae:1.6,rmse:2.2,n:90},ridge:{mae:1.2,rmse:1.7,n:90}}}}},precip:{leads:{0:{test:{mean:0.18,logistic:0.15}}}}};
  const html=Stats.render({view:{rows,iNow:0},train,lead:0,lang:'el'});
  assert.match(html,/Πίνακας συσχετίσεων/);
- assert.match(html,/data-sl-pair="pressure-rain"/);
+ assert.match(html,/data-sl-cell-x="pres" data-sl-cell-y="amount"/);
+ assert.match(html,/data-sl-x/);
+ assert.match(html,/data-sl-y/);
  assert.match(html,/sl-svg/);
  assert.match(html,/Pearson/);
  assert.match(html,/Spearman/);
