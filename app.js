@@ -9,7 +9,7 @@
 const M = window.MONOModel, C = window.MONOClimate;
 const fin = Number.isFinite;
 const VERSION = '4.6';
-const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain', forecastHistory: 'mono31_forecast_history', yday: 'mono31_yday' };
+const K = { prefs: 'mono31_prefs', train: 'mono31_train', snap: 'mono31_snapshot', clim: 'mono31_climate', monthlyRain: 'mono31_monthly_rain', recentRain: 'mono31_recent_rain', forecastHistory: 'mono31_forecast_history', eventHistory: 'mono31_event_history', yday: 'mono31_yday' };
 const TRAIN_TTL = 12 * 3600e3, REFRESH_LIVE = 10 * 60e3, REFRESH_MODELS = 60 * 60e3;
 
 /* ------------------------------------------------------------------ catalogue */
@@ -138,7 +138,7 @@ el: {
   minutes:'λεπτά', hrs:'ώρες', ago:'πριν',
   phenTitle:'Φαινόμενα', phenSub:'Πιθανότητες από τα μέλη των ensembles και τα μοντέλα, για την περιοχή σου.',
   ph_rain:'Βροχή', ph_heavy:'Ισχυρή βροχή', ph_storm:'Καταιγίδα', ph_snow:'Χιόνι', ph_fog:'Ομίχλη', ph_wind:'Θυελλώδεις άνεμοι', ph_frost:'Παγετός', ph_heat:'Καύσωνας',
-  phd_rain:'≥ 1 mm την ημέρα', phd_heavy:'≥ 20 mm την ημέρα', phd_storm:'CAPE και βροχή ή κωδικός καταιγίδας', phd_snow:'Υετός με θερμοκρασία ≤ 0,5°C', phd_fog:'Ορατότητα < 1 km', phd_wind:'Ριπές ≥ 62 km/h (8 Μποφόρ)', phd_frost:'Θερμοκρασία ≤ 0°C', phd_heat:'Θερμοκρασία ≥ 35°C',
+  phd_rain:'≥ 1 mm την ημέρα', phd_heavy:'≥ 20 mm την ημέρα', phd_storm:'CAPE και βροχή ή κωδικός καταιγίδας', phd_snow:'Χιονόπτωση ή υετός με θερμοκρασία ≤ 0,5°C', phd_fog:'Ορατότητα < 1 km', phd_wind:'Ριπές ≥ 62 km/h (8 Μποφόρ)', phd_frost:'Θερμοκρασία ≤ 0°C', phd_heat:'Θερμοκρασία ≥ 35°C',
   rainTimeline:'Πότε θα βρέξει', noRain:'Δεν αναμένεται βροχή τις επόμενες 72 ώρες.', from:'από', to:'έως', upTo:'έως', alerts:'Προσοχή',
   warnTitle:'Επίσημες προειδοποιήσεις', warnNone:'Δεν υπάρχουν ενεργές επίσημες προειδοποιήσεις για τη χώρα.', warnFail:'Οι επίσημες προειδοποιήσεις δεν φορτώθηκαν.', warnRegion:'για την περιοχή σου', warnCountry:'στη χώρα',
   hourlyProb:'Ωριαίες πιθανότητες (72 ώρες)',
@@ -257,7 +257,7 @@ en: {
   minutes:'min', hrs:'h', ago:'ago',
   phenTitle:'Weather events', phenSub:'Probabilities from ensemble members and models, for your area.',
   ph_rain:'Rain', ph_heavy:'Heavy rain', ph_storm:'Thunderstorm', ph_snow:'Snow', ph_fog:'Fog', ph_wind:'Gale-force gusts', ph_frost:'Frost', ph_heat:'Heatwave',
-  phd_rain:'≥ 1 mm in the day', phd_heavy:'≥ 20 mm in the day', phd_storm:'CAPE with rain, or a thunderstorm code', phd_snow:'Precipitation at ≤ 0.5°C', phd_fog:'Visibility < 1 km', phd_wind:'Gusts ≥ 62 km/h (Beaufort 8)', phd_frost:'Temperature ≤ 0°C', phd_heat:'Temperature ≥ 35°C',
+  phd_rain:'≥ 1 mm in the day', phd_heavy:'≥ 20 mm in the day', phd_storm:'CAPE with rain, or a thunderstorm code', phd_snow:'Snowfall or precipitation at ≤ 0.5°C', phd_fog:'Visibility < 1 km', phd_wind:'Gusts ≥ 62 km/h (Beaufort 8)', phd_frost:'Temperature ≤ 0°C', phd_heat:'Temperature ≥ 35°C',
   rainTimeline:'When it will rain', noRain:'No rain expected in the next 72 hours.', from:'from', to:'to', upTo:'up to', alerts:'Heads-up',
   warnTitle:'Official warnings', warnNone:'No active official warnings for the country.', warnFail:'Official warnings did not load.', warnRegion:'for your region', warnCountry:'in the country',
   hourlyProb:'Hourly probabilities (72 hours)',
@@ -413,7 +413,7 @@ Object.assign(L.en,{checkingStations:'Checking nearby stations… Confirming the
 
 /* ------------------------------------------------------------------ state */
 const $ = s => document.querySelector(s);
-const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain','mono31_forecast_history','mono31_yday'].includes(k);
+const optionalCache = k => ['mono31_train','mono31_snapshot','mono31_climate','mono31_monthly_rain','mono31_forecast_history','mono31_event_history','mono31_yday'].includes(k);
 const cacheAllowed = () => { try {return localStorage.getItem('mono_privacy_cache') === 'yes';} catch {return false;} };
 const read = (k, d) => { if (optionalCache(k) && !cacheAllowed()) return d; try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch { return d; } };
 const write = (k, v) => { if (optionalCache(k) && !cacheAllowed()) return false; try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
@@ -430,6 +430,25 @@ function rememberForecast(city, data, at) {
   const recent = Object.entries(forecastHistory).filter(([,v]) => Array.isArray(v) && v.length)
     .sort((a,b) => b[1].at(-1).at - a[1].at(-1).at).slice(0, 3);
   write(K.forecastHistory, Object.fromEntries(recent));
+}
+const eventHistory = read(K.eventHistory, {});
+function rememberEventForecast(city, view, at = Date.now()) {
+  if (!view?.daily?.length || view.active.length < 3 || state.snapshot) return;
+  const key = ckey(city), previous = Array.isArray(eventHistory[key]) ? eventHistory[key] : [];
+  const entries = previous.filter(x => fin(x?.at) && at >= x.at && at - x.at <= 72 * 3600e3);
+  const sample = {at, days:view.daily.map(d => ({key:d.key, rain:fin(d.pop)?d.pop:null}))};
+  // Replace only the current hourly slot; prior forecasts remain immutable.
+  const last = entries.at(-1);
+  if (last && Math.floor(last.at / 3600e3) === Math.floor(at / 3600e3)) entries[entries.length-1] = sample;
+  else entries.push(sample);
+  eventHistory[key] = entries.slice(-72);
+  write(K.eventHistory, Object.fromEntries(Object.entries(eventHistory).filter(([,v])=>Array.isArray(v)&&v.length).sort((a,b)=>b[1].at(-1).at-a[1].at(-1).at).slice(0,3)));
+}
+function yesterdayRainComparison(history, current, now = Date.now()) {
+  const old = (Array.isArray(history) ? history : []).filter(x=>fin(x?.at) && now-x.at >= 18*3600e3 && now-x.at <= 30*3600e3 && Array.isArray(x.days)).sort((a,b)=>Math.abs(now-86400e3-a.at)-Math.abs(now-86400e3-b.at))[0];
+  if (!old || !Array.isArray(current)) return null;
+  const values=current.map(d=>{const before=old.days.find(x=>x.key===d.key)?.rain; return fin(before)&&fin(d.pop) ? {key:d.key,t:d.t,before,after:d.pop,delta:d.pop-before} : null;}).filter(Boolean);
+  return values.length ? {at:old.at, values} : null;
 }
 const P = read(K.prefs, {}), UI = read('mono32_ui', {});
 const sysDark = () => { try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch { return false; } };
@@ -787,7 +806,7 @@ async function fetchPrimaryForecast(c) {
     try {
       const d = await getJSON(url, timeout);
       if (!validPrimaryForecast(d)) throw new Error('empty forecast');
-      return d;
+      d._monoSource = label; return d;
     } catch (err) {
       const msg = err?.name === 'AbortError' ? 'timeout'
         : err?.status ? 'HTTP ' + err.status
@@ -832,7 +851,7 @@ async function loadModelGroup(c, group, token) {
     try {
       const r = await chain([m.id, ...m.alt], id => modelURL(c, id));
       if (modelFeedCurrent(c, token)) {
-        state.models[m.id] = { data: r.data, used: r.id };
+        state.models[m.id] = { data: r.data, used: r.id, at: Date.now() };
         schedule();
       }
     } catch (e) {
@@ -861,7 +880,7 @@ async function loadModelGroup(c, group, token) {
         missing.push(m);
         continue;
       }
-      state.models[m.id] = { data: { timezone: d.timezone, hourly }, used: m.id };
+      state.models[m.id] = { data: { timezone: d.timezone, hourly }, used: m.id, at: Date.now() };
     }
     schedule();
     // One unavailable regional model should not erase the whole batch.
@@ -966,7 +985,7 @@ async function loadAll(force = false) {
     const d = await fetchPrimaryForecast(c);
     if (gen !== state.gen) return;
     primaryRetryCount = 0;
-    state.main = d; state.fetchedAt = Date.now(); state.snapshot = false;
+    state.main = d; state.fetchedAt = Date.now(); state.primarySource = d._monoSource; state.snapshot = false;
     rememberForecast(c, d, state.fetchedAt);
   } catch (err) {
     if (gen !== state.gen) return;
@@ -1007,12 +1026,12 @@ async function loadAll(force = false) {
       return chain([e.id, ...e.alt], id => ensURL(c, id, EV_FULL))
         .catch(() => chain([e.id, ...e.alt], id => ensURL(c, id, EV_BASE)));
     })
-      .then(r => { if (r && modelFeedCurrent(c, modelToken)) { state.ens[e.id] = { data: r.data, used: r.id }; schedule(); } })
+      .then(r => { if (r && modelFeedCurrent(c, modelToken)) { state.ens[e.id] = { data: r.data, used: r.id, at: Date.now() }; schedule(); } })
       .catch(err => { if (modelFeedCurrent(c, modelToken)) { state.ens[e.id] = { error: true, reason: err?.status ? 'HTTP ' + err.status : (err?.message || 'network error') }; schedule(); } })));
     jobs.push(...ensembleJobs);
   }
   jobs.push(getJSON(rain15URL(c)).then(d => { if (gen === state.gen) { state.rain15 = d?.minutely_15?.time ? { t: d.minutely_15.time.map(x => x * 1000), p: d.minutely_15.precipitation, precipitation: d.minutely_15.precipitation, rain: d.minutely_15.rain, showers: d.minutely_15.showers, s: d.minutely_15.snowfall, code: d.minutely_15.weather_code, at: Date.now() } : null; schedule(); } }).catch(() => { if (gen === state.gen) { state.rain15 = null; schedule(); } }));
-  jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = o; state.obsReady = true; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; state.obsReady = true; schedule(); } }));
+  jobs.push(fetchAllObs(c).then(o => { if (gen === state.gen) { state.obs = {...o, fetchedAt:Date.now()}; state.obsReady = true; schedule(); } }).catch(() => { if (gen === state.gen) { state.obs = { error: true }; state.obsReady = true; schedule(); } }));
   if (location.protocol.startsWith('http')) jobs.push(fetchNetatmo(c).then(d => { if (gen === state.gen) { state.pws = d; schedule(); } }).catch(() => { if (gen === state.gen) state.pws = { off: true }; }));
   if (location.protocol.startsWith('http')) {
     const senseKm=window.MONOCommunityStations?.radius(c)||12;
@@ -1027,7 +1046,7 @@ async function loadAll(force = false) {
   jobs.push(fetchAir(c).then(d => { if (gen === state.gen) { state.aq = d; schedule(); } }).catch(() => { if (gen === state.gen) { state.aq = { error: true }; schedule(); } }));
   jobs.push(fetchAtmosphere(c).then(d => { if (gen === state.gen) { state.atmosphere = d; schedule(); } }).catch(() => { if (gen === state.gen) { state.atmosphere = { error: true }; schedule(); } }));
   jobs.push(fetchMarine(c).then(d => { if (gen === state.gen) { state.marine = d; schedule(); } }).catch(() => { if (gen === state.gen) state.marine = { error: true }; }));
-  jobs.push(fetchWarnings(c).then(d => { if (gen === state.gen) { state.warn = d; schedule(); } }).catch(() => { if (gen === state.gen) { state.warn = { error: true }; schedule(); } }));
+  jobs.push(fetchWarnings(c).then(d => { if (gen === state.gen) { state.warn = d; state.warnAt = Date.now(); schedule(); } }).catch(() => { if (gen === state.gen) { state.warn = { error: true }; schedule(); } }));
   // Optional city-level calibration in shared Vercel Blob, independent of this device.
   jobs.push(getJSON(q('/api/rain-memory', {lat:(+c.lat).toFixed(3),lon:(+c.lon).toFixed(3)}), 30000)
     .then(d => { if(gen===state.gen) {state.sharedRain=d?.available?d:null; recompute(); schedule();} })
@@ -1043,11 +1062,11 @@ async function loadAll(force = false) {
       ENSEMBLES.some(e => !state.ens[e.id] || state.ens[e.id].error);
     // A partial failure will be retried with the next ten-minute live refresh.
     state.modelsAt = incomplete ? Date.now() - REFRESH_MODELS + REFRESH_LIVE : Date.now();
-    recompute(); render(); saveSnapshot();
+    recompute(); rememberEventForecast(c, state.view); render(); saveSnapshot();
   });
   await Promise.allSettled([...jobs, ...modelJobs]);
   if (gen !== state.gen) return;
-  recompute(); render(); saveSnapshot();
+  recompute(); if (!state.modelsLoading) rememberEventForecast(c, state.view); render(); saveSnapshot();
 }
 let pending = 0;
 function schedule() {
@@ -1135,7 +1154,7 @@ function runTraining(payload) {
     };
     if (!workerOk || typeof Worker === 'undefined' || location.protocol === 'file:') return inline();
     try {
-      worker ||= new Worker('trainer.js?v=23d659d556');
+      worker ||= new Worker('trainer.js?v=936c07d495');
       const id = ++jobId;
       const on = e => { if (e.data.id !== id) return; worker.removeEventListener('message', on); e.data.ok ? resolve(e.data) : reject(new Error(e.data.error)); };
       worker.addEventListener('message', on);
@@ -1342,7 +1361,7 @@ function recompute() {
     const heavy = M.ensembleDailyWet(famP, idxs, 20);
     return { key: d, t: noon.t, cloud: (() => { const all = rows.filter(r => fin(r.cloud)), day = all.filter(r => r.isDay); const s = day.length ? day : all; return s.length ? s.reduce((a, r) => a + r.cloud, 0) / s.length : null; })(), hi: temps.length ? Math.max(...temps) : null, lo: temps.length ? Math.min(...temps) : null, pop,
       mm: fut.reduce((a, r) => a + (fin(r.amount) ? r.amount : 0), 0), code: pop >= 0.5 && wettest ? wettest.code : noon.code,
-      ev: { rain: pop, heavy: fin(heavy) ? heavy : mx('heavy', r => r.pHeavy), storm: mx('storm', r => r.pStorm), snow: mx('snow', r => r.pSnow), fog: mx('fog', r => r.pFog), wind: mx('wind', r => r.pWind), frost: mx('frost', r => r.pFrost), heat: mx('heat', r => r.pHeat) } };
+      ev: { rain: pop, heavy: fin(heavy) ? heavy : null, storm: mx('storm', r => r.pStorm), snow: mx('snow', r => r.pSnow), fog: mx('fog', r => r.pFog), wind: mx('wind', r => r.pWind), frost: mx('frost', r => r.pFrost), heat: mx('heat', r => r.pHeat) } };
   });
 
   // ---- rain periods in the next 72 h
@@ -1398,7 +1417,7 @@ function recompute() {
   };
   current.isDay = cur.is_day ?? nowRow?.isDay ?? 1;
 
-  state.view = { times, rows: out, iNow, daily, periods, current, md, order, active, dup, famInfo, famCount: fams.length, famP, stationChecks,
+  state.view = { times, rows: out, iNow, daily, periods, current, md, order, active, dup, famInfo, famCount: fams.length, famP, famG, famT, stationChecks,
     members: famT.reduce((a, f) => a + f.members.length, 0), S, station, stations, useStation, live, zone, at: now };
 }
 
@@ -1877,6 +1896,9 @@ function phenPage() {
   const days = V.daily;
   const el = state.lang === 'el';
   const X = (a, b) => el ? a : b;
+  const comparison = state.snapshot ? null : yesterdayRainComparison(eventHistory[ckey(state.city)], days);
+  const changeRows = comparison?.values.map(v => `<div class="kv"><span>${esc(dayLabel(v.t, days.findIndex(d=>d.key===v.key)))}</span><b>${pct(v.before)} → ${pct(v.after)} <small>(${v.delta >= 0 ? '+' : ''}${Math.round(v.delta*100)} ${X('ποσ. μονάδες','pp')})</small></b></div>`).join('') || '';
+  const yesterday = `<section class="section card"><div class="panelhead"><b>${X('Τι άλλαξε από χθες;','What changed since yesterday?')}</b></div>${comparison ? `<p class="notice">${X('Πιθανότητα βροχής ανά ημέρα · προηγούμενη λήψη','Daily rain probability · previous fetch')} ${esc(dt(comparison.at,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</p>${changeRows}` : `<p class="notice">${X('Δεν υπάρχει συγκρίσιμη αποθηκευμένη πρόγνωση από 18–30 ώρες πριν για αυτή την περιοχή.','No comparable saved forecast from 18–30 hours ago for this location.')}</p>`}<p class="notice">${X('Σύγκριση προγνώσεων MONO για τις ίδιες ημέρες, όχι μετρήσεις. Το ιστορικό διατηρείται στη συσκευή μόνο αν έχει ενεργοποιηθεί η προαιρετική αποθήκευση στις ρυθμίσεις απορρήτου.','Compares MONO forecasts for the same dates, not observations. History persists on this device only when optional storage is enabled in privacy settings.')}</p></section>`;
   const confidence = window.MONOForecastConfidence?.render({view:V, lang:state.lang, history:forecastHistory[ckey(state.city)] || [], train:state.train, snapshot:state.snapshot}) || '';
   const upcoming = V.rows.slice(V.iNow, V.iNow + 48).filter(r => r.t >= Date.now());
   const windows = (test) => {
@@ -1890,7 +1912,19 @@ function phenPage() {
   };
   const dry = r => fin(r.pop) && r.pop < .3 && fin(r.wind) && r.wind < 25;
   const activity = `<section class="section card"><div class="panelhead"><b>${X('Παράθυρα δραστηριοτήτων · επόμενες 48 ώρες','Activity windows · next 48 hours')}</b></div><div class="kv"><span>${X('Βόλτα','Walk')}</span><b>${windows(dry)}</b></div><div class="kv"><span>${X('Άπλωμα ρούχων','Drying clothes')}</span><b>${windows(r => dry(r) && fin(r.rh) && r.rh < 70 && fin(r.temp) && r.temp >= 10)}</b></div><div class="kv"><span>${X('Διαδρομή / εκδρομή','Journey / outing')}</span><b>${windows(r => fin(r.pop) && r.pop < .3 && fin(r.gust) && r.gust < 40 && fin(r.visMain) && r.visMain >= 5000)}</b></div><p class="notice">${X('Ενδεικτικά βάσει ωριαίας πρόγνωσης: βροχή κάτω από 30% και άνεμος κάτω από 25 km/h. Για ρούχα επιπλέον υγρασία κάτω από 70% και θερμοκρασία τουλάχιστον 10°C. Για διαδρομή: βροχή κάτω από 30%, ριπές κάτω από 40 km/h και ορατότητα τουλάχιστον 5 km στο σημείο. Δεν αποτελεί εγγύηση.', 'Indicative hourly forecast: rain below 30% and wind below 25 km/h. Drying also requires humidity below 70% and temperature of at least 10°C. Journey: rain below 30%, gusts below 40 km/h and visibility at least 5 km at this location. Not a guarantee.')}</p></section>`;
-  const status = `<section class="section card"><div class="panelhead"><b>${X('Ποιότητα δεδομένων','Data status')}</b></div><p class="notice">${state.snapshot ? X('Προβάλλεται αποθηκευμένη πρόγνωση, όχι ζωντανή ενημέρωση.', 'Showing a saved forecast, not a live update.') : X('Τελευταία λήψη πρόγνωσης:', 'Forecast last fetched:') + ' ' + (state.fetchedAt ? esc(dt(state.fetchedAt, {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})) : '—')} · ${esc(String(V.active.length))} ${X('μοντέλα','models')} · ${esc(String(V.members))} ${X('μέλη','members')}</p><p class="notice">${X('Οι πιθανότητες είναι εκτιμήσεις μοντέλων. Ορισμένα φαινόμενα χρησιμοποιούν εναλλακτικούς υπολογισμούς όταν λείπουν στοιχεία· το 0% δεν αποκλείει το φαινόμενο.', 'Probabilities are model estimates. Some events use fallback calculations when inputs are missing; 0% does not rule an event out.')}</p></section>`;
+  const stamp = t => fin(t) ? esc(dt(t,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})) : '—';
+  const modelSources = MODELS.map(m => {
+    const feed=state.models[m.id];
+    const result=feed?.data ? `${X('διαθέσιμο','available')} · ${stamp(feed.at)}${fin(feed.at) && Date.now()-feed.at > 3*3600e3 ? ' · ' + X('παλιά λήψη','stale fetch') : ''}${feed.used && feed.used!==m.id ? ` · ${X('εναλλακτικό','fallback')}: ${esc(feed.used)}` : ''}` : feed?.outside ? X('εκτός περιοχής','outside coverage') : feed?.error ? X('μη διαθέσιμο','unavailable') : X('αναμονή','pending');
+    return `<li>${esc(m.name)}: ${result}</li>`;
+  }).join('');
+  const ensembleSources = ENSEMBLES.map(e => {
+    const feed=state.ens[e.id];
+    const result=feed?.data ? `${X('διαθέσιμο','available')} · ${stamp(feed.at)}${fin(feed.at) && Date.now()-feed.at > 3*3600e3 ? ' · ' + X('παλιά λήψη','stale fetch') : ''}${feed.used && feed.used!==e.id ? ` · ${X('εναλλακτικό','fallback')}: ${esc(feed.used)}` : ''}` : feed?.error ? X('μη διαθέσιμο','unavailable') : X('αναμονή','pending');
+    return `<li>${esc(e.name || e.id)}: ${result}</li>`;
+  }).join('');
+  const observation = V.current?.source === 'obs' ? X('Μέτρηση σταθμού','Station observation') + ` · ${esc(V.station?.source || '')} · ${stamp(V.current.t)}` : X('Εκτίμηση μοντέλου — δεν υπάρχει κατάλληλη πρόσφατη μέτρηση σταθμού','Model estimate — no suitable recent station observation');
+  const status = `<section class="section card"><div class="panelhead"><b>${X('Ποιότητα δεδομένων','Data status')}</b></div><p class="notice">${state.snapshot ? X('Προβάλλεται αποθηκευμένη πρόγνωση, όχι ζωντανή ενημέρωση.','Showing a saved forecast, not a live update.') : X('Βασική πρόγνωση:','Base forecast:') + ' ' + esc(state.primarySource || X('άγνωστη πηγή','unknown source')) + ' · ' + stamp(state.fetchedAt) + (state.fetchedAt && Date.now()-state.fetchedAt>3600e3 ? ' · ' + X('παλιά λήψη','stale fetch') : '')}</p><p class="notice">${observation}</p><p class="notice">${X('Προειδοποιήσεις Meteoalarm:','Meteoalarm warnings:')} ${state.warn?.error ? X('μη διαθέσιμες','unavailable') : state.warn ? stamp(state.warnAt) : X('αναμονή','pending')} · ${esc(String(V.active.length))} ${X('μοντέλα','models')} · ${esc(String(V.members))} ${X('μέλη θερμοκρασίας','temperature members')}</p><details><summary>${X('Κατάσταση πηγών και εναλλακτικές','Source status and fallbacks')}</summary><p class="notice">${X('Οι ώρες είναι ώρες λήψης, όχι έκδοσης των μοντέλων. Τα μέλη μπορεί να μοιράζονται κοινά δεδομένα.','Times are fetch times, not model issue times. Members can share data.')}</p><b>${X('Μοντέλα','Models')}</b><ul>${modelSources}</ul><b>Ensembles</b><ul>${ensembleSources}</ul></details></section>`;
   const eventDetail = (d, k) => {
     const rows = V.rows.filter(r => dayKey(r.t, V.zone) === d.key && r.t >= Date.now() - 3600e3);
     const items = k === 'rain' || k === 'heavy' ? V.order.map(id => {
@@ -1903,7 +1937,31 @@ function phenPage() {
     const wet = items.filter(m => m.total >= threshold).length;
     const list = items.map(m => `<li>${esc(m.name)}: ${num(m.total,1)} mm</li>`).join('');
     const agreement = items.length >= 3 ? (wet === 0 || wet === items.length ? X('Μεγάλη συμφωνία','Strong agreement') : X('Μικτή εικόνα','Mixed picture')) : X('Ανεπαρκή στοιχεία για σύγκριση','Insufficient data for comparison');
-    const detail = items.length ? `<p>${agreement} · ${wet}/${items.length} ${X('μοντέλα πάνω από το όριο','models above threshold')} ${threshold} mm</p><ul>${list}</ul><p>${X('Ενδεικτικά αθροίσματα διαθέσιμων ωρών, όχι τα μέλη που σχηματίζουν απευθείας την πιθανότητα.','Indicative totals from available hours, not the ensemble members directly forming the probability.')}</p>` : `<p>${X('Η ανάλυση ανά μέλος δεν είναι διαθέσιμη για αυτόν τον υπολογισμό.','Member-level attribution is unavailable for this calculation.')}</p>`;
+    // Independent diagnostic: count members satisfying the event over the
+    // remaining local-day hours; the displayed MONO estimate has its own formula.
+    const families = k === 'wind' ? (V.famG || []) : ['rain','heavy','storm','snow'].includes(k) ? V.famP : k === 'frost' || k === 'heat' ? (V.famT || []) : [];
+    const memberLines = families.map(f => {
+      let valid=0, hits=0;
+      (f.members || []).forEach((member,j) => {
+        const checks=rows.map(r => {
+          const i=r.i, p=member[i];
+          if (k==='rain' || k==='heavy') return fin(p) ? p : null;
+          if (k==='wind') return fin(p) ? p >= 62 : null;
+          if (k==='frost' || k==='heat') return fin(p) ? (k==='frost' ? p<=0 : p>=35) : null;
+          if (k==='storm') { const cape=f.CAPE?.[j]?.[i]; return fin(p)&&fin(cape) ? p>=.5&&cape>=400 : null; }
+          if (k==='snow') { const snow=f.S?.[j]?.[i], t=f.T?.[j]?.[i]; return fin(snow) ? snow>=.1 : fin(p)&&fin(t) ? p>=.2&&t<=.5 : null; }
+          return null;
+        }).filter(v => v !== null);
+        if (!rows.length || checks.length < rows.length*.75) return;
+        valid++;
+        if (k==='rain'||k==='heavy' ? checks.reduce((a,b)=>a+b,0) >= threshold : checks.some(Boolean)) hits++;
+      });
+      return valid ? `<li>${esc(f.id)}: ${hits}/${valid}</li>` : '';
+    }).filter(Boolean).join('');
+    const modelDetail = items.length ? `<p>${agreement} · ${wet}/${items.length} ${X('μοντέλα πάνω από το όριο','models above threshold')} ${threshold} mm</p><ul>${list}</ul><p>${X('Αθροίσματα διαθέσιμων ωρών: απαιτείται κάλυψη τουλάχιστον 80%. Δεν είναι ο υπολογισμός του ποσοστού MONO.','Available-hour totals require at least 80% coverage. These are not the MONO probability calculation.')}</p>` : '';
+    const memberDetail = memberLines ? `<p>${X('Μέλη με ένδειξη / έγκυρα μέλη, ανά σύστημα','Members indicating the event / valid members, by system')}:</p><ul>${memberLines}</ul><p>${X('Διαγνωστικός έλεγχος για τις εναπομείνασες ώρες με τουλάχιστον 75% κάλυψη. Δεν είναι αναγκαστικά ο ίδιος υπολογισμός με το ποσοστό παραπάνω.','Diagnostic for remaining hours with at least 75% coverage; not necessarily the same calculation as the probability above.')}</p>` : `<p>${X('Δεν υπάρχουν επαρκή δεδομένα μελών για ξεχωριστή ανάλυση.','Not enough member data for a separate breakdown.')}</p>`;
+    const method = ({rain:X('Συνδυασμός ensemble ημερήσιου υετού και ωριαίας εκτίμησης MONO.','Combines daily ensemble precipitation and hourly MONO estimates.'),heavy:X('Ημερήσιο ensemble ≥20 mm. Αν δεν υπάρχουν επαρκή μέλη, η πιθανότητα δεν εμφανίζεται.','Daily ensemble ≥20 mm; probability is unavailable when there are too few members.'),storm:X('Μέγιστη ωριαία ένδειξη από CAPE/υετό και κωδικούς καιρού. Δεν ταυτίζεται με πιθανότητα καταιγίδας μέσα σε όλη την ημέρα.','Maximum hourly signal from CAPE/precipitation and weather codes, not a full-day storm probability.'),snow:X('Μέγιστη ωριαία ένδειξη χιονόπτωσης ή υετού με θερμοκρασία ≤0,5°C.','Peak hourly snowfall or precipitation with temperature ≤0.5°C.'),fog:X('Μέγιστη ωριαία ένδειξη από ορατότητα κάτω από 1 km ή κωδικό ομίχλης.','Peak hourly visibility below 1 km or fog code signal.'),wind:X('Μέγιστη ωριαία ένδειξη ριπών ≥62 km/h.','Peak hourly signal for gusts ≥62 km/h.'),frost:X('Μέγιστη ωριαία εκτίμηση από θερμοκρασία και εύρος αβεβαιότητας, όχι καταμέτρηση μελών.','Peak hourly estimate from temperature and uncertainty, not a member count.'),heat:X('Μέγιστη ωριαία εκτίμηση θερμοκρασίας ≥35°C, όχι πρόγνωση διάρκειας καύσωνα.','Peak hourly estimate of temperature ≥35°C, not a heatwave duration forecast.')})[k];
+    const detail = `<p>${method}</p>${modelDetail}${memberDetail}`;
     return `<details><summary class="pcell ${fin(d.ev?.[k]) ? probCls(d.ev[k]) : ''}">${pct(d.ev?.[k])}</summary><div>${esc(T('phd_' + k))}${detail}</div></details>`;
   };
   const grid = `<div class="card tablecard"><div class="tablewrap"><table class="phen-table"><thead><tr><th></th>${days.map((d, i) => `<th>${esc(dayLabel(d.t, i))}<br>${icon(d.code, 1, 'thicon')}</th>`).join('')}</tr></thead><tbody>
@@ -1917,7 +1975,7 @@ function phenPage() {
   const w = state.warn;
   const warn = !w ? loadingCard() : w.error ? `<p class="notice">${T('warnFail')}</p>` : !w.length ? `<p class="notice">${T('warnNone')}</p>`
     : w.slice(0, 8).map(x => `<div class="warnrow ${x.color}"><span class="wdot"></span><div><b>${esc(x.event)}</b> <small class="muted">${x.local ? T('warnRegion') : T('warnCountry')}</small><div class="compact">${esc(x.areas.slice(0, 4).join(', '))}${x.areas.length > 4 ? '…' : ''}</div><div class="compact">${esc(wdt(x.onset))} → ${esc(wdt(x.expires))}</div></div></div>`).join('');
-  return head + status + confidence + grid + activity + hourly + `<section class="section dual"><div class="card"><div class="panelhead"><b>${T('rainTimeline')}</b></div>${tl}</div><div class="card"><div class="panelhead"><b>${T('warnTitle')}</b><span class="badge">Meteoalarm</span></div>${warn}</div></section>`;
+  return head + status + yesterday + confidence + grid + activity + hourly + `<section class="section dual"><div class="card"><div class="panelhead"><b>${T('rainTimeline')}</b></div>${tl}</div><div class="card"><div class="panelhead"><b>${T('warnTitle')}</b><span class="badge">Meteoalarm</span></div>${warn}</div></section>`;
 }
 
 /* ------------------------------------------------------------------ page: radar */
@@ -3668,7 +3726,7 @@ function navRender() {
 /* Heavy, page-specific modules load on first use instead of on every visit. */
 const LAZY_GROUPS = {
   sky: ['vendor/astronomy.min.js?v=f41139a879', 'sky.js?v=6e83909e06', 'cosmic.js?v=462cffbdea', 'space-control.js?v=b7acaf3100', 'gravity-observatory.js?v=3dc1445258'],
-  history: ['history-backtest.js?v=09d403c008'],
+  history: ['history-backtest.js?v=b7b93f81d4'],
   insights: ['model-insights.js?v=5e5da5e749']
 };
 const LAZY_READY = { sky: () => !!(window.MonoSky && window.MonoCosmic), history: () => !!window.MONOHistoryBacktest, insights: () => !!window.MONOModelInsights };

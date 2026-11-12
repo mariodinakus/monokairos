@@ -31,4 +31,6 @@ test('Rain holdout stores predicted probability, occurrence and verified precipi
   assert.ok(L.holdout.length>10);
   assert.ok(L.holdout.every(r=>r.length===5 && r[1]>=0 && r[1]<=1 && (r[2]===0||r[2]===1)));
   assert.ok(Number.isFinite(L.test[L.choice]));
+  assert.ok(L.perModel.global_a.n >= 24);
+  assert.equal(L.perModel.global_a.brier, 0);
 });

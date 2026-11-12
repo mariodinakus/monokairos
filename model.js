@@ -337,7 +337,7 @@
         const y = data.truth[i]; if (!fin(y)) continue;
         const vals = {}; for (const id of ids) { const v = data.models[id][k][i]; if (fin(v)) vals[id] = v; }
         const f = rainFeat(vals); if (!f) continue;
-        rows.push({ t: data.times[i], H: data.hours[i], f, y, wet: y >= WET ? 1 : 0 });
+        rows.push({ t: data.times[i], H: data.hours[i], f, vals, y, wet: y >= WET ? 1 : 0 });
       }
       if (rows.length < 200) continue;
       const { a, b } = splitTimes(rows);
@@ -371,12 +371,17 @@
       } : null;
       const trainScale = amountScale(train), amountValRaw = checkAmount(val, 1), amountValScaled = checkAmount(val, trainScale);
       const amountChoice = amountValScaled && amountValRaw && amountValScaled.mae < amountValRaw.mae ? 'scaled' : 'raw';
+      const perModel = {};
+      for (const id of ids) {
+        const paired = test.filter(r => fin(r.vals[id]));
+        if (paired.length >= 24) perModel[id] = {n:paired.length, brier:r1(mean(paired.map(r => ((r.vals[id] >= WET ? 1 : 0)-r.wet)**2)))};
+      }
       const prod = Object.fromEntries(RAIN_LIVE.map(m => [m, RAIN[m].fit(rows)]));
       const scale = amountScale(rows);
       // Hourly Brier scores below remain exact; this sparse series is visualization only.
        const holdout = test.filter((r, i) => i % 6 === 0 && fin(choiceF(r)))
          .map(r => [r.t, r1(choiceF(r)), r.wet, r1(r.f.amt * (amountChoice === 'scaled' ? trainScale : 1)), r1(r.y)]).slice(-360);
-       out.leads[k] = { choice, ranked, prod, scale, amountChoice, base, holdout,
+       out.leads[k] = { choice, ranked, prod, scale, amountChoice, base, holdout, perModel,
         amountVal: {raw:amountValRaw,scaled:amountValScaled},
         amountTest: checkAmount(test, amountChoice==='scaled'?trainScale:1),
         val: mapR(valS), test: mapR(testS), pod: hit + miss ? hit / (hit + miss) : null, far: hit + fa ? fa / (hit + fa) : null,

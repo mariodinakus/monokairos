@@ -1,5 +1,5 @@
 /* Web Worker: trains the MONO-ML zoo off the main thread. */
-importScripts('model.js?v=81b862842a');
+importScripts('model.js?v=0f0da7ef86');
 onmessage = e => {
   const { id, temp, wind, precip, cloud } = e.data;
   try {
