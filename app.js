@@ -457,7 +457,7 @@ const state = {
   theme: P.theme === 'dark' || P.theme === 'light' ? P.theme : (sysDark() ? 'dark' : 'light'),
   city: P.city || CITIES[0], firstRun: !P.city,
   favorites: Array.isArray(P.favorites) ? P.favorites : CITIES.slice(0, 6),
-  page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, mvar: 'temp', lead: 0, historyDays: [62,180,365].includes(Number(UI.historyDays)) ? Number(UI.historyDays) : 62, historyVar: 'temp', historyOrder: 'latest', trainProgress: null, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
+  page: (location.hash || '').slice(1) || 'now', quickScreen: 0, hours: 48, region: 'All', sel: 0, homeHour: null, mvar: 'temp', lead: 0, historyDays: [62,180,365].includes(Number(UI.historyDays)) ? Number(UI.historyDays) : 62, historyVar: 'temp', historyOrder: 'latest', trainProgress: null, stationPick: null, climMonth: new Date().getMonth() + 1, climSrc: 'station',
   windyStatus: 'idle', windyHtml: '', windySelected: null,
   gen: 0, modelEpoch: 0, modelsLoading: false, modelsStartedAt: 0, main: null, mainErr: false, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', trainError: null,
   aq: null, atmosphere: null, space: null, cosmic: null, cosmicAt: 0, spaceAt: 0, spaceBusy: false, marine: null, warn: null, clim: null, view: null, fetchedAt: 0, modelsAt: 0, snapshot: false, cityLive: {}, locating: false,
@@ -1529,7 +1529,7 @@ function homeMore(id, title, hint, body) {
 }
 function nowPage() {
   const c = state.city, V = state.view;
-  const head = header(esc(cityName(c)), esc([adminName(c), countryName(c)].filter(Boolean).join(' · ')), `${favBtn(c)}${V ? btn('share', '⇪ ' + (state.lang === 'el' ? 'Κοινοποίηση' : 'Share'), `aria-label="${state.lang === 'el' ? 'Κοινοποίηση πρόγνωσης' : 'Share forecast'}"`) : ''}${btn('reload', '↻ ' + T('refresh'))}`);
+  const head = `<div class="topline home-topline"><div><h1 class="display-title">${esc(cityName(c))}</h1><p class="subtitle">${esc([adminName(c), countryName(c)].filter(Boolean).join(' · '))}</p></div><div class="home-actions">${favBtn(c, true)}${V ? btn('share', '⇪', `aria-label="${state.lang === 'el' ? 'Κοινοποίηση πρόγνωσης' : 'Share forecast'}" title="${state.lang === 'el' ? 'Κοινοποίηση' : 'Share'}"`) : ''}</div></div>`;
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard(state.locating ? T('locating') : ''));
   // Do not flash the raw model temperature and then silently replace it with a station observation.
   if (!state.obsReady && !state.snapshot) return head + loadingCard(T('checkingStations'));
@@ -1545,17 +1545,22 @@ function nowPage() {
     ? (state.lang==='el'?'Βρέχει στον σταθμό ':'Raining at station ')+esc(nearbyReport.name)
     :nearbyReport?.kind==='snow'
       ? (state.lang==='el'?'Χιονίζει στον σταθμό ':'Snowing at station ')+esc(nearbyReport.name)
-      :conditionBase+(cur.source==='model'?' · '+T('modelNow'):'');
+      :conditionBase;
   const weatherSource=nearbyReport?.kind==='rain'||nearbyReport?.kind==='snow'
     ? '<div class="hero-station-report">📍 '+num(nearbyReport.dist,1)+' km · '+hhmm(nearbyReport.t)+' · '+esc(nearbyReport.src||'')+'</div>' : '';
-  const hero = `<article class="card hero"><div class="hero-header"><div><div class="hero-place">${T('now')}</div><div class="hero-country">${esc(dt(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' }))} · ${hhmm(Date.now())}</div></div>${icon(cur.code ?? rows[iN]?.code ?? 3, cur.isDay, 'hero-icon')}</div>
-    <div class="temperature" aria-label="${fin(cur.temp) ? num(Math.round(cur.temp)) + ' °C' : '—'}">${fin(cur.temp) ? num(Math.round(cur.temp)) : '—'}<span class="temp-unit">°C</span></div>
-    <div class="hero-bottom"><div><div class="condition">${condition}</div>${weatherSource}<div class="mininote">${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}</div>${state.snapshot ? '' : (window.MONODayCompare?.render(window.MONODayCompare.compare({rows, daily:V.daily, now:Date.now(), zone:V.zone}), {lang:state.lang}) || '')}</div><span class="sourcemark ${cur.source === 'obs' ? 'live' : ''}">${src}</span></div></article>`;
-  const minis = `<div class="mini-grid">
-    ${mini(T('rainChance'), pct(pop6), (state.lang === 'el' ? 'Μέγιστη ανά ώρα · επόμενες 6 ώρες' : 'Peak hourly chance · next 6 hours') + (today?.mm >= 0.1 ? ` · ${num(today.mm, 1)} mm ${T('today').toLowerCase()}` : ''), 'umbrella')}
-    ${mini(T('wind'), `${num(cur.wind)} <small>km/h</small> ${dirArrow(cur.dir)}${fin(cur.wind) ? `<span class="wind-beaufort" title="${state.lang === 'el' ? 'Κλίμακα Μποφόρ για μέση ταχύτητα ανέμου' : 'Beaufort scale for mean wind speed'}">${windBft(cur.wind)}</span>` : ''}`, fin(cur.gust) ? `${T('gust')} ${num(cur.gust)} km/h` : '&nbsp;', 'wind')}
-    ${mini(T('humidity'), `${num(cur.rh)}%`, `${T('dew')} ${deg(cur.dew)} · ☁ ${ccTxt(rows[iN]?.cloud)}`, 'humidity')}
-    ${mini(T('pressure'), `${num(cur.pres)} <small>hPa</small>`, fin(cur.vis) ? `${T('visibility')} ${num(cur.vis, cur.vis < 10 ? 1 : 0)} km` : '&nbsp;', 'pressure')}</div>`;
+  const elNow = state.lang === 'el', LNow = (a,b) => elNow ? a : b;
+  const D = state.main?.daily;
+  const sunIndex = Array.isArray(D?.sunrise) ? D.sunrise.findIndex(t => fin(t) && dayKey(t * 1000, V.zone) === dayKey(Date.now(), V.zone)) : -1;
+  const sr = sunIndex >= 0 && fin(D.sunrise[sunIndex]) ? hhmm(D.sunrise[sunIndex] * 1000) : null;
+  const ss = sunIndex >= 0 && fin(D.sunset?.[sunIndex]) ? hhmm(D.sunset[sunIndex] * 1000) : null;
+  const sun = sr || ss ? `<div class="home-sun"><span>${LNow('Ανατολή','Sunrise')} <b>${sr || '—'}</b></span><span>${LNow('Δύση','Sunset')} <b>${ss || '—'}</b></span></div>` : '';
+  const hero = `<article class="card home-hero"><div class="home-now-top"><span>${T('now')}</span><span>${esc(dt(Date.now(), { weekday: 'short', day: 'numeric', month: 'short' }))} · ${hhmm(Date.now())}</span></div>
+    <div class="home-reading"><div><div class="home-temperature" aria-label="${fin(cur.temp) ? num(Math.round(cur.temp)) + ' °C' : '—'}">${fin(cur.temp) ? num(Math.round(cur.temp)) : '—'}<span>°</span></div><div class="home-condition">${condition}</div>${weatherSource}<div class="home-feels">${T('feels')} ${deg(cur.feels)} · ↑ ${deg(today?.hi)} · ↓ ${deg(today?.lo)}</div></div>${icon(cur.code ?? rows[iN]?.code ?? 3, cur.isDay, 'hero-icon')}</div>
+    <div class="home-source">${src}</div>${state.snapshot ? '' : (window.MONODayCompare?.render(window.MONODayCompare.compare({rows, daily:V.daily, now:Date.now(), zone:V.zone}), {lang:state.lang}) || '')}
+    <div class="home-metrics"><button type="button" class="home-metric" data-action="goto" data-page="rain"><img src="${iconSrc('umbrella')}" alt=""><span>${LNow('Βροχή','Rain')}</span><b>${pct(pop6)}</b><small>${LNow('Μέγ. ανά ώρα · 6ωρο','Peak hourly · 6h')}</small></button>
+      <button type="button" class="home-metric" data-action="goto" data-page="hourly"><img src="${iconSrc('wind')}" alt=""><span>${T('wind')}</span><b>${windBft(cur.wind)}</b><small>${fin(cur.wind) ? num(cur.wind)+' km/h' : '—'}</small></button>
+      <button type="button" class="home-metric" data-action="goto" data-page="environment"><img src="${iconSrc('humidity')}" alt=""><span>${T('humidity')}</span><b>${fin(cur.rh) ? num(cur.rh)+'%' : '—'}</b></button></div>${sun}
+    <details class="nh-info home-current-details" data-home-section="current-details" ${homeOpen.has('current-details') ? 'open' : ''}><summary>${LNow('Περισσότερες ενδείξεις','More conditions')}</summary><div class="home-extra-values"><span>${T('pressure')} <b>${fin(cur.pres) ? num(cur.pres)+' hPa' : '—'}</b></span><span>${T('gust')} <b>${fin(cur.gust) ? num(cur.gust)+' km/h' : '—'}</b></span><span>${T('dew')} <b>${deg(cur.dew)}</b></span><span>${T('clouds')} <b>${ccTxt(rows[iN]?.cloud)}</b></span><span>${T('visibility')} <b>${fin(cur.vis) ? num(cur.vis, cur.vis < 10 ? 1 : 0)+' km' : '—'}</b></span></div><p>${LNow('Νέφωση και αίσθηση: εκτίμηση μοντέλου.','Cloud cover and feels-like: model estimates.')}</p></details></article>`;
   const hourlyRain = state.main?.hourly;
   const nextHour = window.MONONextHour?.forecast({
     fifteen: state.rain15,
@@ -1567,7 +1572,9 @@ function nowPage() {
     series: [{ vals: win.map(r => (past(r) ? r.tempModel : null)), cls: 'hind' }, { vals: win.map((r, j) => (!past(r) || (win[j + 1] && !past(win[j + 1])) ? r.temp : null)), cls: 'mono' }],
     points: win.map(r => r.obs), bars: win.map(r => (past(r) ? null : r.amount)), nowT: Date.now() });
   const el = state.lang === 'el', X = (a,b) => el ? a : b;
-  const hours = `<section class="section"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${esc(rainSentence())}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(rows.slice(iN, iN + 25), cur)}</section>`;
+  const shownHours = rows.slice(iN, iN + 25);
+  if (!shownHours.some(r => r.t === state.homeHour)) state.homeHour = null;
+  const hours = `<section class="section home-hours"><div class="sectionhead"><div><h2 class="h2">${T('next24')}</h2><div class="section-sub">${X('Πάτησε μια ώρα για λεπτομέρειες','Tap an hour for details')}</div></div>${btn('goto', '↗ ' + T('hourly'), 'data-page="hourly"')}</div>${hoursStrip(shownHours, cur)}${homeHourDetail(shownHours, cur)}</section>`;
   const rainDetail = (window.MONOMonthlyRain?.render(state.monthlyRain, {lang:state.lang,zone:V.zone,city:cityName(c)}) || '') +
     (window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(c)}) || '') + rainNowCard(true);
   const chartDetail = `<section class="section card"><div class="panelhead"><div><b>${T('chartNow')}</b><div class="section-sub">${V.useStation ? T('chartNowSub') : T('chartNowSubNoObs')}</div></div></div>${ch}
@@ -1584,7 +1591,7 @@ function nowPage() {
     homeMore('planning',X('Σχέδια και πρόγνωση','Plans and forecast'),'',monoStory(V)+monoPlanCard(V)+monoStationsCard(V)+summaryCard()+MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
     homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),'',newsCard()+holidaysCard()+environment()+glossary()) +
     (notifications ? homeMore('notifications',X('Ειδοποιήσεις βροχής','Rain alerts'),'',notifications) : '');
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + alertsStrip() +
+  return head + warningsBanner() + hero + attentionStrip(V) + alertsStrip() +
     (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone,detailsOpen:homeOpen.has('next-hour-info')}) || '') + hours + week +
     homeMore('extra',X('Περισσότερα','More'),'',more);
 }
@@ -1622,13 +1629,42 @@ function yesterdayCard() {
   const result = Y.evaluate({ forecast: state.yday.forecast, obs: V.rows.map(r => ({ t: r.t, obs: r.obs })), now: Date.now(), zone: V.zone });
   return Y.render(result, { lang: state.lang, station: `${V.station.id} · ${num(V.station.dist)} km` });
 }
-function ccTxt(c) { return Number.isFinite(c) ? Math.round(c) + '%' : '—'; } function hoursStrip(rows, cur) {
-  return `<div class="scroll-hours">${rows.map((r, j) => `<div class="hourcard ${j === 0 ? 'active' : ''}"><span class="hourtime">${j === 0 ? T('now') : hh(r.t) + ':00'}</span>${icon(j === 0 && cur && fin(cur.code) ? cur.code : r.code, j === 0 && cur ? cur.isDay : r.isDay)}<span class="hourtemp">${deg(j === 0 && cur && fin(cur.temp) ? cur.temp : r.temp)}</span><span class="hoursub">☂ ${pct(r.pop)}</span><span class="hoursub cc" title="${T('clouds')}">☁ ${ccTxt(r.cloud)}</span>${(r.amount ?? 0) >= 0.1 ? `<span class="hoursub rn-hmm">${mm1(r.amount)} mm</span>` : ''}</div>`).join('')}</div>`;
+function ccTxt(c) { return Number.isFinite(c) ? Math.round(c) + '%' : '—'; }
+function hoursStrip(rows, cur) {
+  return `<div id="home-hour-scroll" class="scroll-hours">${rows.map((r, j) => {
+    const selected = state.homeHour === r.t, active = selected || (state.homeHour === null && j === 0);
+    const when = j === 0 ? T('now') : hh(r.t) + ':00';
+    const temp = j === 0 && cur && fin(cur.temp) ? cur.temp : r.temp;
+    return `<button type="button" class="hourcard home-hour ${active ? 'active' : ''}" data-action="homeHour" data-t="${r.t}" aria-expanded="${selected}" aria-controls="home-hour-detail" aria-label="${esc(when)} · ${deg(temp)} · ${T('rainChance')} ${pct(r.pop)}"><span class="hourtime">${esc(when)}</span>${icon(j === 0 && cur && fin(cur.code) ? cur.code : r.code, j === 0 && cur ? cur.isDay : r.isDay)}<span class="hourtemp">${deg(temp)}</span><span class="hoursub">☂ ${pct(r.pop)}</span></button>`;
+  }).join('')}</div>`;
+}
+function homeHourDetail(rows, cur) {
+  const i = rows.findIndex(r => r.t === state.homeHour), r = rows[i];
+  if (!r) return '<div id="home-hour-detail" hidden></div>';
+  const el = state.lang === 'el', X = (a,b) => el ? a : b, current = i === 0, c = current ? cur : r;
+  const time = current ? T('now') : dt(r.t, { weekday:'short', day:'numeric', hour:'2-digit', minute:'2-digit', hourCycle:'h23' });
+  const note = current && cur.source === 'obs'
+    ? X('Θερμοκρασία, άνεμος και υγρασία: σταθμός · Βροχή και νέφωση: πρόγνωση','Temperature, wind and humidity: station · Rain and clouds: forecast')
+    : X('Πρόγνωση μοντέλου','Model forecast');
+  return `<div id="home-hour-detail" class="home-hour-detail"><div class="home-detail-top"><b>${esc(time)}</b><button type="button" data-action="homeHour" data-t="${r.t}" aria-label="${X('Κλείσιμο λεπτομερειών','Close details')}">×</button></div><small>${note}</small><div class="home-detail-grid"><span>${T('temp')} <b>${deg(c?.temp)}</b></span><span>${T('rainChance')} <b>${pct(r.pop)}</b></span><span>${X('Υετός','Precipitation')} <b>${fin(r.amount) ? mm1(r.amount)+' mm' : '—'}</b></span><span>${T('wind')} <b>${windBft(c?.wind)}</b></span><span>${T('gust')} <b>${fin(c?.gust) ? num(c.gust)+' km/h' : '—'}</b></span><span>${T('humidity')} <b>${fin(c?.rh) ? num(c.rh)+'%' : '—'}</b></span><span>${T('clouds')} <b>${ccTxt(r.cloud)}</b></span></div></div>`;
 }
 function dailyRows(d) {
   if (!d?.length) return `<p class="muted">—</p>`;
-  const lo = Math.min(...d.map(x => x.lo)), hi = Math.max(...d.map(x => x.hi)), sp = Math.max(1, hi - lo);
-  return d.map((x, i) => `<div class="dailyrow"><strong>${esc(dayLabel(x.t, i))}</strong>${icon(x.code, 1)}<div class="dailybar"><span style="left:${(100 * (x.lo - lo) / sp).toFixed(1)}%;width:${Math.max(4, 100 * (x.hi - x.lo) / sp).toFixed(1)}%"></span></div><div class="dailytemps"><span class="min">${deg(x.lo)}</span><span>${deg(x.hi)}</span></div><div class="dailycc" title="${T('clouds')}">☁ ${ccTxt(x.cloud)}</div><div class="dailywet">☂ ${pct(x.pop)}${x.mm >= 0.1 ? ` · ${num(x.mm, 1)}mm` : ''}</div></div>`).join('');
+  const el = state.lang === 'el';
+  return d.map((x, i) => `<div class="home-day"><strong>${esc(dayLabel(x.t, i))}</strong>${icon(x.code, 1)}<span class="home-day-rain" aria-label="${el ? 'Ημερήσια πιθανότητα βροχής' : 'Daily rain chance'} ${pct(x.pop)}">☂ ${pct(x.pop)}</span><div class="home-day-temps"><span aria-label="${T('low')} ${deg(x.lo)}">${deg(x.lo)}</span><b aria-label="${T('high')} ${deg(x.hi)}">${deg(x.hi)}</b></div></div>`).join('');
+}
+function attentionStrip(V) {
+  if (state.snapshot) return '';
+  const items = window.MONOHomeInsights?.highlights(V.rows, Date.now()) || [];
+  if (!items.length) return '';
+  const el = state.lang === 'el', X = (a,b) => el ? a : b;
+  const labels = {
+    rain: a => `${X('Πιθανότητα βροχής','Rain chance')} ${pct(a.value)}`,
+    gust: a => `${X('Ριπές ανέμου','Wind gusts')} ${num(a.value)} km/h`,
+    hot: a => `${X('Ζέστη','Heat')} ${deg(a.value)}`,
+    cold: a => `${X('Πιθανός παγετός','Possible frost')} ${deg(a.value)}`
+  };
+  return `<section class="section home-attention"><div class="home-attention-heading"><h2>${X('Τι να προσέξεις','Heads up')}</h2><span>${X('Πρόγνωση · 24 ώρες','Forecast · 24 hours')}</span></div><div class="home-attention-items">${items.map(a => `<button type="button" data-action="goto" data-page="${a.kind === 'rain' ? 'rain' : 'hourly'}"><b>${labels[a.kind](a)}</b><small>${a.kind === 'rain' ? X('Ωριαία πιθανότητα · ','Hourly chance · ') : ''}${esc(dt(a.t, {weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}))}</small><span aria-hidden="true">↗</span></button>`).join('')}</div></section>`;
 }
 function periodText(p) {
   const V = state.view, lab = t => { const i = V.daily.findIndex(d => d.key === dayKey(t, V.zone)); return i >= 0 ? dayLabel(t, i) : dt(t, { weekday: 'short' }); };
@@ -3809,7 +3845,7 @@ function render() {
   const oldHomeDetails = [...document.querySelectorAll('#content details[data-home-section]')];
   if (oldHomeDetails.length) { homeOpen.clear(); oldHomeDetails.filter(el => el.open).forEach(el => homeOpen.add(el.dataset.homeSection)); }
   const explainOpen = !!document.querySelector('#content .fc-explain[open]');
-  const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap')].map(el => [el.id, el.scrollLeft]);
+  const envScroll = [...document.querySelectorAll('.env-hour-scroll,.env-table-scroll,.mx-hours,.mx-pmap,#home-hour-scroll')].map(el => [el.id, el.scrollLeft]);
   if (document.getElementById('sc-globe')) window.MONOSpaceControl?.destroy();
   const waiting = lazyPending(state.page);
   if (waiting.length) { Promise.all(waiting.map(loadLazyGroup)).then(() => render(), () => render()); }
@@ -3945,7 +3981,7 @@ function goto(p) {
 function setCity(c) {
   if (!c) return;
   killMap(); killGlobe(); MonoForecast.destroy();
-  Object.assign(state, { city: c, main: null, view: null, rain15: null, yday: null, verify: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', trainError: null, modelsAt: 0, sel: 0, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
+  Object.assign(state, { city: c, main: null, view: null, rain15: null, yday: null, verify: null, monthlyRain: null, probe: null, models: {}, ens: {}, obs: null, obsReady: false, train: null, trainStatus: 'idle', trainError: null, modelsAt: 0, sel: 0, homeHour: null, aq: null, atmosphere: null, marine: null, warn: null, clim: null, stationPick: null, climSrc: 'station', pws: null,stationRain:null,communityStations:null,communityRain:null,stationBoxes:null,stationNetFilter:'all',stationNetLimit:35,windyStatus:'idle',windyHtml:'',windySelected:null });
   if (state.page === 'cities') state.page = 'now';
   restoreHistoricCache(c);
   persist(); $('#search').value = ''; $('#results').classList.add('hidden'); $('.sidebar').classList.remove('open');
@@ -4037,6 +4073,13 @@ function onClick(e) {
   else if (a === 'navGroup') { const key=b.dataset.v; if(NAV_GROUPS.some(g=>g.id===key)){navOpen[key]=!navOpen[key];write(NAV_OPEN_KEY,navOpen);navRender();} }
   else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); if(state.page==='space')window.MONOSpaceControl?.load(true); }
   else if (a === 'share') shareForecast();
+  else if (a === 'homeHour') {
+    const t = Number(b.dataset.t), V = state.view;
+    if (!fin(t) || !V?.rows.slice(V.iNow, V.iNow + 25).some(r => r.t === t)) return;
+    state.homeHour = state.homeHour === t ? null : t;
+    render();
+    document.querySelector(`.home-hour[data-t="${t}"]`)?.focus({ preventScroll:true });
+  }
   else if (a === 'trustTab') { if (['reliability','station','yesterday','agreement'].includes(b.dataset.v)) { state.trustTab = b.dataset.v; render(); } }
   else if (a === 'rainAlerts') toggleRainAlerts();
   else if (a === 'rainAlertsHere') { const pref = rainAlertsPref(); if (pref?.on) { localStorage.setItem(RA_KEY, JSON.stringify({ ...pref, on: false })); toggleRainAlerts(); } }
