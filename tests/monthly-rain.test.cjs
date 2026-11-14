@@ -162,3 +162,43 @@ test('monthly comparisons are wired into both Now and Rain pages and bust the hi
   assert.equal((read('app.js').match(/MONOMonthlyRain\?\.renderComparison/g)||[]).length,2);
   assert.match(read('app.js'),/cached\.daily\?\.time\?\.length >= 700/);
 });
+
+
+test('historical rain analogs compare complete non-overlapping seven-day ERA5 windows without extrapolation', () => {
+  const data=syntheticDays('2024-09-01','2026-11-12');
+  const result=Rain.findRainAnalogs(data,Date.parse('2026-11-15T01:00:00Z'),'Europe/Athens');
+  assert.equal(result.reference.end,'2026-11-12');
+  assert.equal(result.reference.total,7);
+  assert.equal(result.reference.rainyDays,7);
+  assert.equal(result.matches.length,3);
+  for(const p of result.matches){
+    assert.equal(p.total,7);
+    assert.equal(p.rmse,0);
+    assert.ok(p.end < '2026-10-24');
+  }
+  assert.ok(result.matches[0].end < result.matches[1].start || result.matches[1].end < result.matches[0].start);
+});
+
+test('rain analogs reject incomplete daily windows and duplicate dates, and never fabricate unavailable matches', () => {
+  const sparse=syntheticDays('2026-10-01','2026-11-10',new Set(['2026-11-09']));
+  const r=Rain.findRainAnalogs(sparse,Date.parse('2026-11-12T12:00:00Z'),'UTC');
+  assert.equal(r.reference.end,'2026-11-08');
+  const dup=syntheticDays('2026-11-01','2026-11-10');
+  dup.time.push('2026-11-10');dup.precipitation_sum.push(99);
+  assert.equal(Rain.findRainAnalogs(dup,Date.parse('2026-11-11T12:00:00Z'),'UTC').reference.end,'2026-11-09');
+  assert.equal(Rain.findRainAnalogs({time:['2026-11-10'],precipitation_sum:[2]},Date.parse('2026-11-11T12:00:00Z')),null);
+  assert.equal(Rain.findRainAnalogs({time:['2026-11-10'],precipitation_sum:[null]},Date.parse('2026-11-11T12:00:00Z')),null);
+});
+
+test('rain analog section is compact, truthful, translated, and wired to the rain page', () => {
+ const recent={status:'ready',daily:syntheticDays('2024-09-01','2026-11-12')};
+ const html=Rain.renderComparison(recent,{status:'error'}, {lang:'el',zone:'Europe/Athens',now:Date.parse('2026-11-15T12:00:00Z')});
+ assert.match(html,/Παρόμοια 7ήμερα βροχής/);
+ assert.match(html,/Μόνο ιστορική βροχή ERA5/);
+ assert.match(html,/RMSE/);
+ assert.match(html,/data-rain-analogs/);
+ assert.doesNotMatch(html,/συνολική πρόγνωση ακριβείας/);
+ const english=Rain.renderRainAnalogs(recent,{lang:'en',now:Date.parse('2026-11-15T12:00:00Z')});
+ assert.match(english,/Similar historical rain weeks/);
+ assert.equal(Rain.renderRainAnalogs({status:'loading'}),'');
+});
