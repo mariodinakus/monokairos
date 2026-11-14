@@ -161,6 +161,75 @@
     });
   }
 
+
+  function findRainAnalogs(daily, now=Date.now(), zone='UTC', limit=3) {
+  if (!Array.isArray(daily?.time) || !Array.isArray(daily?.precipitation_sum) || daily.time.length !== daily.precipitation_sum.length) return null;
+  const values = new Map(), duplicates = new Set(), step = 86400000;
+  const shift = (date, days) => new Date(Date.parse(date + 'T12:00:00Z') + days * step).toISOString().slice(0, 10);
+  for (let i=0; i<daily.time.length; i++) {
+    const date = daily.time[i], value = daily.precipitation_sum[i];
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date + 'T12:00:00Z'))) continue;
+    if (values.has(date)) duplicates.add(date);
+    values.set(date, Number.isFinite(value) && value >= 0 ? value : null);
+  }
+  let today;
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(now));
+    const part = type => parts.find(p=>p.type===type)?.value;
+    today = `${part('year')}-${part('month')}-${part('day')}`;
+  } catch { today = new Date(now).toISOString().slice(0, 10); }
+  const cutoff = shift(today, -1);
+  const dates = [...values.keys()].filter(d=>d<=cutoff && !duplicates.has(d) && Number.isFinite(values.get(d))).sort();
+  const sequence = end => {
+    const start = shift(end,-6), dailyAmounts=[];
+    for (let j=0; j<7; j++) {
+      const day = shift(start,j), amount = values.get(day);
+      if (duplicates.has(day) || !Number.isFinite(amount)) return null;
+      dailyAmounts.push(amount);
+    }
+    const total = dailyAmounts.reduce((a,b)=>a+b,0);
+    return {start,end,total,rainyDays:dailyAmounts.filter(v=>v>=1).length,amounts:dailyAmounts};
+  };
+  let reference=null;
+  for (let i=dates.length-1;i>=0;i--) { reference=sequence(dates[i]); if(reference)break; }
+  if (!reference) return null;
+  const previousLimit = shift(reference.start,-14);
+  const candidates=[];
+  for (const date of dates) {
+    if (date>previousLimit) break;
+    const period=sequence(date);
+    if (!period) continue;
+    period.rmse=Math.sqrt(period.amounts.reduce((a,v,i)=>a+(v-reference.amounts[i])**2,0)/7);
+    candidates.push(period);
+  }
+  candidates.sort((a,b)=>a.rmse-b.rmse || a.start.localeCompare(b.start));
+  const selected=[];
+  for (const candidate of candidates) {
+    if (selected.every(other=>candidate.end<other.start || candidate.start>other.end)) selected.push(candidate);
+    if (selected.length>=Math.max(1,Math.min(5,limit))) break;
+  }
+  const strip = ({amounts,...rest})=>rest;
+  return {reference:strip(reference),matches:selected.map(strip),from:dates[0]||null,to:dates.at(-1)||null,candidates:candidates.length};
+}
+
+  function renderRainAnalogs(recent, {lang='el',zone='UTC',now=Date.now()}={}) {
+  if (recent?.status!=='ready') return '';
+  const result=findRainAnalogs(recent.daily,now,zone),el=lang!=='en',X=(a,b)=>el?a:b;
+  if (!result) return '';
+  const locale=el?'el-GR':'en-GB', number=v=>new Intl.NumberFormat(locale,{maximumFractionDigits:1}).format(v);
+  const label=key=>new Date(key+'T12:00:00Z').toLocaleDateString(locale,{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+  const period=p=>label(p.start)+' – '+label(p.end);
+  const current=result.reference;
+  const rows=result.matches.map(item=>'<div class="mr-highlight"><small>'+period(item)+'</small><strong>'+number(item.total)+' <span>mm</span></strong><span>'+
+    item.rainyDays+' '+X('ημέρες ≥1 mm','days ≥1 mm')+' · RMSE '+number(item.rmse)+' mm/'+X('ημέρα','day')+'</span></div>').join('');
+  const note = X('Μόνο ιστορική βροχή ERA5 (Open-Meteo), όχι θερμοκρασία ή συνολική ομοιότητα καιρού. Εμφανίζονται μόνο πλήρη 7ήμερα με απόσταση τουλάχιστον 14 ημερών από το τρέχον δείγμα. Μικρότερο RMSE = πιο παρόμοιο ημερήσιο μοτίβο.',
+    'ERA5 historical rain only (Open-Meteo), not temperature or overall weather similarity. Only complete 7-day periods at least 14 days away from the reference. Lower RMSE = more similar daily rainfall pattern.');
+  return '<details class="mr-details" data-rain-analogs><summary>'+X('Παρόμοια 7ήμερα βροχής','Similar historical rain weeks')+'</summary>'+
+    '<p class="mr-compare-note"><b>'+X('Σύγκριση με','Compared with')+' '+period(current)+': '+number(current.total)+' mm · '+current.rainyDays+' '+X('ημέρες βροχής','rainy days')+'</b></p>'+
+    (rows?'<div class="mr-summary">'+rows+'</div>':'<p class="mr-status">'+X('Δεν υπάρχουν αρκετά παλαιότερα πλήρη 7ήμερα.','Not enough complete historical weeks yet.')+'</p>')+
+    '<p class="mr-compare-note">'+note+' '+X('Διαθέσιμη περίοδος','Available period')+': '+label(result.from)+' – '+label(result.to)+'.</p></details>';
+}
+
   function renderComparison(recent, normals, {lang='el',zone='UTC',city='',now=Date.now()}={}) {
     const el=lang!=='en', X=(a,b)=>el?a:b,locale=el?'el-GR':'en-GB';
     const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -219,9 +288,9 @@
       ' '+X('Ο ιστορικός μέσος όρος αφορά πλήρεις μήνες 1991–2020.','Normals represent complete calendar months in 1991–2020.')+
       ' '+X('Οι μήνες με * είναι ελλιπείς και δεν υπολογίζεται συγκρίσιμη ποσοστιαία διαφορά.','Months marked * are incomplete, so percentage differences are omitted.')+
       (latest?' '+X('Τελευταία διαθέσιμη ημέρα: ','Latest available day: ')+esc(latest)+'.':'')+'</p>';
-    return block(stats+legend+chart+table+note);
+    return block(stats+legend+chart+table+renderRainAnalogs(recent,{lang,zone,now})+note);
   }
 
-  root.MONOMonthlyRain = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth };
-  if (typeof module !== 'undefined' && module.exports) module.exports = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth };
+  root.MONOMonthlyRain = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth, findRainAnalogs, renderRainAnalogs };
+  if (typeof module !== 'undefined' && module.exports) module.exports = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth, findRainAnalogs, renderRainAnalogs };
 })(typeof window !== 'undefined' ? window : globalThis);
