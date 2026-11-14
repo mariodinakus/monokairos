@@ -462,4 +462,4 @@
   .home-day{grid-template-columns:minmax(52px,1fr) 30px minmax(48px,.75fr) minmax(96px,1.25fr);gap:6px;padding:10px 0}.home-day img{width:29px;height:29px}.home-day-temps{gap:6px}.home-day-rain,.home-day-temps{font-size:11px}
   .home-detail-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
-@media(max-width:350px){.home-metric b{font-size:14px}.home-day{grid-template-columns:minmax(47px,1fr) 26px minmax(42px,.8fr) minmax(90px,1.3fr);gap:4px}.home-day img{width:26px;height:26px}.home-day-temps{gap:4px;font-size:10.5px}}
+@media(max-width:350px){.home-metric b{font-size:14px}.home-metric b.home-wind{font-size:11px;white-space:nowrap}.home-day{grid-template-columns:minmax(47px,1fr) 26px minmax(42px,.8fr) minmax(90px,1.3fr);gap:4px}.home-day img{width:26px;height:26px}.home-day-temps{gap:4px;font-size:10.5px}}
