@@ -40,7 +40,7 @@
     return null;
   }
 
-  function render(result, { lang = 'el', zone = 'UTC' } = {}) {
+  function render(result, { lang = 'el', zone = 'UTC', detailsOpen = false } = {}) {
     const el = lang !== 'en', X = (gr, en) => el ? gr : en;
     const clock = t => {
       try { return new Intl.DateTimeFormat(el ? 'el-GR' : 'en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zone }).format(new Date(t)); }
@@ -49,7 +49,7 @@
     const number = n => n > 0 && n < 0.05 ? (el ? '<0,1' : '<0.1') : new Intl.NumberFormat(el ? 'el-GR' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(n);
     const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
     const title = result?.kind === 'precipitation' ? X('Υετός την επόμενη ώρα', 'Precipitation in the next hour') : X('Βροχή την επόμενη ώρα', 'Rain in the next hour');
-    if (!result) return `<section class="section card nh-card" aria-label="${title}"><div class="nh-heading"><img src="icons/rain.svg" alt=""><div><span class="label">MONO / NEXT HOUR</span><h2>${title}</h2><p>${X('Δεν υπάρχουν επαρκή πρόσφατα δεδομένα. Δοκίμασε ανανέωση.', 'Not enough recent forecast data. Try refreshing.')}</p></div></div></section>`;
+    if (!result) return `<section class="section card nh-card" aria-label="${title}"><div class="nh-heading"><img src="icons/rain.svg" alt=""><div><h2>${title}</h2><p>${X('Δεν υπάρχουν επαρκή πρόσφατα δεδομένα. Δοκίμασε ανανέωση.', 'Not enough recent forecast data. Try refreshing.')}</p></div></div></section>`;
     const amount = esc(number(result.amount));
     const description = result.amount === 0
       ? (result.kind === 'rain' ? X('Δεν προβλέπεται βροχή', 'No rain forecast') : X('Δεν προβλέπεται υετός', 'No precipitation forecast'))
@@ -58,7 +58,7 @@
       ? X('Υπολογισμός από 15λεπτα διαστήματα, που σε ορισμένες περιοχές προκύπτουν από ωριαία δεδομένα.', 'Calculated from 15-minute intervals, which may be interpolated from hourly data in some regions.')
       : X('Υπολογισμός αναλογικά από ωριαία διαστήματα.', 'Calculated proportionally from hourly intervals.');
     const kindNote = result.kind === 'precipitation' ? X('Περιλαμβάνει πιθανό χιόνι ως ισοδύναμο νερού. ', 'Includes any snow as water equivalent. ') : '';
-    return `<section class="section card nh-card" aria-label="${title}"><div class="nh-layout"><div class="nh-heading"><img src="icons/rain.svg" alt=""><div><span class="label">MONO / NEXT HOUR</span><h2>${title}</h2><p>${clock(result.start)} – ${clock(result.end)} · ${X('εκτίμηση μοντέλου', 'model forecast')}</p></div></div><div class="nh-amount"><strong>≈ ${amount} <small>mm</small></strong><span>${description}</span></div><div class="nh-water"><b>≈ ${amount} ${X('λίτρα / τ.μ.', 'litres / m²')}</b><span>${X('1 mm = 1 λίτρο νερού ανά τ.μ.', '1 mm = 1 litre of water per m²')}</span></div></div><p class="nh-note">${kindNote}${X('Open-Meteo · πρόγνωση, όχι μέτρηση.', 'Open-Meteo · forecast, not an observation.')} ${method} ${X('Ανανέωση', 'Updated')}: ${clock(result.at)}.</p></section>`;
+    return `<section class="section card nh-card" aria-label="${title}"><div class="nh-layout"><div class="nh-heading"><img src="icons/rain.svg" alt=""><div><h2>${title}</h2><p>${clock(result.start)} – ${clock(result.end)} · ${X('πρόγνωση μοντέλου', 'model forecast')}</p></div></div><div class="nh-amount"><strong>≈ ${amount} <small>mm</small></strong><span>${description}</span></div></div><details class="nh-info" data-home-section="next-hour-info" ${detailsOpen ? 'open' : ''}><summary>${X('Λεπτομέρειες','Details')}</summary><p>${kindNote}${X('Open-Meteo · πρόγνωση, όχι μέτρηση.', 'Open-Meteo · forecast, not an observation.')} ${method} ${X('Ανανέωση', 'Updated')}: ${clock(result.at)}. ${X('1 mm = 1 λίτρο νερού ανά τ.μ.', '1 mm = 1 litre of water per m²')}</p></details></section>`;
   }
   root.MONONextHour = { forecast, render };
   if (typeof module !== 'undefined' && module.exports) module.exports = { forecast, render };

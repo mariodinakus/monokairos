@@ -393,7 +393,7 @@ html[data-theme=dark]{--r1:#46648c;--r2:#3f7fd8;--r3:#5b9cf0;--r4:#9cc6ff;--r5:#
 .rn-now{border-color:color-mix(in oklab,var(--rain) 35%,var(--line))}
 /* One rolling hour of forecast accumulation, kept next to current conditions. */
 .nh-card{border-color:var(--line);background:linear-gradient(120deg,var(--panel),var(--soft));}
-.nh-layout{display:grid;grid-template-columns:minmax(190px,1.4fr) minmax(125px,.7fr) minmax(155px,.8fr);gap:24px;align-items:center}
+.nh-layout{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:center}
 .nh-heading{display:flex;align-items:center;gap:14px;min-width:0}
 .nh-heading img{width:43px;height:43px;flex:0 0 43px;filter:var(--iconfilter,none)}
 .nh-heading h2{margin:5px 0 3px;font-size:18px;letter-spacing:-.035em;line-height:1.2}
@@ -405,8 +405,13 @@ html[data-theme=dark]{--r1:#46648c;--r2:#3f7fd8;--r3:#5b9cf0;--r4:#9cc6ff;--r5:#
 .nh-water{display:flex;flex-direction:column;gap:4px;border-left:1px solid var(--line);padding-left:22px}
 .nh-water b{font-size:14px;font-variant-numeric:tabular-nums}
 .nh-note{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--line);color:var(--sub);font-size:11px;line-height:1.5}
-@media(max-width:700px){.nh-layout{grid-template-columns:1fr 1fr;gap:18px}.nh-heading{grid-column:1/-1}.nh-water{padding-left:14px}.nh-note{font-size:11px}}
-@media(max-width:350px){.nh-layout{grid-template-columns:1fr}.nh-heading{grid-column:auto}.nh-water{border-left:0;padding-left:0}}
+.nh-info{margin-top:14px;color:var(--sub);font-size:12px;line-height:1.55}
+.nh-info summary{cursor:pointer;font-weight:700;min-height:30px;display:flex;align-items:center;gap:7px}
+.nh-info summary::before{content:'+';font-size:17px;line-height:1}
+.nh-info[open] summary::before{content:'−'}
+.nh-info p{margin:5px 0 0}
+@media(max-width:700px){.nh-layout{grid-template-columns:minmax(0,1fr) auto;gap:12px}.nh-heading{grid-column:auto}.nh-heading img{width:34px;height:34px;flex-basis:34px}.nh-amount{text-align:right}.nh-amount strong{font-size:27px}.nh-water{padding-left:14px}.nh-note{font-size:11px}}
+@media(max-width:350px){.nh-heading img{display:none}.nh-layout{gap:8px}.nh-water{border-left:0;padding-left:0}}
 /* Historic rainfall context for the selected month and location. */
 .mr-card{border-color:var(--line)}
 .mr-heading{display:flex;align-items:flex-start;gap:13px}

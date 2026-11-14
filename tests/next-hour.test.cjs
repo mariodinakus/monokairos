@@ -71,3 +71,13 @@ test('zero remains a valid dry forecast and times use the selected location time
   assert.match(html, /12:07 – 13:07/);
   assert.match(html, /15λεπτα/);
 });
+
+test('the compact card keeps its source and method available in an expandable detail', () => {
+  const f = Next.forecast({ fifteen: fifteen(), now });
+  const html = Next.render(f, { lang: 'el', zone: 'Europe/Athens' });
+  assert.match(html, /πρόγνωση μοντέλου/);
+  assert.match(html, /<details class="nh-info"[^>]*>\s*<summary>Λεπτομέρειες<\/summary>/);
+  assert.match(html, /Open-Meteo · πρόγνωση, όχι μέτρηση/);
+  assert.match(html, /15λεπτα/);
+  assert.match(Next.render(f, { lang: 'en', detailsOpen: true }), /data-home-section="next-hour-info" open/);
+});

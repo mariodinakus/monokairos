@@ -139,7 +139,7 @@ el: {
   phenTitle:'Φαινόμενα', phenSub:'Πιθανότητες από τα μέλη των ensembles και τα μοντέλα, για την περιοχή σου.',
   ph_rain:'Βροχή', ph_heavy:'Ισχυρή βροχή', ph_storm:'Καταιγίδα', ph_snow:'Χιόνι', ph_fog:'Ομίχλη', ph_wind:'Θυελλώδεις άνεμοι', ph_frost:'Παγετός', ph_heat:'Καύσωνας',
   phd_rain:'≥ 1 mm την ημέρα', phd_heavy:'≥ 20 mm την ημέρα', phd_storm:'CAPE και βροχή ή κωδικός καταιγίδας', phd_snow:'Χιονόπτωση ή υετός με θερμοκρασία ≤ 0,5°C', phd_fog:'Ορατότητα < 1 km', phd_wind:'Ριπές ≥ 62 km/h (8 Μποφόρ)', phd_frost:'Θερμοκρασία ≤ 0°C', phd_heat:'Θερμοκρασία ≥ 35°C',
-  rainTimeline:'Πότε θα βρέξει', noRain:'Δεν αναμένεται βροχή τις επόμενες 72 ώρες.', from:'από', to:'έως', upTo:'έως', alerts:'Προσοχή',
+  rainTimeline:'Πότε θα βρέξει', noRain:'Δεν ξεχωρίζει επεισόδιο βροχής στο 72ωρο.', from:'από', to:'έως', upTo:'έως', alerts:'Προσοχή',
   warnTitle:'Επίσημες προειδοποιήσεις', warnNone:'Δεν υπάρχουν ενεργές επίσημες προειδοποιήσεις για τη χώρα.', warnFail:'Οι επίσημες προειδοποιήσεις δεν φορτώθηκαν.', warnRegion:'για την περιοχή σου', warnCountry:'στη χώρα',
   hourlyProb:'Ωριαίες πιθανότητες (72 ώρες)',
   space:'Διάστημα', spaceTitle:'Διαστημικός καιρός', spaceSub:'Ηλιακή δραστηριότητα, γεωμαγνητικές καταιγίδες, ραδιοεπικοινωνίες και όσα δεν βλέπουμε στον ουρανό.',
@@ -258,7 +258,7 @@ en: {
   phenTitle:'Weather events', phenSub:'Probabilities from ensemble members and models, for your area.',
   ph_rain:'Rain', ph_heavy:'Heavy rain', ph_storm:'Thunderstorm', ph_snow:'Snow', ph_fog:'Fog', ph_wind:'Gale-force gusts', ph_frost:'Frost', ph_heat:'Heatwave',
   phd_rain:'≥ 1 mm in the day', phd_heavy:'≥ 20 mm in the day', phd_storm:'CAPE with rain, or a thunderstorm code', phd_snow:'Snowfall or precipitation at ≤ 0.5°C', phd_fog:'Visibility < 1 km', phd_wind:'Gusts ≥ 62 km/h (Beaufort 8)', phd_frost:'Temperature ≤ 0°C', phd_heat:'Temperature ≥ 35°C',
-  rainTimeline:'When it will rain', noRain:'No rain expected in the next 72 hours.', from:'from', to:'to', upTo:'up to', alerts:'Heads-up',
+  rainTimeline:'When it will rain', noRain:'No distinct rain episode in the next 72 hours.', from:'from', to:'to', upTo:'up to', alerts:'Heads-up',
   warnTitle:'Official warnings', warnNone:'No active official warnings for the country.', warnFail:'Official warnings did not load.', warnRegion:'for your region', warnCountry:'in the country',
   hourlyProb:'Hourly probabilities (72 hours)',
   space:'Space', spaceTitle:'Space weather', spaceSub:'Solar activity, geomagnetic storms, radio communications and the invisible sky.',
@@ -338,7 +338,7 @@ en: {
 }};
 /* v3.5 — detailed rain forecast + live interactive globe */
 Object.assign(L.el, {
-  rain:'Βροχή', rainTitle:'Πρόγνωση βροχής', rainSub:'Πότε αρχίζει, πότε σταματά, πόση θα ρίξει και πόσο σίγουρο είναι — ώρα με την ώρα.',
+  rain:'Βροχή', rainTitle:'Πρόγνωση βροχής', rainSub:'Ώρες, πιθανότητα και ποσότητα.',
   rNowLabel:'Αυτή τη στιγμή', rEpisodes:'Επεισόδια βροχής · 7 ημέρες', rEpisodesSub:'Κάθε συνεχόμενο διάστημα με βροχή, με αρχή, τέλος, σύνολο και κορύφωση.',
   r15:'Επόμενες 6 ώρες ανά 15 λεπτά', r15Sub:'Πρόγνωση Open-Meteo. Κάθε στήλη αφορά το προηγούμενο τέταρτο. Σε ορισμένες περιοχές τα 15λεπτα προκύπτουν από ωριαία δεδομένα.',
   r15None:'Η λεπτομέρεια ανά 15 λεπτά δεν είναι διαθέσιμη για αυτό το σημείο.', r15Dry:'Καμία βροχή τις επόμενες 6 ώρες', rHourly:'Ώρα με την ώρα · 48 ώρες', rHourlySub:'Τα ξηρά διαστήματα συμπτύσσονται. mm/ώρα = λίτρα νερό ανά τετραγωνικό μέτρο σε μία ώρα.',
@@ -361,7 +361,7 @@ Object.assign(L.el, {
   rShapePeak:(a, w, r) => `Η πιο έντονη ώρα είναι γύρω στις ${a}: ${w}, ~${r} mm/ώρα.`,
   rMmExplain:'1 mm βροχής = 1 λίτρο νερό σε κάθε τετραγωνικό μέτρο. Σε μπαλκόνι 2 m², 5 mm είναι 10 λίτρα νερό. Πάνω από 20 mm σε μια μέρα θεωρούνται πολλά.',
   rUntil:(t) => t, rToday:'σήμερα', rTomorrow:'αύριο', rRefined:'εκτίμηση από δεδομένα 15λέπτου', rHourlyOnly:'ακρίβεια ώρας',
-  rNoEpisodes:'Καμία βροχή στις επόμενες 7 ημέρες.', rWhatMm:'Τι σημαίνουν τα mm;', rUpdated:'Ενημέρωση',
+  rNoEpisodes:'Δεν ξεχωρίζει επεισόδιο στην 7ήμερη πρόγνωση.', rWhatMm:'Τι σημαίνουν τα mm;', rUpdated:'Ενημέρωση',
   globeTitle:'Ζωντανή υδρόγειος', globeSub:'Πραγματικά δεδομένα: δορυφόρος NASA, ραντάρ RainViewer, βροχή IMERG και ζωντανό πλέγμα καιρού Open-Meteo. Γύρισέ τη, κάνε κλικ οπουδήποτε.',
   gRadar:'Ραντάρ βροχής', gGridL:'Πλέγμα καιρού', gTemps:'Πόλεις', gRain:'Βροχή IMERG', gVar:'Χρώμα πλέγματος', gV_temp:'Θερμοκρασία', gV_wind:'Άνεμος', gV_cloud:'Νέφωση', gV_precip:'Βροχή τώρα',
   gFresh:'Τελευταία ενημέρωση δεδομένων', gRefresh:'↻ Ανανέωση', gAuto:'αυτόματη ανανέωση κάθε 10′', gNA:'μη διαθέσιμο', gOff:'κλειστό', gDaily:'ημερήσια σύνθεση',
@@ -370,7 +370,7 @@ Object.assign(L.el, {
   gPointAt:'Σημείο', gNoRain6:'χωρίς βροχή', gNoteFoot:'Οι χρόνοι είναι στην ώρα της συσκευής σου. Ραντάρ: μόνο όπου υπάρχει κάλυψη ραντάρ. IMERG: εκτίμηση δορυφόρου με καθυστέρηση ~4–6 ωρών. Πλέγμα: παγκόσμια σημεία ανά 10°, όχι τοπικό ραντάρ.'
 });
 Object.assign(L.en, {
-  rain:'Rain', rainTitle:'Rain forecast', rainSub:'When it starts, when it stops, how much will fall and how sure that is — hour by hour.',
+  rain:'Rain', rainTitle:'Rain forecast', rainSub:'Timing, chance and amount.',
   rNowLabel:'Right now', rEpisodes:'Rain episodes · 7 days', rEpisodesSub:'Each continuous spell of rain, with start, end, total and peak.',
   r15:'Next 6 hours in 15-minute steps', r15Sub:'Open-Meteo forecast. Each column is the preceding quarter-hour; in some regions 15-minute data is interpolated from hourly data.',
   r15None:'15-minute detail is not available for this location.', r15Dry:'No rain in the next 6 hours', rHourly:'Hour by hour · 48 hours', rHourlySub:'Dry stretches are collapsed. mm/h = litres of water per square metre in one hour.',
@@ -393,7 +393,7 @@ Object.assign(L.en, {
   rShapePeak:(a, w, r) => `The most intense hour is around ${a}: ${w}, ~${r} mm/h.`,
   rMmExplain:'1 mm of rain = 1 litre of water on every square metre. 20 mm in a day counts as a lot.',
   rUntil:(t) => t, rToday:'today', rTomorrow:'tomorrow', rRefined:'estimated from 15-minute data', rHourlyOnly:'hourly precision',
-  rNoEpisodes:'No rain in the next 7 days.', rWhatMm:'What do the mm mean?', rUpdated:'Updated',
+  rNoEpisodes:'No distinct rain episode in the 7-day forecast.', rWhatMm:'What do the mm mean?', rUpdated:'Updated',
   globeTitle:'Live globe', globeSub:'Real data: NASA satellite, RainViewer radar, IMERG rainfall and a live Open-Meteo weather grid. Spin it, click anywhere.',
   gRadar:'Rain radar', gGridL:'Weather grid', gTemps:'Cities', gRain:'IMERG rain', gVar:'Grid colour', gV_temp:'Temperature', gV_wind:'Wind', gV_cloud:'Cloud', gV_precip:'Rain now',
   gFresh:'Data last updated', gRefresh:'↻ Refresh', gAuto:'auto-refresh every 10′', gNA:'not available', gOff:'off', gDaily:'daily composite',
@@ -1522,7 +1522,10 @@ function monoStationsCard(V) {
 /* ------------------------------------------------------------------ page: now */
 const homeOpen = new Set();
 function homeMore(id, title, hint, body) {
-  return `<details class="home-more" data-home-section="${id}" ${homeOpen.has(id) ? 'open' : ''}><summary><span>${title}<small class="home-more-desc">${hint}</small></span></summary><div class="home-more-body">${body}</div></details>`;
+  // Only the long-range outlook needs a changing preview; other descriptions
+  // repeated their section titles and made the collapsed list harder to scan.
+  const preview = id === 'month' ? `<small class="home-more-desc">${hint}</small>` : '';
+  return `<details class="home-more" data-home-section="${id}" ${homeOpen.has(id) ? 'open' : ''}><summary><span>${title}${preview}</span></summary><div class="home-more-body">${body}</div></details>`;
 }
 function nowPage() {
   const c = state.city, V = state.view;
@@ -1572,12 +1575,18 @@ function nowPage() {
     <section class="section card">${engineSummary()}</section>`;
   const week = `<section class="section card home-week"><div class="panelhead"><b>${T('week')}</b>${btn('goto', '↗ ' + T('phen'), 'data-page="phen"')}</div>${dailyRows(V.daily)}</section>`;
   const revisions = window.MONOForecastConfidence?.render({view:V,lang:state.lang,history:forecastHistory[ckey(c)]||[],snapshot:state.snapshot,mode:'changes'}) || '';
-  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + monoStory(V) + alertsStrip() +
-    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone}) || '') + (rainAlertsOn() ? '' : rainAlertsCard()) + hours + week + homeMore('month',X('Τάση μήνα · 6 εβδομάδες','Monthly outlook · 6 weeks'),X('Τι αλλαγές δείχνουν τα μοντέλα στα βάθη του μήνα','Possible weather changes later this month'),'<div id="mono-month-trend" aria-live="polite"></div>') + revisions + homeMore('trust',X('Ιστορικός έλεγχος και μοντέλα','Historical checks and models'),X('Ακρίβεια, σταθμός και συμφωνία μοντέλων','Accuracy, station and model agreement'),trustCard()) +
+  const notifications = rainAlertsCard();
+  const more = homeMore('month',X('Τάση μήνα · 6 εβδομάδες','Monthly outlook · 6 weeks'),X('Έλεγχος τάσης…','Checking outlook…'),'<div id="mono-month-trend" aria-live="polite"></div>') +
+    (revisions ? homeMore('changes',X('Αλλαγές πρόγνωσης','Forecast changes'),'',revisions) : '') +
+    homeMore('trust',X('Ιστορικός έλεγχος και μοντέλα','Historical checks and models'),'',trustCard()) +
     homeMore('rain',X('Βροχή και μετρήσεις','Rain and measurements'),X('Ποσότητες, σταθμοί και μηνιαία σύγκριση','Amounts, stations and monthly comparison'),rainDetail) +
     homeMore('charts',X('Γραφήματα και μοντέλο','Charts and model'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
-    homeMore('planning',X('Περισσότερα για την πρόγνωση','More forecast details'),X('Χάρτες, ουρανός, δραστηριότητες και Σαββατοκύριακο','Maps, sky, activities and weekend'),monoPlanCard(V)+monoStationsCard(V)+summaryCard()+MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
-    homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),X('Ήλιος, αέρας, θάλασσα και ειδήσεις','Sun, air, sea and news'),newsCard()+holidaysCard()+environment()+glossary());
+    homeMore('planning',X('Σχέδια και πρόγνωση','Plans and forecast'),'',monoStory(V)+monoPlanCard(V)+monoStationsCard(V)+summaryCard()+MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
+    homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),'',newsCard()+holidaysCard()+environment()+glossary()) +
+    (notifications ? homeMore('notifications',X('Ειδοποιήσεις βροχής','Rain alerts'),'',notifications) : '');
+  return head + warningsBanner() + `<div class="hero-grid">${hero}${minis}</div>` + alertsStrip() +
+    (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone,detailsOpen:homeOpen.has('next-hour-info')}) || '') + hours + week +
+    homeMore('extra',X('Περισσότερα','More'),'',more);
 }
 function trustCard() {
   const Tr = window.MONOTrust, V = state.view; if (!Tr || !V || state.snapshot) return '';
@@ -1908,8 +1917,8 @@ function rainPage() {
   const head = header(T('rainTitle'), T('rainSub'), btn('reload', '↻ ' + T('refresh')));
   if (!V) return head + (state.mainErr ? errorCard() : loadingCard());
   const eps = rainEpisodes(), rows72 = V.rows.slice(V.iNow + 1, V.iNow + 73), rows48 = V.rows.slice(V.iNow + 1, V.iNow + 49);
-  const firstEpisode = `<section class="section"><div class="sectionhead"><div><h2 class="h2">${X('Το επόμενο επεισόδιο βροχής','Next rain episode')}</h2><div class="section-sub">${T('rEpisodesSub')}</div></div></div>${eps.length ? `<div class="rn-eps">${episodeCard(eps[0])}</div>` : `<div class="card placeholder"><b>☀ ${T('rNoEpisodes')}</b></div>`}</section>`;
-  const shortRange = `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${T('r15Sub')}</div></div></div>${rain15Chart()}<div class="rn-legend">${T('rIntensity').slice(1).map((w,k)=>`<span><i class="lv${k+1}"></i>${esc(w)}</span>`).join('')}</div></section>`;
+  const firstEpisode = `<section class="section"><div class="sectionhead"><h2 class="h2">${X('Επόμενη βροχή','Next rain')}</h2></div>${eps.length ? `<div class="rn-eps">${episodeCard(eps[0])}</div>` : `<div class="card placeholder"><b>☀ ${T('rNoEpisodes')}</b></div>`}</section>`;
+  const shortRange = `<section class="section card"><div class="panelhead"><div><b>${T('r15')}</b><div class="section-sub">${X('Πρόγνωση Open-Meteo','Open-Meteo forecast')}</div></div></div>${rain15Chart()}<div class="rn-legend">${T('rIntensity').slice(1).map((w,k)=>`<span><i class="lv${k+1}"></i>${esc(w)}</span>`).join('')}</div><details class="nh-info" data-home-section="rain-15-info" ${homeOpen.has('rain-15-info') ? 'open' : ''}><summary>${X('Πώς διαβάζεται','How to read it')}</summary><p>${T('r15Sub')}</p></details></section>`;
   const days = `<section class="section card"><div class="panelhead"><div><b>${T('rDaily')}</b><div class="section-sub">${X('Προβλεπόμενη βροχή στις υπόλοιπες ώρες κάθε ημέρας · εύρος ensemble 10%–90%.','Forecast rain in the remaining hours of each day · ensemble 10%–90% range.')}</div></div></div>${rainDaily()}</section>`;
   const future = `${eps.length > 1 ? `<section class="section"><div class="sectionhead"><h2 class="h2">${X('Υπόλοιπα επεισόδια','Further rain episodes')}</h2></div><div class="rn-eps">${eps.slice(1).map(episodeCard).join('')}</div></section>` : ''}<section class="section card"><div class="panelhead"><div><b>${T('rChart')}</b><div class="section-sub">${T('rChartSub')}</div></div></div>${rain72Chart(rows72)}</section><section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rHourly')}</h2><div class="section-sub">${T('rHourlySub')}</div></div>${btn('goto', '↗ '+T('hourly'), 'data-page="hourly"')}</div>${rainHourly(rows48)}</section>`;
   const measurements = (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city),includeLive:false}) || '') + communityRainCard();
