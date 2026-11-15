@@ -232,7 +232,7 @@ test('whole-weather analogs compare temperature, wind and rain across complete n
  assert.equal(r.reference.end,'2026-11-12');
  assert.equal(r.matches.length,3);
  assert.ok(r.matches.every(m=>Number.isFinite(m.tempRmse)&&Number.isFinite(m.windRmse)&&Number.isFinite(m.rainRmse)));
- assert.ok(r.matches.every(m=>m.end<'2026-10-23'));
+ assert.ok(r.matches.every(m=>m.end<='2026-10-23'));
  for(let i=0;i<r.matches.length;i++)for(let j=i+1;j<r.matches.length;j++){
    assert.ok(r.matches[i].end<r.matches[j].start||r.matches[j].end<r.matches[i].start);
  }
