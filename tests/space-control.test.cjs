@@ -12,11 +12,12 @@ test('sky windows only rank dark hours from actual MONO cloud data',()=>{
  const prior=[globalThis.Astronomy,globalThis.MonoSky];
  globalThis.Astronomy={Observer:class{constructor(lat,lon){this.lat=lat;this.lon=lon;}}};
  globalThis.MonoSky={snapshot:()=>({illumination:0.5}),position:(body,time)=>({altitude:new Date(time).getUTCHours()===19?-22:10})};
- const base=new Date(),day=Date.UTC(base.getUTCFullYear(),base.getUTCMonth(),base.getUTCDate()+1);
+ const base=new Date(),today19=Date.UTC(base.getUTCFullYear(),base.getUTCMonth(),base.getUTCDate(),19);
+ const darkHour=today19>Date.now()?today19:today19+86400e3; // Always inside the upcoming 24h, regardless of CI run time.
  try{
   const o={lat:40.64,lon:22.94,rows:[
-   {t:day+19*3600e3,cloud:90,pop:.8,amount:1},
-   {t:day+20*3600e3,cloud:0,pop:0,amount:0},
+   {t:darkHour,cloud:90,pop:.8,amount:1},
+   {t:darkHour+3600e3,cloud:0,pop:0,amount:0},
    {t:Date.now()-2*3600e3,cloud:40,pop:0,amount:0}
   ]};
   const w=C.skyWindows(o);assert.equal(w.length,1);assert.ok(w[0].score<30);
