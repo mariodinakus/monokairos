@@ -62,7 +62,7 @@ test('asset versions, service-worker precache and visible version are stamped an
 test('release pages exist and the privacy notice covers the new device features', () => {
   for (const f of ['about.html', '404.html']) assert.ok(fs.existsSync(path.join(root, f)), f);
   const p = read('privacy.html');
-  assert.match(p, /Ειδοποιήσεις βροχής/);
+  assert.match(p, /Ειδοποιήσεις καιρού/);
   assert.match(p, /Web Analytics/);
   assert.doesNotMatch(p + read('terms.html'), /window\.va\s*=/, 'inline scripts are blocked by the CSP');
   assert.match(read('privacy.js'), /mono-alerts/);
