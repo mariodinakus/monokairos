@@ -941,11 +941,11 @@ const recentRainMemo = new Map(), RECENT_RAIN_TTL = 6 * 3600e3;
 let recentRainSeq = 0;
 async function loadRecentRain(c, force = false) {
   const key = ckey(c), previous = state.recentRain;
-  if (!force && previous?.key === key && (previous.status === 'loading' || (previous.status === 'ready' && previous.daily?.time?.length >= 700 && Date.now() - previous.fetchedAt < RECENT_RAIN_TTL))) return;
+  if (!force && previous?.key === key && (previous.status === 'loading' || (previous.status === 'ready' && previous.daily?.time?.length >= 700 && previous.daily?.weatherFieldsRequested === true && Date.now() - previous.fetchedAt < RECENT_RAIN_TTL))) return;
   const seq = ++recentRainSeq;
   if (!force) {
     const cached = recentRainMemo.get(key) || read(K.recentRain, {})[key];
-    if (cached && Number.isFinite(cached.at) && Date.now() - cached.at >= 0 && Date.now() - cached.at < RECENT_RAIN_TTL && cached.daily?.time?.length >= 700 && cached.daily?.model === 'era5') {
+    if (cached && Number.isFinite(cached.at) && Date.now() - cached.at >= 0 && Date.now() - cached.at < RECENT_RAIN_TTL && cached.daily?.time?.length >= 700 && cached.daily?.model === 'era5' && cached.daily?.weatherFieldsRequested === true) {
       state.recentRain = { key, status:'ready', daily:cached.daily, fetchedAt:cached.at };
       return;
     }
@@ -1960,7 +1960,8 @@ function rainPage() {
   const future = `${eps.length > 1 ? `<section class="section"><div class="sectionhead"><h2 class="h2">${X('Υπόλοιπα επεισόδια','Further rain episodes')}</h2></div><div class="rn-eps">${eps.slice(1).map(episodeCard).join('')}</div></section>` : ''}<section class="section card"><div class="panelhead"><div><b>${T('rChart')}</b><div class="section-sub">${T('rChartSub')}</div></div></div>${rain72Chart(rows72)}</section><section class="section"><div class="sectionhead"><div><h2 class="h2">${T('rHourly')}</h2><div class="section-sub">${T('rHourlySub')}</div></div>${btn('goto', '↗ '+T('hourly'), 'data-page="hourly"')}</div>${rainHourly(rows48)}</section>`;
   const measurements = (window.MONORainIntelligence?.render({lang:state.lang,view:V,train:state.train,stations:V.stations,pws:state.pws,trainingStatus:state.trainStatus,shared:state.sharedRain,stationLearning:state.stationRain,recentRain:state.recentRain,city:cityName(state.city),includeLive:false}) || '') + communityRainCard();
   const monthly = window.MONOMonthlyRain?.renderComparison(state.recentRain,state.monthlyRain,{lang:state.lang,zone:V.zone,city:cityName(state.city)}) || '';
-  return head + rainNowCard(false) + firstEpisode + shortRange + days +
+   const verification = window.MONORainIntelligence?.verificationSummary(state.stationRain,state.lang) || '';
+  return head + rainNowCard(false) + firstEpisode + shortRange + days + verification +
     `<div class="rain-quick-actions">${btn('goto', '◎ '+X('Άνοιγμα ραντάρ','Open radar'), 'data-page="radar"')}</div>` +
     homeMore('rain-future',X('Αναλυτική πρόγνωση','Detailed forecast'),X('72 ώρες, ωριαία βροχή και επόμενα επεισόδια','72 hours, hourly rain and further episodes'),future) +
     homeMore('rain-observations',X('Μετρήσεις και έλεγχος βροχής','Rain measurements and evaluation'),X('Σταθμοί, πρόσφατη βροχή και ιστορικός έλεγχος','Stations, recent rain and historical evaluation'),measurements) +

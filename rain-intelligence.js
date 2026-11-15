@@ -106,13 +106,36 @@ function stationLearningCard(data,lang='el',zone='Europe/Athens',now=Date.now())
  const meaning=X('Παράδειγμα: πρόβλεψη 5 mm, μέτρηση 3 mm → απόλυτο σφάλμα 2 mm. Το MAE είναι ο μέσος όρος πολλών τέτοιων διαφορών. Τα 2 mm αφορούν ολόκληρη την περίοδο μέτρησης, όχι υποχρεωτικά μία ώρα. Σωστό/λάθος για βροχή υπολογίζεται χωριστά.','Example: predicted 5 mm, observed 3 mm → absolute error 2 mm. MAE averages these over multiple periods; it is not automatically an hourly error. Rain/no-rain detection is scored separately.');
  return `<section class="ri-learning card"><div class="panelhead"><div><b>🎯 ${heading}</b><div class="section-sub">${count} ${X('σταθμοί με συγκρίσιμες μετρήσεις','gauges with comparable observations')} · ${X('πλησιέστερος','nearest')}: ${escape(st.name||st.id||'—')} (${num(st.dist,1)} km) · ${X('τελευταίος έλεγχος','last checked')} ${fmt(data.checkedAt)}${data.stale?' · '+X('παλιά στοιχεία','stale'):''}</div></div></div>
  <p class="ri-foot">${X('Πραγματικές μετρήσεις από διαθέσιμους ποιοτικά αποδεκτούς σταθμούς SYNOP σε ακτίνα έως 75 km (έως 12 ανά περιοχή), με πρόγνωση ECMWF/GFS από 24 ώρες πριν. Επανέλεγχος κάθε 3 ώρες. Αυτό δεν ελέγχει τις παλιές ενδείξεις του πλήρους MONO.','Actual quality-screened SYNOP gauges within 75 km (up to 12 per region), compared to 24h-lead ECMWF/GFS. Rechecked every 3 hours. This is not a score of all previously displayed MONO forecasts.')}</p>
- ${meanMetrics}
+ <details class="ri-history"><summary>${X('Αναλυτικοί δείκτες σφάλματος','Detailed error metrics')}</summary>${meanMetrics}</details>
  <details class="ri-history"><summary>${X('Τι σημαίνουν τα σφάλματα;','What do the errors mean?')}</summary><p class="ri-foot">${escape(meaning)}</p><p class="ri-foot">${X('Τα MAE, RMSE και bias υπολογίζονται από τον βασικό συνδυασμό ECMWF/GFS. Η βελτίωση της διόρθωσης κρίνεται ξεχωριστά σε μεταγενέστερες περιόδους, και εφαρμόζεται μόνο όταν έχει αποδείξει μείωση σφάλματος.','MAE, RMSE and bias describe the baseline ECMWF/GFS blend; the correction is assessed separately on later time periods and activates only if error is lower.')}</p></details>
  <div class="ri-learning-stats">${stats}</div>
  <p class="ri-foot"><b>${escape(status)}</b> · ${num(s.n,0)} ${X('ανεξάρτητες περίοδοι','non-overlapping periods')} · ${X('όριο υετού','wet threshold')} ${num(data.threshold,1)} mm.${validation?' '+escape(validation):''}</p>
  <details class="ri-history"><summary>${X('Σταθμοί που συμμετέχουν','Gauges included')} · ${count}</summary>${stationRows||'<p class="ri-foot">—</p>'}</details>
  <details class="ri-history"><summary>${X('Αναλυτικό ιστορικό','Detailed history')}</summary>${recent||`<p class="ri-foot">${X('Δεν υπάρχουν ακόμη πλήρεις συγκρίσιμες περίοδοι.','No complete comparable periods yet.')}</p>`}</details>
  <p class="ri-foot">${X('Ο υετός περιλαμβάνει και το ισοδύναμο νερού από χιόνι. Η μέτρηση αφορά τη θέση του σταθμού, όχι κάθε δρόμο της περιοχής.','Precipitation includes snow water equivalent. The gauge reports its own location, not every street nearby.')}</p></section>`;
+}
+function verificationSummary(data,lang='el',now=Date.now()){
+ if(!data?.available||!Number.isFinite(data.samples?.n)||data.samples.n<1)return '';
+ const el=lang!=='en',X=(a,b)=>el?a:b;
+ const s=data.samples,n=s.n,wet=s.hit+s.miss,predWet=s.hit+s.falseAlarm;
+ const enough=n>=20;
+ const pct=v=>Number.isFinite(v)?Math.round(v*100)+'%':'—';
+ const number=v=>Number.isFinite(v)?v.toLocaleString(el?'el-GR':'en-GB',{maximumFractionDigits:2}):'—';
+ const mae=enough&&Number.isFinite(s.mae)?number(s.mae)+' mm':'—';
+ const recall=enough&&wet>=5?pct(s.recall):'—';
+ const falseRate=enough&&predWet>=5?pct(s.falseAlarm/predWet):'—';
+ const stations=Number.isFinite(data.network?.stations)?data.network.stations:Array.isArray(data.stations)?data.stations.length:0;
+ const stale=data.stale||!Number.isFinite(data.checkedAt)||now-data.checkedAt>8*3600000||data.checkedAt>now+5*60000;
+ const metrics=[
+  [X('Σφάλμα ποσότητας','Amount error'),mae,X('MAE / περίοδο','MAE / period')],
+  [X('Βροχές που εντόπισε','Rain events detected'),recall,wet+' '+X('πραγματικές βροχές','observed rain events')],
+  [X('Λανθασμένοι συναγερμοί','False alarms'),falseRate,predWet+' '+X('προβλεπόμενες βροχές','predicted rain events')]
+ ].map(([title,value,desc])=>'<div><small>'+title+'</small><strong>'+value+'</strong><span>'+desc+'</span></div>').join('');
+ const status=stale?X('Παλαιότερος έλεγχος','Older verification'):X('Πρόσφατος έλεγχος','Recent verification');
+ const explanation=X('Συγκρίσεις σταθμού/περιόδου: '+n+'. Το MAE προκύπτει από σύγκριση εκτιμήσεων ECMWF/GFS 24 ώρες νωρίτερα με ποσότητες WMO SYNOP στο βροχόμετρο. Η ανάκληση είναι σωστές βροχές / όλες τις πραγματικές βροχές. Λανθασμένοι συναγερμοί είναι λανθασμένες προβλέψεις βροχής / όλες τις προβλέψεις βροχής. Ποσοστά εμφανίζονται μόνο με ≥20 περιόδους και ≥5 περιπτώσεις στον αντίστοιχο παρονομαστή. Διαφορετικές περίοδοι μπορεί να καλύπτουν διαφορετικές ώρες. Δεν αξιολογείται το πλήρες MONO ή κάθε δρόμος της πόλης.',
+  'Station-period comparisons: '+n+'. MAE compares 24-hour-lead ECMWF/GFS precipitation estimates to WMO SYNOP gauge totals. Recall is correctly identified rain / all observed rain. False alarm rate is false rain predictions / all predicted rain. Percentages require ≥20 periods and ≥5 events in their denominator. Reporting periods may span different hours. This is not a score of the full MONO model or every street.');
+ return '<section class="card ri-verification" aria-label="'+X('Έλεγχος πρόγνωσης με σταθμούς','Gauge forecast verification')+'"><div class="ri-verification-head"><div><b>'+X('Έλεγχος με πραγματικά βροχόμετρα','Verified against rain gauges')+'</b><small>ECMWF / GFS · '+X('πρόβλεψη 24 ωρών','24-hour lead')+' · '+number(stations)+' '+X('σταθμοί','stations')+'</small></div><span>'+status+'</span></div>'+
+  '<div class="ri-verification-values">'+metrics+'</div><details><summary>'+X('Πώς υπολογίζονται;','How is this calculated?')+'</summary><p>'+explanation+'</p></details></section>';
 }
 function render({lang='el',view,train,stations,pws,trainingStatus,shared,stationLearning,recentRain,city,includeLive=true}={}){
  const el=lang!=='en',X=(a,b)=>el?a:b;
@@ -162,6 +185,6 @@ function render({lang='el',view,train,stations,pws,trainingStatus,shared,station
  const cloudFoot=fin(M.cloudMae)?X(`Εκπαίδευση νεφών: ιστορικό μέσο σφάλμα ${num(M.cloudMae,1)} ποσοστιαίες μονάδες (ERA5).`,`Cloud model: historical error ${num(M.cloudMae,1)} percentage points (ERA5).`):X('Η νέφωση εμφανίζεται από τα διαθέσιμα μοντέλα· η εκπαίδευσή της απαιτεί ιστορικά δεδομένα.','Cloud cover comes from available models; training requires historical samples.');
  return `<section class="section ri-section" aria-label="${X('Η βροχή με μια ματιά','Rain at a glance')}"><div class="sectionhead"><div><span class="label">MONO / RAIN INTELLIGENCE</span><h2 class="h2">${X('Ο καιρός σε 4 εικόνες','Weather in four icons')}</h2><p class="section-sub">${X('Μέτρηση, πρόγνωση και έλεγχος: τρία διαφορετικά πράγματα.','Observation, forecast, and verification are different.')}</p></div></div>${includeLive?liveCard:''}${nearbySection}${root.MONOMonthlyRain?.renderRecent(recentRain,{lang,zone:view.zone||'Europe/Athens',city,now})||''}<div class="ri-grid">${cards.join('')}</div>${stationLearningCard(stationLearning,lang,view.zone||'Europe/Athens',now)}<p class="ri-foot">☁ ${cloudFoot}</p><p class="ri-foot">${shared?.shared?X('🌐 Κοινό ιστορικό μοντέλο διαθέσιμο σε κινητό και υπολογιστή. Τοπική εκπαίδευση ανά συσκευή.','🌐 Shared historical learning across devices. Local training stays per device.'):X('Τοπική εκπαίδευση ανά συσκευή · κοινά στοιχεία για υποστηριζόμενες πόλεις.','Local training per device · shared results for supported cities.')}</p></section>`;
 }
-root.MONORainIntelligence={render,observed,present,metrics,stationAmount,stationLearningCard};
-if(typeof module!=='undefined'&&module.exports)module.exports={render,observed,present,metrics,stationAmount,stationLearningCard};
+root.MONORainIntelligence={render,observed,present,metrics,stationAmount,stationLearningCard,verificationSummary};
+if(typeof module!=='undefined'&&module.exports)module.exports={render,observed,present,metrics,stationAmount,stationLearningCard,verificationSummary};
 })(typeof window!=='undefined'?window:globalThis);

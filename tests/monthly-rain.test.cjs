@@ -99,7 +99,7 @@ test('recent ERA5 request covers 26 months for year-on-year comparison and retai
     return {ok:true,json:async()=>({timezone:'Europe/Athens',daily:{time:['2026-10-01','2026-10-02'],rain_sum:[2.5,0]}})};
   });
   assert.equal(url.searchParams.get('models'),'era5');
-  assert.equal(url.searchParams.get('daily'),'rain_sum');
+  assert.equal(url.searchParams.get('daily'),'rain_sum,temperature_2m_mean,wind_speed_10m_max');
   assert.ok(Date.parse(url.searchParams.get('end_date'))-Date.parse(url.searchParams.get('start_date'))>700*86400e3);
   assert.deepEqual(result.precipitation_sum,[2.5,0]);
   assert.equal(result.model,'era5');
@@ -201,4 +201,69 @@ test('rain analog section is compact, truthful, translated, and wired to the rai
  const english=Rain.renderRainAnalogs(recent,{lang:'en',now:Date.parse('2026-11-15T12:00:00Z')});
  assert.match(english,/Similar historical rain weeks/);
  assert.equal(Rain.renderRainAnalogs({status:'loading'}),'');
+});
+
+test('recent ERA5 uses one request for rain, daily mean temperature and maximum wind', async () => {
+ let url;
+ const result=await Rain.loadRecent({lat:40.65,lon:22.94},async input=>{
+   url=new URL(input);
+   return {ok:true,json:async()=>({timezone:'Europe/Athens',daily:{
+     time:['2026-11-01','2026-11-02'],rain_sum:[1,0],
+     temperature_2m_mean:[15,17],wind_speed_10m_max:[22,31]
+   }})};
+ });
+ assert.equal(url.searchParams.get('models'),'era5');
+ assert.equal(url.searchParams.get('daily'),'rain_sum,temperature_2m_mean,wind_speed_10m_max');
+ assert.deepEqual(result.temperature_2m_mean,[15,17]);
+ assert.deepEqual(result.wind_speed_10m_max,[22,31]);
+ assert.equal(result.weatherFieldsRequested,true);
+ assert.deepEqual(result.precipitation_sum,[1,0]);
+});
+
+function fullWeather(start,end,skip=new Set()){
+ const r=syntheticDays(start,end,skip);
+ r.temperature_2m_mean=r.time.map((_,i)=>12+Math.sin(i/10));
+ r.wind_speed_10m_max=r.time.map((_,i)=>16+i%11);
+ return r;
+}
+test('whole-weather analogs compare temperature, wind and rain across complete nonoverlapping weeks',()=>{
+ const now=Date.parse('2026-11-15T12:00:00Z');
+ const r=Rain.findWeatherAnalogs(fullWeather('2025-09-01','2026-11-12'),now,'Europe/Athens');
+ assert.equal(r.reference.end,'2026-11-12');
+ assert.equal(r.matches.length,3);
+ assert.ok(r.matches.every(m=>Number.isFinite(m.tempRmse)&&Number.isFinite(m.windRmse)&&Number.isFinite(m.rainRmse)));
+ assert.ok(r.matches.every(m=>m.end<='2026-10-23'));
+ for(let i=0;i<r.matches.length;i++)for(let j=i+1;j<r.matches.length;j++){
+   assert.ok(r.matches[i].end<r.matches[j].start||r.matches[j].end<r.matches[i].start);
+ }
+});
+test('weather analogs require matching valid daily values and never treat missing days as zero',()=>{
+ assert.equal(Rain.findWeatherAnalogs({time:['2026-11-10'],precipitation_sum:[0]}),null);
+ const r=fullWeather('2026-10-01','2026-11-10',new Set(['2026-11-09']));
+ const out=Rain.findWeatherAnalogs(r,Date.parse('2026-11-12T12:00:00Z'));
+ assert.equal(out.reference.end,'2026-11-08');
+ const bad=fullWeather('2026-11-01','2026-11-10');
+ bad.wind_speed_10m_max[9]=null;
+ assert.equal(Rain.findWeatherAnalogs(bad,Date.parse('2026-11-12T12:00:00Z')).reference.end,'2026-11-09');
+ const dup=fullWeather('2026-11-01','2026-11-10');
+ dup.time.push('2026-11-10');dup.precipitation_sum.push(7);dup.temperature_2m_mean.push(22);dup.wind_speed_10m_max.push(12);
+ assert.equal(Rain.findWeatherAnalogs(dup,Date.parse('2026-11-12T12:00:00Z')).reference.end,'2026-11-09');
+});
+test('historical weather analysis is transparent about units, sample limits, and is translated',()=>{
+ const daily=fullWeather('2025-08-01','2026-11-12');
+ const recent={status:'ready',daily},now=Date.parse('2026-11-15T12:00:00Z');
+ const el=Rain.renderComparison(recent,{status:'error'},{lang:'el',zone:'Europe/Athens',now});
+ assert.match(el,/data-weather-analogs/);
+ assert.match(el,/Παρόμοια 7ήμερα: βροχή, θερμοκρασία και άνεμος/);
+ assert.match(el,/RMSE/);
+ assert.match(el,/όχι πρόγνωση/);
+ const en=Rain.renderWeatherAnalogs(recent,{lang:'en',now});
+ assert.match(en,/Similar 7-day weather/);
+ assert.match(en,/not a forecast/);
+ assert.equal(Rain.renderWeatherAnalogs({status:'loading'}),'');
+});
+test('old cached rain history is refreshed once to request the additional weather fields',()=>{
+ const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+ assert.match(app,/previous\.daily\?\.weatherFieldsRequested === true/);
+ assert.match(app,/cached\.daily\?\.weatherFieldsRequested === true/);
 });
