@@ -44,6 +44,14 @@ function diagnostics(view,atmosphere,now=Date.now()){
    data.find(r=>r.t>now&&r.t<=now+H)||null;
  if(!start)return {status:'no-overlap',data,periods:[]};
  const targets=[6,24,48],periods=[];
+ const old=data.find(r=>r.t===start.t-6*H);
+ if(old&&fin(old.temp)&&fin(start.temp)){
+  const diff=k=>fin(start[k])&&fin(old[k])?start[k]-old[k]:null;
+  periods.push({hours:-6,from:old.t,to:start.t,
+   temperature:diff('temp'),cloud:diff('cloud'),cloudLow:diff('cloudLow'),pressure:diff('pressure'),
+   t850:diff('t850'),jetCore:diff('jetCore'),jetNow:old.jetCore,jetLater:start.jetCore,
+   wind850:diff('wind850'),rain:fin(start.amount)?start.amount:null,daytime:start.isDay});
+ }
  for(const h of targets){
   const end=data.find(r=>r.t===start.t+h*H);
   if(!end||!fin(start.temp)||!fin(end.temp))continue;
@@ -64,7 +72,7 @@ function indicators(p,{lang='el'}={}){
   const sign=p.temperature<=-1.5?-1:p.temperature>=1.5?1:0;
   add(sign<0?X('Προβλεπόμενη ψύχρανση','Forecast cooling'):sign>0?X('Προβλεπόμενη θέρμανση','Forecast warming'):X('Μικρή μεταβολή θερμοκρασίας','Minor temperature change'),
    X('Μεταβολή θερμοκρασίας επιφάνειας','Surface temperature change')+' '+(p.temperature>0?'+':'')+num(p.temperature,lang)+'°C',
-   'MONO · '+p.hours+' h');
+   'MONO · '+Math.abs(p.hours)+' h');
  }
  if(fin(p.t850)&&Math.abs(p.t850)>=2){
   add(X('Μεταβολή της αέριας μάζας στα 850 hPa','850 hPa air-mass signal'),
@@ -100,12 +108,15 @@ function render({view,atmosphere,lang='el',now=Date.now(),zone='UTC'}={}){
  const shell=inner=>'<section class="section card wd-root" id="mono-weather-drivers"><div class="wd-head"><span>MONO / WEATHER DRIVERS</span><h2>'+X('Γιατί αλλάζει ο καιρός;','Why is the weather changing?')+'</h2><p>'+X('Ενδείξεις από την εξέλιξη της πρόγνωσης — όχι αυτόματη απόδοση αιτίας.','Evidence from forecast evolution, not automatic causal attribution.')+'</p></div>'+inner+'</section>';
  if(d.status!=='ready')return shell('<p class="wd-empty">'+X('Δεν υπάρχουν ακόμη αρκετά χρονικά ευθυγραμμισμένα στοιχεία ανώτερης ατμόσφαιρας και επιφάνειας.','Not enough timestamp-aligned upper-air and surface forecast fields yet.')+'</p>');
  const clock=t=>{try{return new Date(t).toLocaleString(el?'el-GR':'en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:zone});}catch{return new Date(t).toISOString().slice(0,16)+' UTC';}};
- const sections=d.periods.map(p=>{
+ const makeSection=p=>{
   const findings=indicators(p,{lang});
   const emphasis=findings.slice(0,4).map(f=>'<div class="wd-signal"><b>'+safe(f.title)+'</b><p>'+safe(f.desc)+'</p><small>'+safe(f.proof)+'</small></div>').join('');
-  return '<div class="wd-window"><div class="wd-period"><strong>'+(p.hours===6?X('Επόμενο 6ωρο','Next 6 hours'):p.hours===24?X('Επόμενο 24ωρο','Next 24 hours'):X('Επόμενο 48ωρο','Next 48 hours'))+'</strong><small>'+safe(clock(p.from))+' → '+safe(clock(p.to))+'</small></div>'+
+  return '<div class="wd-window"><div class="wd-period"><strong>'+(p.hours===-6?X('Τελευταίο 6ωρο · μοντέλο','Last 6 hours · model'):p.hours===6?X('Επόμενο 6ωρο','Next 6 hours'):p.hours===24?X('Επόμενο 24ωρο','Next 24 hours'):X('Επόμενο 48ωρο','Next 48 hours'))+'</strong><small>'+safe(clock(p.from))+' → '+safe(clock(p.to))+'</small></div>'+
    '<div class="wd-signals">'+emphasis+'</div>'+(findings.length>4?'<details class="wd-more"><summary>'+X('Περισσότερες ενδείξεις','More signals')+'</summary>'+findings.slice(4).map(f=>'<div class="wd-signal"><b>'+safe(f.title)+'</b><p>'+safe(f.desc)+'</p><small>'+safe(f.proof)+'</small></div>').join('')+'</details>':'')+'</div>';
- }).join('');
+ };
+ const important=d.periods.filter(p=>p.hours===-6||p.hours===24);
+ const extra=d.periods.filter(p=>p.hours!==-6&&p.hours!==24);
+ const sections=important.map(makeSection).join('')+(extra.length?'<details class="wd-more"><summary>'+X('Άλλα διαστήματα: επόμενο 6ωρο / 48ωρο','Other windows: next 6h / 48h')+'</summary>'+extra.map(makeSection).join('')+'</details>':'');
  return shell(sections+'<details class="wd-method"><summary>'+X('Πηγές και περιορισμοί','Sources and limitations')+'</summary><p>'+X('MONO: πρόγνωση επιφάνειας · GFS μέσω Open-Meteo: άνεμοι 300/250/200 hPa, θερμοκρασία 850 hPa και νεφοκάλυψη. Όλες οι μεταβολές είναι διαφορές μεταξύ ωρών της πρόγνωσης, όχι παρατηρημένες αλλαγές. Χωρίς χωρική ανάλυση, δορυφορική κίνηση νεφών ή πεδία θερμικής μεταφοράς δεν τεκμηριώνεται ότι «αυτό το σύννεφο» ή «ο αεροχείμαρρος» προκάλεσε τη μεταβολή.','MONO surface forecast · GFS via Open-Meteo: winds at 300/250/200 hPa, 850 hPa temperature and cloud cover. All changes are differences between forecast hours, not observed change. Without spatial fields, tracked cloud motion, or thermal-advection fields, no particular cloud or jet stream can be identified as the cause.')+'</p></details>');
 }
 const api={join,diagnostics,indicators,render};
