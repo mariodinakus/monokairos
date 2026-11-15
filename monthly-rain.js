@@ -63,7 +63,7 @@
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) throw new Error('invalid location');
     // 26 months support year-over-year comparisons plus a complete rolling 12 months.
     const end = new Date(), start = new Date(Date.now() - 790 * 86400000);
-    const params = new URLSearchParams({ latitude:lat.toFixed(4), longitude:lon.toFixed(4), start_date:start.toISOString().slice(0,10), end_date:end.toISOString().slice(0,10), models:'era5', daily:'rain_sum', timezone:'auto' });
+    const params = new URLSearchParams({ latitude:lat.toFixed(4), longitude:lon.toFixed(4), start_date:start.toISOString().slice(0,10), end_date:end.toISOString().slice(0,10), models:'era5', daily:'rain_sum,temperature_2m_mean,wind_speed_10m_max', timezone:'auto' });
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 30000);
     try {
       const response = await fetcher('https://archive-api.open-meteo.com/v1/archive?' + params, {signal:controller.signal});
@@ -71,7 +71,10 @@
       const json = await response.json(), daily = json?.daily;
       if (json?.error || !Array.isArray(daily?.time) || !Array.isArray(daily?.rain_sum) || daily.time.length !== daily.rain_sum.length) throw new Error('invalid history');
       // Existing recent-rain panels consume precipitation_sum; both charts now use the same ERA5 rain_sum source.
-      return {time:daily.time, precipitation_sum:daily.rain_sum, timezone:json.timezone || 'auto', model:'era5'};
+      return {time:daily.time, precipitation_sum:daily.rain_sum,
+        temperature_2m_mean:Array.isArray(daily.temperature_2m_mean)&&daily.temperature_2m_mean.length===daily.time.length?daily.temperature_2m_mean:null,
+        wind_speed_10m_max:Array.isArray(daily.wind_speed_10m_max)&&daily.wind_speed_10m_max.length===daily.time.length?daily.wind_speed_10m_max:null,
+        weatherFieldsRequested:true,timezone:json.timezone || 'auto', model:'era5'};
     } finally { clearTimeout(timer); }
   }
 
@@ -230,6 +233,79 @@
     '<p class="mr-compare-note">'+note+' '+X('Διαθέσιμη περίοδος','Available period')+': '+label(result.from)+' – '+label(result.to)+'.</p></details>';
 }
 
+  function findWeatherAnalogs(daily,now=Date.now(),zone='UTC',limit=3){
+ const keys=['precipitation_sum','temperature_2m_mean','wind_speed_10m_max'];
+ if(!Array.isArray(daily?.time)||!keys.every(k=>Array.isArray(daily[k])&&daily[k].length===daily.time.length))return null;
+ const validDay=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.parse(d+'T12:00:00Z'))&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
+ const shift=(d,n)=>new Date(Date.parse(d+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
+ const records=new Map(),dup=new Set();
+ for(let i=0;i<daily.time.length;i++){
+  const day=daily.time[i];if(!validDay(day))continue;
+  if(records.has(day))dup.add(day);
+  const row=keys.map(k=>daily[k][i]);
+  records.set(day,row.every(Number.isFinite)&&row[0]>=0&&row[2]>=0?row:null);
+ }
+ let today;
+ try {
+  const p=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(now));
+  const get=x=>p.find(z=>z.type===x)?.value;
+  today=get('year')+'-'+get('month')+'-'+get('day');
+ }catch{today=new Date(now).toISOString().slice(0,10);}
+ const dates=[...records.keys()].filter(d=>d<today&&!dup.has(d)&&records.get(d)).sort();
+ const makeWeek=end=>{
+  const start=shift(end,-6),rows=[];
+  for(let j=0;j<7;j++){
+   const day=shift(start,j),row=records.get(day);
+   if(dup.has(day)||!row)return null;
+   rows.push(row);
+  }
+  const rain=rows.reduce((sum,r)=>sum+r[0],0);
+  const temp=rows.reduce((sum,r)=>sum+r[1],0)/7;
+  const maxWind=Math.max(...rows.map(r=>r[2]));
+  return {start,end,rain,temp,maxWind,rows};
+ };
+ let reference=null;
+ for(let i=dates.length-1;i>=0;i--){reference=makeWeek(dates[i]);if(reference)break;}
+ if(!reference)return null;
+ const before=shift(reference.start,-14),candidates=[];
+ for(const end of dates){
+  if(end>before)break;
+  const c=makeWeek(end);if(!c)continue;
+  const rmse=j=>Math.sqrt(c.rows.reduce((sum,r,i)=>sum+Math.pow(r[j]-reference.rows[i][j],2),0)/7);
+  c.rainRmse=rmse(0);c.tempRmse=rmse(1);c.windRmse=rmse(2);
+  // Transparent heuristic: normalise units, then use a Euclidean distance, not a probability.
+  c.distance=Math.hypot(c.rainRmse/6,c.tempRmse/4,c.windRmse/15);
+  candidates.push(c);
+ }
+ candidates.sort((a,b)=>a.distance-b.distance||a.start.localeCompare(b.start));
+ const selected=[];
+ for(const c of candidates){
+  if(selected.every(x=>c.end<x.start||c.start>x.end))selected.push(c);
+  if(selected.length>=Math.max(1,Math.min(5,limit)))break;
+ }
+ const strip=({rows,...x})=>x;
+ return {reference:strip(reference),matches:selected.map(strip),from:dates[0]||null,to:dates.at(-1)||null,checkedWindows:candidates.length};
+}
+
+  function renderWeatherAnalogs(recent,{lang='el',zone='UTC',now=Date.now()}={}){
+ if(recent?.status!=='ready')return '';
+ const el=lang!=='en',X=(a,b)=>el?a:b;
+ const result=findWeatherAnalogs(recent.daily,now,zone);
+ const locale=el?'el-GR':'en-GB',num=(x,d=1)=>new Intl.NumberFormat(locale,{maximumFractionDigits:d}).format(x);
+ const date=d=>new Date(d+'T12:00:00Z').toLocaleDateString(locale,{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+ const period=x=>date(x.start)+' – '+date(x.end);
+ const shell=content=>'<details class="mr-details" data-weather-analogs><summary>'+X('Παρόμοια 7ήμερα: βροχή, θερμοκρασία και άνεμος','Similar 7-day weather: rain, temperature and wind')+'</summary>'+content+'</details>';
+ if(!result)return shell('<p class="mr-status">'+X('Δεν υπάρχουν ακόμη 7 πλήρεις ημέρες με όλα τα ιστορικά πεδία ERA5.','There are not yet 7 complete ERA5 days with all required fields.')+'</p>');
+ const explain=X('Η κατάταξη συγκρίνει καθημερινά μοτίβα με κανονικοποιημένο RMSE (βροχή /6 mm, θερμοκρασία /4°C, μέγιστος άνεμος /15 km/h). Είναι περιγραφική ομοιότητα ιστορικής επανάλυσης, όχι πρόγνωση, πιθανότητα ή μέτρηση στο σπίτι σου. Απαιτούνται πλήρη 7ήμερα, χωρίς επικαλύψεις και με τουλάχιστον 14 ημέρες απόσταση.',
+  'Ranking compares daily patterns using normalised RMSE (rain /6 mm, temperature /4°C, maximum wind /15 km/h). This is descriptive similarity of historical reanalysis, not a forecast, probability, or a measurement at your home. Only complete non-overlapping 7-day periods at least 14 days away qualify.');
+ const summary=x=>num(x.rain)+' mm · '+num(x.temp)+'°C '+X('μ.ό.','avg.')+' · '+num(x.maxWind,0)+' km/h '+X('κορυφή','peak');
+ const rows=result.matches.map(x=>'<article class="mr-highlight"><small>'+period(x)+'</small><strong>'+num(x.temp)+'<span>°C</span></strong>'+
+  '<span>'+summary(x)+'</span><small>RMSE '+X('βροχής','rain')+' '+num(x.rainRmse)+' mm · '+X('θερμ.','temp.')+' '+num(x.tempRmse)+'°C · '+X('ανέμου','wind')+' '+num(x.windRmse)+' km/h</small></article>').join('');
+ return shell('<p class="mr-compare-note"><b>'+X('Τελευταίο πλήρες 7ήμερο','Latest complete 7 days')+' · '+period(result.reference)+'</b> · '+summary(result.reference)+'</p>'+
+  (rows?'<div class="mr-summary">'+rows+'</div>':'<p class="mr-status">'+X('Δεν υπάρχουν αρκετά ανεξάρτητα παλαιότερα 7ήμερα.','Not enough separate earlier 7-day periods.')+'</p>')+
+  '<p class="mr-compare-note">ERA5 · Open-Meteo. '+explain+'</p>');
+}
+
   function renderComparison(recent, normals, {lang='el',zone='UTC',city='',now=Date.now()}={}) {
     const el=lang!=='en', X=(a,b)=>el?a:b,locale=el?'el-GR':'en-GB';
     const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -288,9 +364,9 @@
       ' '+X('Ο ιστορικός μέσος όρος αφορά πλήρεις μήνες 1991–2020.','Normals represent complete calendar months in 1991–2020.')+
       ' '+X('Οι μήνες με * είναι ελλιπείς και δεν υπολογίζεται συγκρίσιμη ποσοστιαία διαφορά.','Months marked * are incomplete, so percentage differences are omitted.')+
       (latest?' '+X('Τελευταία διαθέσιμη ημέρα: ','Latest available day: ')+esc(latest)+'.':'')+'</p>';
-    return block(stats+legend+chart+table+renderRainAnalogs(recent,{lang,zone,now})+note);
+    return block(stats+legend+chart+table+renderRainAnalogs(recent,{lang,zone,now})+renderWeatherAnalogs(recent,{lang,zone,now})+note);
   }
 
-  root.MONOMonthlyRain = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth, findRainAnalogs, renderRainAnalogs };
-  if (typeof module !== 'undefined' && module.exports) module.exports = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth, findRainAnalogs, renderRainAnalogs };
+  root.MONOMonthlyRain = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth, findRainAnalogs, renderRainAnalogs, findWeatherAnalogs, renderWeatherAnalogs };
+  if (typeof module !== 'undefined' && module.exports) module.exports = { summarize, load, loadRecent, renderRecent, render, renderComparison, monthlySeries, localMonth, findRainAnalogs, renderRainAnalogs, findWeatherAnalogs, renderWeatherAnalogs };
 })(typeof window !== 'undefined' ? window : globalThis);
