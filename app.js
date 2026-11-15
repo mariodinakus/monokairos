@@ -3352,8 +3352,9 @@ function labPage() {
   const insights = window.MONOModelInsights?.render({train:tr,view:V,stationLearning:state.stationRain,lead:k,lang:state.lang,algorithmName:AN}) || '';
    const history = window.MONOHistoryBacktest?.render({ train:tr, lead:k, lang:state.lang, days:state.historyDays, variable:state.historyVar, order:state.historyOrder, status:state.trainStatus, progress:state.trainProgress, modelsLoading:state.modelsLoading }) || '';
   const equations = window.MONOEquations?.render({train:tr,lead:k,lang:state.lang,mode:equationMode,city:cityName(state.city),algorithmName:AN,modelName:id=>MODELS.find(m=>m.id===id)?.name || id}) || '';
-  const statistics = window.MONOStats?.render({view:V,train:tr,lead:k,lang:state.lang}) || '';
-  return head + chips + equations + statistics + history + insights + body + liveCard() + steps;
+  const drivers = window.MONOWeatherDrivers?.render({view:V,atmosphere:state.atmosphere,lang:state.lang,zone:V.zone}) || '';
+  const statistics = window.MONOStats?.render({view:V,atmosphere:state.atmosphere,train:tr,lead:k,lang:state.lang}) || '';
+  return head + chips + drivers + statistics + equations + history + insights + body + liveCard() + steps;
 }
 function stationCard() {
   const V = state.view, S = V.S;
@@ -3855,7 +3856,7 @@ function render() {
   if (state.page === 'now' && !waiting.length && $('#mono-month-trend')) {
     window.MONOMonthTrend?.mount({lat:+state.city.lat,lon:+state.city.lon,lang:state.lang,city:cityName(state.city),daily:state.view?.daily||[],historyEnabled:cacheAllowed()});
   }
-  if(state.page==='lab' && !waiting.length)window.MONOStats?.mount({view:state.view,train:state.train,lead:state.lead,lang:state.lang});
+  if(state.page==='lab' && !waiting.length)window.MONOStats?.mount({view:state.view,atmosphere:state.atmosphere,train:state.train,lead:state.lead,lang:state.lang});
   if(state.page==='guide'){
     const q=$('#qs-panel');let start=null;
     q?.addEventListener('touchstart',e=>{const t=e.touches[0];if(t)start={x:t.clientX,y:t.clientY};},{passive:true});
