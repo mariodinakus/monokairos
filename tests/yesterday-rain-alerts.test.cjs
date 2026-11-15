@@ -106,3 +106,56 @@ test('manifest offers launcher shortcuts to real pages', () => {
     assert.ok(fs.existsSync(path.join(__dirname, '..', s.icons[0].src)));
   }
 });
+
+test('storm and wind alerts only use actual non-stale hourly forecast values',()=>{
+ const now=Date.parse('2026-11-15T08:00:00Z'),H=3600e3;
+ const data={hourly:{time:[(now+H)/1000,(now+2*H)/1000],
+   weather_code:[95,3],wind_gusts_10m:[59,74]}};
+ const events=A.detectHazards(data,{now,cfg:{storm:true,wind:true}});
+ assert.deepEqual(events.map(e=>e.type),['storm','wind']);
+ assert.equal(events[1].gust,74);
+ assert.equal(A.detectHazards(data,{now,cfg:{storm:false,wind:false}}).length,0);
+ assert.equal(A.detectHazards({hourly:{time:[(now-8*H)/1000],weather_code:[99],wind_gusts_10m:[90]}},{now,cfg:{storm:true,wind:true}}).length,0);
+ assert.equal(A.detectHazards({hourly:{time:[(now+H)/1000],weather_code:[null],wind_gusts_10m:[null]}},{now,cfg:{storm:true,wind:true}}).length,0);
+});
+test('morning forecast uses the selected location timezone and complete day data',()=>{
+ const now=Date.parse('2026-11-15T06:30:00Z'); // 08:30 in Athens
+ const data={daily:{time:[Date.parse('2026-11-14T22:00:00Z')/1000],
+   temperature_2m_min:[8],temperature_2m_max:[17],precipitation_sum:[2]}};
+ const cfg={morning:true};
+ const e=A.morningEvent(data,{now,cfg,zone:'Europe/Athens'});
+ assert.equal(e.id,'morning-2026-11-15');
+ assert.equal(e.rain,2);
+ assert.equal(A.morningEvent(data,{now:Date.parse('2026-11-15T13:00:00Z'),cfg,zone:'Europe/Athens'}),null);
+ assert.equal(A.morningEvent({daily:{...data.daily,precipitation_sum:[null]}},{now,cfg,zone:'Europe/Athens'}),null);
+ assert.equal(A.morningEvent(data,{now,cfg:{morning:false},zone:'Europe/Athens'}),null);
+});
+test('air quality alerts reject missing or stale forecasts and require AQI 100+',()=>{
+ const now=Date.parse('2026-11-15T06:30:00Z');
+ const current=(when,value)=>({current:{time:when/1000,european_aqi:value}});
+ assert.equal(A.airEvent(current(now-20*MIN,119),{now,cfg:{air:true}}).aqi,119);
+ assert.equal(A.airEvent(current(now-4*H,119),{now,cfg:{air:true}}),null);
+ assert.equal(A.airEvent(current(now-20*MIN,99),{now,cfg:{air:true}}),null);
+ assert.equal(A.airEvent(current(now-20*MIN,null),{now,cfg:{air:true}}),null);
+});
+test('new notification categories are disabled until selected, with no false official-warning label',()=>{
+ const now=Date.parse('2026-11-15T08:00:00Z'),data={hourly:{time:[(now+H)/1000],weather_code:[95],wind_gusts_10m:[80]}};
+ assert.deepEqual(A.detectHazards(data,{now,cfg:{on:true}}),[]);
+ const m=A.otherMessage({type:'storm',start:now},{lang:'el',place:'Θεσσαλονίκη',zone:'Europe/Athens'});
+ assert.match(m.body,/Όχι επίσημη προειδοποίηση/);
+ assert.equal(m.page,'phen');
+ const url=new URL(A.forecastURL({lat:40.65,lon:22.93}));
+ assert.match(url.searchParams.get('hourly'),/wind_gusts_10m/);
+ assert.match(url.searchParams.get('daily'),/temperature_2m_max/);
+});
+test('five weather categories, opt-in controls and test notification remain connected to app',()=>{
+ const app=read('app.js');
+ for(const field of ['rain','storm','wind','air','morning'])assert.ok(app.includes("'"+field+"'"));
+ assert.match(app,/data-action="rainAlertType"/);
+ assert.match(app,/data-action="rainAlertTest"/);
+ assert.match(app,/moveWeatherAlertsHere/);
+ assert.match(app,/Παρασκήνιο μόνο αν το επιτρέπει/);
+ const sw=read('sw.js');
+ assert.match(sw,/MONORainAlerts\.check/);
+ assert.match(sw,/notificationclick/);
+});
