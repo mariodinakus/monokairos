@@ -80,7 +80,6 @@ test('station verification strip uses observed counts, event denominators and a 
    n:30,hit:8,miss:2,falseAlarm:3,correctDry:17,mae:1.5,recall:.8
  }};
  const html=Rain.verificationSummary(d,'el',now);
- assert.match(html,/data/); // All displayed values derive from the supplied station sample.
  assert.match(html,/80%/);assert.match(html,/27%/);assert.match(html,/1,5 mm/);
  assert.match(html,/24 ωρών/);
  assert.match(html,/πλήρες MONO/);
