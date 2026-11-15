@@ -19,7 +19,14 @@ const VARS=[
  {id:'rainfinal',el:'Πιθανότητα υετού τελική',en:'Final rain probability',unit:'%'},
  {id:'dew',el:'Σημείο δρόσου',en:'Dew point',unit:'°C'},
  {id:'dewgap',el:'Απόσταση σημείου δρόσου',en:'Dew point spread',unit:'°C'},
- {id:'pressure3',el:'Μεταβολή πίεσης 3 ωρών',en:'3-hour pressure change',unit:'hPa'}
+ {id:'pressure3',el:'Μεταβολή πίεσης 3 ωρών',en:'3-hour pressure change',unit:'hPa'},
+ {id:'jet300',el:'Άνεμος 300 hPa (GFS)',en:'300 hPa wind (GFS)',unit:'km/h'},
+ {id:'jetCore',el:'Μέγιστος άνεμος 300–200 hPa (GFS)',en:'300–200 hPa upper-wind max (GFS)',unit:'km/h'},
+ {id:'t850',el:'Θερμοκρασία 850 hPa (GFS)',en:'850 hPa temperature (GFS)',unit:'°C'},
+ {id:'t500',el:'Θερμοκρασία 500 hPa (GFS)',en:'500 hPa temperature (GFS)',unit:'°C'},
+ {id:'wind850',el:'Άνεμος 850 hPa (GFS)',en:'850 hPa wind (GFS)',unit:'km/h'},
+ {id:'cloudLow',el:'Χαμηλή νεφοκάλυψη (GFS)',en:'Low clouds (GFS)',unit:'%'},
+ {id:'cloudHigh',el:'Υψηλή νεφοκάλυψη (GFS)',en:'High clouds (GFS)',unit:'%'}
 ];
 const CHOICES=[];
 for(let i=0;i<VARS.length;i++) for(let j=i+1;j<VARS.length;j++) {
@@ -30,12 +37,26 @@ for(let i=0;i<VARS.length;i++) for(let j=i+1;j<VARS.length;j++) {
 let active='pres-amount', hours=120;
 const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(x,lang,d=2)=>fin(x)?new Intl.NumberFormat(lang==='en'?'en-GB':'el-GR',{minimumFractionDigits:d,maximumFractionDigits:d}).format(x):'—';
-function dataset(view){
+function dataset(view,atmosphere){
  const rows=Array.isArray(view?.rows)?view.rows:[];
+ const ah=atmosphere?.hourly,upper=new Map();
+ if(Array.isArray(ah?.time))ah.time.forEach((stamp,i)=>{
+  if(!fin(stamp)||upper.has(stamp*1000))return;
+  const read=k=>fin(ah[k]?.[i])?ah[k][i]:null;
+  const levels=[read('wind_speed_300hPa'),read('wind_speed_250hPa'),read('wind_speed_200hPa')].filter(fin);
+  upper.set(stamp*1000,{
+   jet300:read('wind_speed_300hPa'),jetCore:levels.length?Math.max(...levels):null,
+   t850:read('temperature_850hPa'),t500:read('temperature_500hPa'),
+   wind850:read('wind_speed_850hPa'),cloudLow:read('cloud_cover_low'),cloudHigh:read('cloud_cover_high')
+  });
+ });
  const start=fin(view?.iNow)?Math.max(0,view.iNow):0;
  return rows.slice(start,start+hours).filter(x=>fin(x?.t)).map(row=>{
   const o={t:row.t};
   VARS.forEach(v=>{o[v.id]=fin(row[v.id])?row[v.id]:null;});
+  // Independent GFS upper-air feed; only exact matching UTC hours are joined.
+  const atmosphereRow=upper.get(row.t);
+  if(atmosphereRow)Object.assign(o,atmosphereRow);
   const avg=x=>{const a=Object.values(x||{}).filter(fin);return a.length?a.reduce((u,v)=>u+v,0)/a.length:null;};
   o.vis=fin(row.visMain)?row.visMain/1000:null;
   o.cape=avg(row.vi?.cape) ?? (fin(row.capeMain)?row.capeMain:null); o.snow=avg(row.vi?.snowf) ?? (fin(row.snowMain)?row.snowMain:null);
@@ -118,7 +139,7 @@ function scatter(data,choice,lang){
 }
 function observations(data,lang){
  const en=lang==='en';
- const pairs=[['rh','amount'],['cloud','amount'],['pres','amount'],['pressure3','amount'],['wind','gust'],['temp','rh'],['cape','amount']];
+ const pairs=[['rh','amount'],['cloud','amount'],['pres','amount'],['pressure3','amount'],['wind','gust'],['temp','rh'],['cape','amount'],['jetCore','amount'],['jet300','pres'],['t850','temp'],['cloudLow','temp']];
  const name=id=>VARS.find(v=>v.id===id)?.[en?'en':'el']||id;
  const findings=pairs.map(([x,y])=>{const a=paired(data,x,y);return {x,y,n:a.length,r:pearson(a)};}).filter(p=>p.r!==null&&Math.abs(p.r)>=.2).sort((a,b)=>Math.abs(b.r)-Math.abs(a.r)).slice(0,3);
  let h='<section class="sl-panel sl-observations"><div class="sl-sectiontitle"><span>MONO / WEATHER INSIGHTS</span><h3>'+(en?'What MONO observes':'Τι παρατηρεί το MONO')+'</h3><p>'+(en?'Patterns in the selected hourly forecast window.':'Μοτίβα στο επιλεγμένο χρονικό διάστημα ωριαίας πρόγνωσης.')+'</p></div>';
@@ -145,6 +166,23 @@ function rankedPairs(mat,lang){
  return '<article class="sl-panel"><h3>'+(en?'Strongest forecast relationships':'Οι ισχυρότερες σχέσεις της πρόγνωσης')+'</h3><div class="sl-bars">'+
  pairs.slice(0,5).map(c=>'<div class="sl-bar-row"><div class="sl-bar-name"><b>'+esc(name(c.x))+' ↔ '+esc(name(c.y))+'</b><small>n='+c.n+' · Spearman ρ '+fmt(c.rho,lang)+'</small></div><div class="sl-track"><span style="width:'+(100*Math.abs(c.r)).toFixed(1)+'%"></span></div><strong>r '+fmt(c.r,lang)+'</strong></div>').join('')+
  '</div><p class="sl-note">'+(en?'Ranked by absolute Pearson correlation; the sign shows direction.':'Κατάταξη με βάση την απόλυτη τιμή Pearson· το πρόσημο δείχνει την κατεύθυνση.')+'</p></article>';
+}
+function lagged(data,x,y,shift=6){
+ const valid=new Map(data.filter(r=>fin(r?.t)).map(r=>[r.t,r]));
+ return data.filter(r=>fin(r?.[x])&&fin(valid.get(r.t+shift*3600000)?.[y]))
+   .map(r=>[r[x],valid.get(r.t+shift*3600000)[y]]);
+}
+function jetRelationships(data,lang){
+ const en=lang==='en',W=(a,b)=>en?b:a;
+ const names={jetCore:W('Μέγιστος άνεμος ψηλά','Upper-wind maximum'),jet300:W('Άνεμος 300 hPa','300 hPa wind'),t850:W('Θερμοκρασία 850 hPa','850 hPa temperature'),
+   amount:W('Υετός','Precipitation'),temp:W('Θερμοκρασία επιφάνειας','Surface temperature'),cloud:W('Συνολική νεφοκάλυψη','Total clouds'),pres:W('Πίεση','Pressure')};
+ const cases=[['jetCore','amount',6],['jet300','pres',6],['t850','temp',6],['jetCore','cloud',12]];
+ const rows=cases.map(([x,y,lag])=>{const p=lagged(data,x,y,lag);return {x,y,lag,n:p.length,r:pearson(p)};});
+ const visible=rows.some(r=>r.n>=24);
+ return '<article class="sl-panel sl-jet-lag"><h3>'+W('Αεροχείμαρρος & μετατοπίσεις 6–12 ωρών','Jet stream & 6–12 h lead-lag patterns')+'</h3>'+
+ (visible?'<div class="sl-bars">'+rows.map(r=>'<div class="sl-bar-row"><div class="sl-bar-name"><b>'+esc(names[r.x])+' → '+esc(names[r.y])+' +'+r.lag+'h</b><small>n='+r.n+' · GFS / MONO '+W('ακριβής σύμπτωση ωρών','exact UTC-hour join')+'</small></div><div class="sl-track"><span style="width:'+(fin(r.r)?(100*Math.abs(r.r)).toFixed(1):0)+'%"></span></div><strong>r '+fmt(r.r,lang)+'</strong></div>').join('')+'</div>':
+ '<p class="sl-empty">'+W('Δεν υπάρχουν ακόμη τουλάχιστον 24 ευθυγραμμισμένα ζεύγη για τις μεταβλητές ανώτερης ατμόσφαιρας.','Not yet 24 timestamp-aligned upper-air pairs.')+'</p>')+
+ '<p class="sl-note">'+W('Ο αεροχείμαρρος προσεγγίζεται από ανέμους GFS στα 300/250/200 hPa, όχι από εντοπισμένη τροχιά jet streak. Οι συσχετίσεις με χρονική υστέρηση δεν αποτελούν πρόγνωση γεγονότων ή απόδειξη αιτίας: κοινές τάσεις, αυτοσυσχέτιση και κοινά μοντέλα μπορούν να τις ενισχύσουν.','Upper-air flow uses GFS winds at 300/250/200 hPa, not a tracked jet streak. Lead-lag relationships are neither event forecasts nor causal proof; shared trends, serial dependence and model inputs affect them.')+'</p></article>';
 }
 function benchmarks(train,lead,lang){
  const en=lang==='en',T=train?.temp?.leads?.[lead],P=train?.precip?.leads?.[lead];
@@ -190,8 +228,8 @@ function experimental(train,lead,lang){
  }
  return h+'<p class="sl-caution">'+(en?'All three methods use the same paired test hours. Forecasts are compared with ERA5 reanalysis, not a local station. Experimental models are not used in the live MONO forecast; scores do not guarantee future performance.':'Και οι τρεις μέθοδοι συγκρίνονται στις ίδιες κοινές ώρες τεστ. Η ERA5 είναι αναανάλυση και όχι μέτρηση τοπικού σταθμού. Τα πειραματικά μοντέλα δεν χρησιμοποιούνται στη ζωντανή πρόγνωση MONO και οι ιστορικές επιδόσεις δεν εγγυώνται μελλοντική απόδοση.')+'</p></section>';
 }
-function render({view,train,lead=0,lang='el'}={}){
- const en=lang==='en',data=dataset(view),m=matrix(data),best=m.flat().filter(c=>c.x!==c.y&&c.r!==null&&c.n>=MIN).sort((a,b)=>Math.abs(b.r)-Math.abs(a.r))[0];
+function render({view,train,lead=0,lang='el',atmosphere}={}){
+ const en=lang==='en',data=dataset(view,atmosphere),m=matrix(data),best=m.flat().filter(c=>c.x!==c.y&&c.r!==null&&c.n>=MIN).sort((a,b)=>Math.abs(b.r)-Math.abs(a.r))[0];
  const name=id=>VARS.find(v=>v.id===id)?.[en?'en':'el']||id;
  const pair=CHOICES.find(c=>c.id===active)||CHOICES[0];
  const options=(chosen)=>VARS.map(v=>'<option value="'+v.id+'" '+(v.id===chosen?'selected':'')+'>'+esc(v[en?'en':'el'])+'</option>').join('');
@@ -205,15 +243,15 @@ function render({view,train,lead=0,lang='el'}={}){
   '<div><small>'+(en?'STATISTICAL METHODS':'ΣΤΑΤΙΣΤΙΚΕΣ ΜΕΘΟΔΟΙ')+'</small><b>Pearson · Spearman · OLS</b><span>'+(en?'Minimum 24 paired hours':'Τουλάχιστον 24 κοινές ώρες')+'</span></div></div>'+
   '<div class="sl-layout"><article class="sl-panel"><h3>'+(en?'Correlation matrix':'Πίνακας συσχετίσεων')+'</h3>'+heatmap(m,lang)+ 
   '<p class="sl-note">'+(en?'Pairwise Pearson correlations from hourly forecasts. Select a cell to explore it; scroll horizontally to see all variables.':'Pearson ανά ζεύγος από ωριαίες προβλέψεις. Πάτησε ένα κελί για να δεις το διάγραμμα. Σύρε οριζόντια για όλες τις μεταβλητές.')+'</p></article>'+
-  '<article class="sl-panel"><h3>'+(en?'Scatter & linear fit':'Διασπορά και γραμμική τάση')+'</h3><p class="sl-note">'+(en?'Choose any two of the 17 forecast variables.':'Επίλεξε οποιεσδήποτε δύο από τις 17 μεταβλητές πρόγνωσης.')+'</p><div class="sl-choices">'+buttons+'</div><div id="sl-scatter">'+scatter(data,pair,lang)+'</div>'+
+  '<article class="sl-panel"><h3>'+(en?'Scatter & linear fit':'Διασπορά και γραμμική τάση')+'</h3><p class="sl-note">'+(en?'Choose any two of the forecast variables.':'Επίλεξε οποιεσδήποτε δύο από τις μεταβλητές πρόγνωσης.')+'</p><div class="sl-choices">'+buttons+'</div><div id="sl-scatter">'+scatter(data,pair,lang)+'</div>'+
   '<p class="sl-note">'+(en?'OLS is descriptive; R² is not forecast accuracy.':'Η παλινδρόμηση OLS είναι περιγραφική· το R² δεν είναι ακρίβεια πρόγνωσης.')+'</p></article></div>'+
-  observations(data,lang)+rankedPairs(m,lang)+experimental(train,lead,lang)+benchmarks(train,lead,lang)+
-  '<p class="sl-caution">'+(en?'Interpretation: these correlations arise from predicted values, NOT observed measurements. Some variables are mathematically related (e.g. feels-like and temperature); many zero rain or snowfall values can affect correlations. Visibility and UV come from the main forecast; CAPE, snowfall and dew point use model averages where available, otherwise the main forecast, and rain probability is MONO before the final ensemble blend. Shared inputs and serial dependence affect correlations. No causal claim, p-value, or calibrated success probability is inferred.':'Ερμηνεία: οι συσχετίσεις προέρχονται από προβλέψεις, ΟΧΙ πραγματικές μετρήσεις. Ορισμένες μεταβλητές συνδέονται μαθηματικά (π.χ. αίσθηση και θερμοκρασία), ενώ πολλές μηδενικές τιμές υετού ή χιονιού μπορεί να επηρεάσουν τις συσχετίσεις. Η ορατότητα και ο UV προέρχονται από την κύρια πρόγνωση· CAPE, χιονόπτωση και σημείο δρόσου προέρχονται από τον μέσο όρο των διαθέσιμων μοντέλων ή, εναλλακτικά, από την κύρια πρόγνωση, η πιθανότητα MONO είναι πριν από τον τελικό συνδυασμό ensemble. Η διαφορά σημείου δρόσου και η τρίωρη μεταβολή πίεσης είναι παράγωγοι δείκτες. Οι κοινές είσοδοι και η χρονική αυτοσυσχέτιση επηρεάζουν τις τιμές. Δεν τεκμηριώνεται αιτιότητα, στατιστική σημαντικότητα ή πιθανότητα επιτυχίας.')+'</p></section>';
+  observations(data,lang)+jetRelationships(data,lang)+rankedPairs(m,lang)+experimental(train,lead,lang)+benchmarks(train,lead,lang)+
+  '<p class="sl-caution">'+(en?'Interpretation: these correlations arise from predicted values, NOT observed measurements. Some variables are mathematically related (e.g. feels-like and temperature); many zero rain or snowfall values can affect correlations. Visibility and UV come from the main forecast; CAPE, snowfall and dew point use model averages where available, otherwise the main forecast, and rain probability is MONO before the final ensemble blend. Upper-air variables come from separate GFS hourly forecasts at EXACT UTC timestamps (no invented matches); they are neither observations nor detected jet-streak trajectories. Shared inputs and serial dependence affect correlations. No causal claim, p-value, or calibrated success probability is inferred.':'Ερμηνεία: οι συσχετίσεις προέρχονται από προβλέψεις, ΟΧΙ πραγματικές μετρήσεις. Ορισμένες μεταβλητές συνδέονται μαθηματικά (π.χ. αίσθηση και θερμοκρασία), ενώ πολλές μηδενικές τιμές υετού ή χιονιού μπορεί να επηρεάσουν τις συσχετίσεις. Η ορατότητα και ο UV προέρχονται από την κύρια πρόγνωση· CAPE, χιονόπτωση και σημείο δρόσου προέρχονται από τον μέσο όρο των διαθέσιμων μοντέλων ή, εναλλακτικά, από την κύρια πρόγνωση, η πιθανότητα MONO είναι πριν από τον τελικό συνδυασμό ensemble. Η διαφορά σημείου δρόσου και η τρίωρη μεταβολή πίεσης είναι παράγωγοι δείκτες. Τα δεδομένα ανώτερης ατμόσφαιρας είναι ωριαίες προγνώσεις GFS σε ακριβώς ίδιες ώρες UTC, όχι παρατηρήσεις ούτε ανίχνευση της τροχιάς συγκεκριμένου αεροχειμάρρου. Οι κοινές είσοδοι και η χρονική αυτοσυσχέτιση επηρεάζουν τις τιμές. Δεν τεκμηριώνεται αιτιότητα, στατιστική σημαντικότητα ή πιθανότητα επιτυχίας.')+'</p></section>';
 }
-function mount({view,train,lead=0,lang='el'}={}){
+function mount({view,train,lead=0,lang='el',atmosphere}={}){
  const rootNode=typeof document==='undefined'?null:document.getElementById('mono-statistical-lab');
  if(!rootNode)return;
- const data=dataset(view),host=rootNode.querySelector('#sl-scatter');
+ const data=dataset(view,atmosphere),host=rootNode.querySelector('#sl-scatter');
  const x=rootNode.querySelector('[data-sl-x]'),y=rootNode.querySelector('[data-sl-y]');
  const update=()=>{
   if(!x||!y||!host)return;
@@ -224,9 +262,9 @@ function mount({view,train,lead=0,lang='el'}={}){
  };
  x?.addEventListener('change',update);y?.addEventListener('change',update);
  rootNode.querySelectorAll('[data-sl-cell-x]').forEach(btn=>btn.addEventListener('click',()=>{if(!x||!y)return;x.value=btn.dataset.slCellX;y.value=btn.dataset.slCellY;update();host?.scrollIntoView({behavior:'smooth',block:'nearest'});}));
- rootNode.querySelectorAll('[data-sl-hours]').forEach(btn=>btn.addEventListener('click',()=>{hours=Number(btn.dataset.slHours);rootNode.outerHTML=render({view,train,lead,lang});mount({view,train,lead,lang});}));
+ rootNode.querySelectorAll('[data-sl-hours]').forEach(btn=>btn.addEventListener('click',()=>{hours=Number(btn.dataset.slHours);rootNode.outerHTML=render({view,train,lead,lang,atmosphere});mount({view,train,lead,lang,atmosphere});}));
 }
-const api={render,mount,dataset,paired,pearson,spearman,regression,matrix,benchmarks};
+const api={render,mount,dataset,paired,pearson,spearman,regression,matrix,benchmarks,lagged,jetRelationships};
 root.MONOStats=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
 
