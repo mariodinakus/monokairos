@@ -3887,6 +3887,7 @@ async function showDeviceNotification(title, options) {
     if (reg?.showNotification) return await reg.showNotification(title, options);
   } catch {}
   try { return new Notification(title, options); } catch {}
+  throw new Error('notification_unavailable');
 }
 let rainAlertTimer = 0;
 function runRainCheck() {
@@ -3958,7 +3959,8 @@ async function testWeatherNotification(){
   }catch{toast(el?'Η δοκιμή απέτυχε':'Test failed');}
 }
 function rainAlertsCard(){
-  if(!('Notification' in window)||state.snapshot)return '';
+  if(state.snapshot)return '';
+  if(!('Notification' in window))return '<section class="section ra-card"><div class="ra-text"><b>'+(state.lang==='el'?'Ειδοποιήσεις καιρού':'Weather notifications')+'</b><span>'+(state.lang==='el'?'Ο συγκεκριμένος browser ή WebView δεν υποστηρίζει ειδοποιήσεις ιστού. Χρειάζεται συμβατός browser ή native push.':'This browser or WebView does not support web notifications. Use a compatible browser or native push.')+'</span></div></section>';
   const el=state.lang==='el',X=(a,b)=>el?a:b,p=rainAlertsPref(),on=rainAlertsOn(),denied=Notification.permission==='denied';
   const where=on&&p?.name?esc(p.name):esc(cityName(state.city)),other=on&&p&&ckey(p)!==ckey(state.city);
   const types=[['rain',X('Βροχή','Rain')],['storm',X('Καταιγίδες','Storms')],['wind',X('Ριπές ≥60 km/h','Gusts ≥60 km/h')],['air',X('Αέρας AQI ≥100','Air AQI ≥100')],['morning',X('Πρωινή σύνοψη','Morning brief')]];
