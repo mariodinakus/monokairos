@@ -99,7 +99,7 @@ test('recent ERA5 request covers 26 months for year-on-year comparison and retai
     return {ok:true,json:async()=>({timezone:'Europe/Athens',daily:{time:['2026-10-01','2026-10-02'],rain_sum:[2.5,0]}})};
   });
   assert.equal(url.searchParams.get('models'),'era5');
-  assert.equal(url.searchParams.get('daily'),'rain_sum');
+  assert.equal(url.searchParams.get('daily'),'rain_sum,temperature_2m_mean,wind_speed_10m_max');
   assert.ok(Date.parse(url.searchParams.get('end_date'))-Date.parse(url.searchParams.get('start_date'))>700*86400e3);
   assert.deepEqual(result.precipitation_sum,[2.5,0]);
   assert.equal(result.model,'era5');
