@@ -73,3 +73,34 @@ test('rain detail can omit the duplicate current conditions while retaining stat
  assert.doesNotMatch(html,/class="ri-live /);
  assert.match(html,/Πραγματικές μετρήσεις από κοντινούς σταθμούς/);
 });
+
+test('station verification strip uses observed counts, event denominators and a 24-hour lead label',()=>{
+ const now=Date.parse('2026-11-15T08:00:00Z');
+ const d={available:true,checkedAt:now,network:{stations:4},samples:{
+   n:30,hit:8,miss:2,falseAlarm:3,correctDry:17,mae:1.5,recall:.8
+ }};
+ const html=Rain.verificationSummary(d,'el',now);
+ assert.match(html,/data/); // All displayed values derive from the supplied station sample.
+ assert.match(html,/80%/);assert.match(html,/27%/);assert.match(html,/1,5 mm/);
+ assert.match(html,/24 ωρών/);
+ assert.match(html,/πλήρες MONO/);
+ assert.match(html,/4 σταθμοί/);
+ assert.doesNotMatch(html,/100%/);
+});
+test('missing, stale and statistically thin station verification is not presented as accuracy',()=>{
+ const now=Date.parse('2026-11-15T08:00:00Z');
+ assert.equal(Rain.verificationSummary({available:false},'el',now),'');
+ const d={available:true,checkedAt:now-12*3600000,stale:true,samples:{n:5,hit:1,miss:1,falseAlarm:1,correctDry:2,mae:2,recall:.5}};
+ const html=Rain.verificationSummary(d,'el',now);
+ assert.match(html,/Παλαιότερος έλεγχος/);
+ assert.match(html,/—/);
+ assert.doesNotMatch(html,/50%/);
+ assert.doesNotMatch(html,/100%/);
+ const enough={...d,stale:false,checkedAt:now,samples:{...d.samples,n:25,hit:1,miss:1,falseAlarm:1,correctDry:22}};
+ assert.doesNotMatch(Rain.verificationSummary(enough,'en',now),/50%/);
+});
+test('rain page shows concise gauge verification after the short-range forecast',()=>{
+ const app=require('node:fs').readFileSync(require('node:path').join(__dirname,'..','app.js'),'utf8');
+ assert.match(app,/const verification = window\.MONORainIntelligence\?\.verificationSummary/);
+ assert.match(app,/shortRange \+ days \+ verification/);
+});
