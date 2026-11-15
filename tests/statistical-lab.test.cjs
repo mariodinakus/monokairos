@@ -27,7 +27,7 @@ test('forecast correlations do not replace missing values with zero and preserve
  assert.equal(d[1].amount,null);
  assert.equal(Stats.paired(d,'temp','amount').length,47);
  assert.equal(Stats.paired(d,'temp','rh').length,47);
- const matrix=Stats.matrix(d);assert.equal(matrix.length,17);
+ const matrix=Stats.matrix(d);assert.equal(matrix.length,24);
  assert.ok(matrix[0][1].r<-.99);
  assert.equal(matrix[0][5].n,47);
 });
@@ -69,4 +69,44 @@ test('MONO Lab uses its existing routes; math and charts are loaded before app.j
  assert.match(app,/MONOStats\?\.render/);
  assert.match(app,/MONOStats\?\.mount/);
  assert.match(app,/const NAV_GROUPS =/);
+});
+
+test('upper-air GFS fields are joined by exact UTC forecast hours, never by array index',()=>{
+ const now=Date.parse('2026-11-15T10:00:00Z');
+ const rows=Array.from({length:48},(_,i)=>({t:now+i*3600000,temp:10+i/10,amount:i%4?0:1,pres:1010-i/10}));
+ const shuffled=rows.map((r,i)=>({t:r.t,score:i})).reverse();
+ const upper={hourly:{time:shuffled.map(x=>x.t/1000),
+   wind_speed_300hPa:shuffled.map(x=>80+x.score),
+   wind_speed_250hPa:shuffled.map(x=>100+x.score),
+   wind_speed_200hPa:shuffled.map(x=>null),
+   temperature_850hPa:shuffled.map(x=>0+x.score/10),
+   cloud_cover_low:shuffled.map(x=>40+x.score),
+   cloud_cover_high:shuffled.map(x=>10+x.score),
+   wind_speed_850hPa:shuffled.map(x=>20+x.score),
+   temperature_500hPa:shuffled.map(x=>-15+x.score/10)}};
+ const data=Stats.dataset({rows,iNow:0},upper);
+ assert.equal(data[0].jet300,80);
+ assert.equal(data[0].jetCore,100);
+ assert.equal(data[0].cloudLow,40);
+ assert.equal(data[47].jet300,127);
+ assert.equal(Stats.matrix(data).length,24);
+ assert.equal(Stats.lagged(data,'jetCore','temp',6).length,42);
+ assert.ok(Stats.pearson(Stats.lagged(data,'t850','temp',6))>.99);
+ const html=Stats.render({view:{rows,iNow:0},atmosphere:upper,lang:'el'});
+ assert.match(html,/Αεροχείμαρρος & μετατοπίσεις/);
+ assert.match(html,/300 hPa/);
+ assert.match(html,/ακριβής σύμπτωση ωρών/);
+ assert.match(html,/όχι παρατηρήσεις/);
+});
+test('no atmospheric data never become fabricated zero wind or spurious correlations',()=>{
+ const now=Date.parse('2026-11-15T10:00:00Z');
+ const rows=Array.from({length:48},(_,i)=>({t:now+i*3600000,temp:i,amount:i%7?0:2}));
+ const d=Stats.dataset({rows},null);
+ assert.equal(d[0].jetCore,null);
+ assert.equal(d[0].t850,null);
+ assert.equal(Stats.paired(d,'jetCore','temp').length,0);
+ assert.match(Stats.jetRelationships(d,'el'),/Δεν υπάρχουν ακόμη/);
+ const shifted={hourly:{time:rows.map(r=>r.t/1000+1800),
+   wind_speed_300hPa:rows.map(()=>120)}};
+ assert.equal(Stats.dataset({rows},shifted)[0].jet300,null);
 });

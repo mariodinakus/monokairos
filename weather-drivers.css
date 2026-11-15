@@ -1,0 +1,18 @@
+/* MONO Weather Drivers — quiet, compact evidence cards. */
+.wd-root{padding:18px 20px;margin:14px 0;min-width:0}
+.wd-head span{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--sub,var(--muted,#737c89))}
+.wd-head h2{font-size:clamp(18px,2.5vw,23px);letter-spacing:-.04em;margin:7px 0 5px;line-height:1.15}
+.wd-head p{color:var(--sub,var(--muted,#737c89));font-size:12px;line-height:1.5;margin:0}
+.wd-window{padding-top:15px;margin-top:15px;border-top:1px solid var(--line)}
+.wd-period{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.wd-period strong{font-size:13px}.wd-period small{color:var(--sub,var(--muted,#737c89));font-size:10px;font-variant-numeric:tabular-nums}
+.wd-signals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.wd-signal{border:1px solid var(--line);border-radius:12px;padding:13px;min-width:0;background:color-mix(in srgb,var(--panel,#fff) 86%,var(--soft,#f0f1f2))}
+.wd-signal b{font-size:12px;line-height:1.4;display:block}
+.wd-signal p{font-size:11px;color:var(--sub,var(--muted,#737c89));line-height:1.55;margin:6px 0}
+.wd-signal small{display:block;font-size:10px;line-height:1.45;font-variant-numeric:tabular-nums}
+.wd-more{margin-top:10px}.wd-more summary,.wd-method summary{cursor:pointer;font-size:11px;font-weight:700}
+.wd-more .wd-signal{margin-top:8px}
+.wd-method{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.wd-method p,.wd-empty{font-size:11px;line-height:1.6;color:var(--sub,var(--muted,#737c89));margin:8px 0}
+@media(max-width:620px){.wd-root{padding:14px}.wd-signals{grid-template-columns:minmax(0,1fr)}.wd-signal{padding:12px}.wd-period{gap:5px}}
