@@ -79,3 +79,10 @@
 .ri-verification details{margin-top:8px}.ri-verification summary{cursor:pointer;font-size:11px;font-weight:700}
 .ri-verification details p{font-size:11px;line-height:1.6;color:var(--sub,var(--muted,#758093))}
 @media(max-width:440px){.ri-verification{padding:12px}.ri-verification-values{gap:5px}.ri-verification-values>div{padding:8px}.ri-verification-values strong{font-size:18px}.ri-verification-head{flex-wrap:wrap}}
+
+/* Compact weather alert preferences */
+.ra-types{display:flex;gap:7px;flex-wrap:wrap;width:100%;margin:11px 0}
+.ra-type{border:1px solid var(--line);border-radius:999px;padding:8px 11px;background:transparent;color:inherit;font:inherit;font-size:11px;line-height:1.3;cursor:pointer}
+.ra-type.active{background:color-mix(in srgb,var(--accent,#38a7b7) 12%,transparent);border-color:var(--accent,#38a7b7);font-weight:750}
+.ra-type:focus-visible{outline:2px solid var(--accent,#38a7b7);outline-offset:2px}
+@media(max-width:540px){.ra-types{gap:6px}.ra-type{padding:9px 10px;font-size:11px}}
