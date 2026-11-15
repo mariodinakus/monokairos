@@ -1591,7 +1591,7 @@ function nowPage() {
     homeMore('charts',X('Γραφήματα και μοντέλο','Charts and model'),X('Αναλυτική εξέλιξη και τρόπος υπολογισμού','Detailed forecast and model information'),chartDetail) +
     homeMore('planning',X('Σχέδια και πρόγνωση','Plans and forecast'),'',monoStory(V)+monoPlanCard(V)+monoStationsCard(V)+summaryCard()+MonoForecast.compact(forecastOptions())+(window.MonoSky?MonoSky.render({...skyOptions(),compact:true}):'')+todoCard()+weekendCard()) +
     homeMore('other',X('Περιβάλλον και ειδήσεις','Environment and news'),'',newsCard()+holidaysCard()+environment()+glossary()) +
-    (notifications ? homeMore('notifications',X('Ειδοποιήσεις βροχής','Rain alerts'),'',notifications) : '');
+    (notifications ? homeMore('notifications',X('Ειδοποιήσεις καιρού','Weather notifications'),'',notifications) : '');
   return head + warningsBanner() + hero + attentionStrip(V) + alertsStrip() +
     (window.MONONextHour?.render(nextHour, {lang:state.lang,zone:V.zone,detailsOpen:homeOpen.has('next-hour-info')}) || '') + hours + week +
     homeMore('extra',X('Περισσότερα','More'),'',more);
@@ -3887,6 +3887,7 @@ async function showDeviceNotification(title, options) {
     if (reg?.showNotification) return await reg.showNotification(title, options);
   } catch {}
   try { return new Notification(title, options); } catch {}
+  throw new Error('notification_unavailable');
 }
 let rainAlertTimer = 0;
 function runRainCheck() {
@@ -3911,7 +3912,7 @@ async function toggleRainAlerts() {
   }
   const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
   if (perm !== 'granted') { render(); toast(el ? 'Δεν δόθηκε άδεια για ειδοποιήσεις' : 'Notification permission was not granted'); return; }
-  const c = state.city, cfg = { on: true, lat: +c.lat, lon: +c.lon, name: cityName(c), lang: state.lang };
+  const c = state.city, cfg = { on:true, rain:true, storm:false, wind:false, air:false, morning:false, lat:+c.lat, lon:+c.lon, name:cityName(c), lang:state.lang };
   try { localStorage.setItem(RA_KEY, JSON.stringify(cfg)); } catch {}
   await MONORainAlerts?.setConfig(cfg);
   let background = false;
@@ -3932,16 +3933,49 @@ async function toggleRainAlerts() {
   localStorage.setItem(RA_KEY, JSON.stringify({ ...cfg, background }));
   startRainAlerts(); render();
 }
-function rainAlertsCard() {
-  if (!('Notification' in window) || state.snapshot) return '';
-  const el = state.lang === 'el', X = (a, b) => el ? a : b, pref = rainAlertsPref(), on = rainAlertsOn(), denied = Notification.permission === 'denied';
-  const where = on && pref?.name ? esc(pref.name) : esc(cityName(state.city));
-  const other = on && pref && ckey(pref) !== ckey(state.city);
-  const sub = denied ? X('Οι ειδοποιήσεις είναι μπλοκαρισμένες στις ρυθμίσεις του browser για το MONO.', 'Notifications are blocked in your browser settings for MONO.')
-    : on ? X(`Ενεργές για ${where}. `, `On for ${where}. `) + (pref?.background ? X('Ελέγχει και στο παρασκήνιο όποτε το επιτρέπει το κινητό.', 'Also checks in the background when the phone allows it.') : X('Ελέγχει κάθε 10′ όσο το MONO είναι ανοιχτό ή στο παρασκήνιο. Εγκατέστησε την εφαρμογή για περισσότερους ελέγχους.', 'Checks every 10 min while MONO is open or in the background. Install the app for more checks.'))
-      : X(`Ειδοποίηση σε αυτή τη συσκευή όταν έρχεται βροχή στην επόμενη ώρα, για ${where}.`, `Get a notification on this device when rain is due within the hour at ${where}.`);
-  const action = denied ? '' : `<button class="${on ? 'outline-btn' : 'solid-btn'}" data-action="rainAlerts">${on ? X('Απενεργοποίηση', 'Turn off') : X('🔔 Ενεργοποίηση', '🔔 Turn on')}</button>${other ? `<button class="outline-btn" data-action="rainAlertsHere">${X('Μεταφορά εδώ', 'Use this place')}</button>` : ''}`;
-  return `<section class="section ra-card"><div class="ra-text"><b>${on ? '🔔' : '🔕'} ${X('Ειδοποιήσεις βροχής', 'Rain alerts')}</b><span>${sub}</span></div><div class="ra-actions">${action}</div></section>`;
+
+async function toggleWeatherAlertType(type){
+  if(!['rain','storm','wind','air','morning'].includes(type)||!rainAlertsOn())return;
+  const p=rainAlertsPref();if(!p)return;
+  const next={...p,[type]:type==='rain'?p.rain===false:!p[type]};
+  try{localStorage.setItem(RA_KEY,JSON.stringify(next));}catch{}
+  await window.MONORainAlerts?.setConfig(next);render();
+}
+async function moveWeatherAlertsHere(){
+  const p=rainAlertsPref();if(!p?.on)return;
+  const c=state.city,next={...p,lat:+c.lat,lon:+c.lon,name:cityName(c),lang:state.lang};
+  try{localStorage.setItem(RA_KEY,JSON.stringify(next));}catch{}
+  await window.MONORainAlerts?.setConfig(next);startRainAlerts();render();
+}
+async function testWeatherNotification(){
+  if(!rainAlertsOn())return;
+  const el=state.lang==='el';
+  try{
+    await showDeviceNotification('MONO · '+(el?'δοκιμή ειδοποίησης':'notification test'),{
+      body:el?'Η άδεια ειδοποιήσεων λειτουργεί. Δεν εξασφαλίζεται παράδοση στο παρασκήνιο.':
+        'Notification permission works. Background delivery is not guaranteed.',
+      tag:'mono-test',icon:'app-icon-192.png',data:{url:'./#now'}});
+    toast(el?'Δοκιμή στο σύστημα ειδοποιήσεων':'Test sent to notification system');
+  }catch{toast(el?'Η δοκιμή απέτυχε':'Test failed');}
+}
+function rainAlertsCard(){
+  if(state.snapshot)return '';
+  if(!('Notification' in window))return '<section class="section ra-card"><div class="ra-text"><b>'+(state.lang==='el'?'Ειδοποιήσεις καιρού':'Weather notifications')+'</b><span>'+(state.lang==='el'?'Ο συγκεκριμένος browser ή WebView δεν υποστηρίζει ειδοποιήσεις ιστού. Χρειάζεται συμβατός browser ή native push.':'This browser or WebView does not support web notifications. Use a compatible browser or native push.')+'</span></div></section>';
+  const el=state.lang==='el',X=(a,b)=>el?a:b,p=rainAlertsPref(),on=rainAlertsOn(),denied=Notification.permission==='denied';
+  const where=on&&p?.name?esc(p.name):esc(cityName(state.city)),other=on&&p&&ckey(p)!==ckey(state.city);
+  const types=[['rain',X('Βροχή','Rain')],['storm',X('Καταιγίδες','Storms')],['wind',X('Ριπές ≥60 km/h','Gusts ≥60 km/h')],['air',X('Αέρας AQI ≥100','Air AQI ≥100')],['morning',X('Πρωινή σύνοψη','Morning brief')]];
+  const items=on?'<div class="ra-types" role="group" aria-label="'+X('Επιλογή ειδοποιήσεων','Notification types')+'">'+types.map(([type,label])=>{
+    const active=type==='rain'?p?.rain!==false:p?.[type]===true;
+    return '<button type="button" class="ra-type '+(active?'active':'')+'" data-action="rainAlertType" data-v="'+type+'" aria-pressed="'+active+'">'+(active?'✓ ':'+ ')+label+'</button>';
+  }).join('')+'</div>':'';
+  const sub=denied?X('Οι ειδοποιήσεις είναι μπλοκαρισμένες από τον browser.','Notifications are blocked by the browser.'):
+    on?X('Για '+where+'. Έλεγχος ανά 10′ όταν εκτελείται το MONO. Παρασκήνιο μόνο αν το επιτρέπει ο browser — χωρίς εγγύηση αποστολής.',
+         'For '+where+'. Checked every 10 min while MONO runs. Background delivery is not guaranteed.'):
+      X('Ενεργοποίησε ειδοποιήσεις και επίλεξε φαινόμενα.','Turn on notifications and select weather events.');
+  const actions=denied?'':'<button class="'+(on?'outline-btn':'solid-btn')+'" data-action="rainAlerts">'+(on?X('Απενεργοποίηση','Turn off'):X('Ενεργοποίηση','Turn on'))+'</button>'+
+    (other?'<button class="outline-btn" data-action="rainAlertsHere">'+X('Αυτή η περιοχή','Use this area')+'</button>':'')+
+    (on?'<button class="outline-btn" data-action="rainAlertTest">'+X('Δοκιμή','Test')+'</button>':'');
+  return '<section class="section ra-card"><div class="ra-text"><b>'+X('Ειδοποιήσεις καιρού','Weather notifications')+'</b><span>'+sub+'</span></div>'+items+'<div class="ra-actions">'+actions+'</div></section>';
 }
 function shareText() {
   const V = state.view; if (!V) return '';
@@ -4084,7 +4118,9 @@ function onClick(e) {
   }
   else if (a === 'trustTab') { if (['reliability','station','yesterday','agreement'].includes(b.dataset.v)) { state.trustTab = b.dataset.v; render(); } }
   else if (a === 'rainAlerts') toggleRainAlerts();
-  else if (a === 'rainAlertsHere') { const pref = rainAlertsPref(); if (pref?.on) { localStorage.setItem(RA_KEY, JSON.stringify({ ...pref, on: false })); toggleRainAlerts(); } }
+  else if (a === 'rainAlertsHere') moveWeatherAlertsHere();
+  else if (a === 'rainAlertType') toggleWeatherAlertType(b.dataset.v);
+  else if (a === 'rainAlertTest') testWeatherNotification();
   else if (a === 'reloadModels') { state.models = {}; state.ens = {}; state.modelsAt = 0; loadAll(true); }
   else if (a === 'retrain') ensureTraining(state.city, state.gen, true);
    else if (a === 'historyPeriod') { const days=Number(b.dataset.days); if(![62,180,365].includes(days)||days===state.historyDays||state.trainStatus==='loading')return; state.historyDays=days; persistUI(); render(); ensureTraining(state.city,state.gen,true); }
