@@ -1,5 +1,9 @@
 # MONO Weather v5.0
 
+> **Workspace status:** Core development — MONO Weather.
+>
+> **Active projects:** [NBA Atlas](https://github.com/mariodinakus/sideline-sports) · [AXON](https://github.com/mariodinakus/axon) · [MONO](https://github.com/mariodinakus/monokairos) · [PAX](https://github.com/mariodinakus/world-faultline/tree/main/pax) · [EFIMERIA ONE](https://github.com/mariodinakus/efimeria-one) · [AOTH](https://github.com/mariodinakus/aoth).
+
 ## Νέα στην v5.0
 - **Εμπιστοσύνη πρόγνωσης σε μία κάρτα** (Ιστορικό · Σταθμός · Χθες · Συμφωνία μοντέλων). Ποσοστό «πόσο συχνά βγαίνει σωστή» ανά μέρα από το ανεξάρτητο τεστ, και ✓ % σε κάθε μέρα της εβδομάδας.
 - **Επαλήθευση με σταθμό αεροδρομίου** για 12 ελληνικές πόλεις: κάθε πρωί (GitHub Actions → `/api/verify?mode=update`) η πρόγνωση MONO μίας μέρας πριν, στο σημείο του σταθμού, συγκρίνεται με ωριαία METAR (IEM). Η εκπαίδευση τελειώνει πάντα πριν από τη μέρα που ελέγχεται· η διόρθωση σταθμού μαθαίνει μόνο από προηγούμενες μέρες. Αποθήκευση στο Vercel Blob (`mono-verify/<πόλη>.json`).
