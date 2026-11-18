@@ -32,7 +32,7 @@ function assetList(files) {
   for (const f of ['app.js', 'trainer.js', 'sw.js'])
     for (const m of files[f].matchAll(REF)) if (exists(m[2])) refs.add('./' + m[2] + '?v=' + m[3]);
   const icons = fs.readdirSync(path.join(ROOT, 'icons')).filter(f => f.endsWith('.svg')).sort().map(f => './icons/' + f);
-  const fixed = ['./', './index.html', './manifest.webmanifest', './icon.svg', './app-icon-192.png', './app-icon-512.png', './vendor/leaflet.js', './vendor/leaflet.css'];
+  const fixed = ['./', './index.html', './manifest.webmanifest', './icon.svg', './app-icon-192.png', './app-icon-512.png', './mono-install-192-v3.png', './mono-install-512-v3.png', './mono-install-maskable-512-v3.png', './mono-icon-v3.svg', './favicon.ico', './vendor/leaflet.js', './vendor/leaflet.css'];
   return [...fixed, ...[...refs].sort(), ...icons];
 }
 
