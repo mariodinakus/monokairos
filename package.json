@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "@vercel/blob": "2.8.2",
-    "satellite.js": "6.0.2"
+    "satellite.js": "7.2.0"
   }
 }
