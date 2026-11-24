@@ -1555,7 +1555,8 @@ function nowPage() {
   const sr = sunIndex >= 0 && fin(D.sunrise[sunIndex]) ? hhmm(D.sunrise[sunIndex] * 1000) : null;
   const ss = sunIndex >= 0 && fin(D.sunset?.[sunIndex]) ? hhmm(D.sunset[sunIndex] * 1000) : null;
   const sun = sr || ss ? `<div class="home-sun"><span>${LNow('Ανατολή','Sunrise')} <b>${sr || '—'}</b></span><span>${LNow('Δύση','Sunset')} <b>${ss || '—'}</b></span></div>` : '';
-  const hero = `<article class="card home-hero"><div class="home-now-top"><span>${T('now')}</span><span>${esc(dt(Date.now(), { weekday: 'short', day: 'numeric', month: 'short' }))} · ${hhmm(Date.now())}</span></div>
+  const skyBtn = window.MONOLivingSky ? `<button type="button" class="sky-toggle" data-action="livingSky" aria-pressed="${livingSkyOn}" title="${LNow('Ζωντανός ουρανός: απεικόνιση του πραγματικού καιρού','Live sky: an animation of the real weather')}">${livingSkyOn ? LNow('✦ Ουρανός','✦ Sky') : LNow('✧ Ουρανός','✧ Sky')}</button>` : '';
+  const hero = `<article class="card home-hero"><div class="home-now-top"><span>${T('now')}</span><span>${esc(dt(Date.now(), { weekday: 'short', day: 'numeric', month: 'short' }))} · ${hhmm(Date.now())}${skyBtn}</span></div>
     <div class="home-reading"><div><div class="home-temperature" aria-label="${fin(cur.temp) ? num(Math.round(cur.temp)) + ' °C' : '—'}">${fin(cur.temp) ? num(Math.round(cur.temp)) : '—'}<span>°</span></div><div class="home-condition">${condition}</div>${weatherSource}<div class="home-feels" aria-label="${T('feels')} ${deg(cur.feels)} · ${T('high')} ${deg(today?.hi)} · ${T('low')} ${deg(today?.lo)}">${T('feels')} ${compactDeg(cur.feels)} · ↑ ${compactDeg(today?.hi)} · ↓ ${compactDeg(today?.lo)}</div></div>${icon(cur.code ?? rows[iN]?.code ?? 3, cur.isDay, 'hero-icon')}</div>
     <div class="home-source">${src}</div>${state.snapshot ? '' : (window.MONODayCompare?.render(window.MONODayCompare.compare({rows, daily:V.daily, now:Date.now(), zone:V.zone}), {lang:state.lang}) || '')}
     <div class="home-metrics"><button type="button" class="home-metric" data-action="goto" data-page="rain"><img src="${iconSrc('umbrella')}" alt=""><span>${LNow('Βροχή','Rain')}</span><b>${pct(pop6)}</b><small>${LNow('Μέγ. ανά ώρα · 6ωρο','Peak hourly · 6h')}</small></button>
@@ -3856,6 +3857,7 @@ function render() {
   if (state.page === 'now' && !waiting.length && $('#mono-month-trend')) {
     window.MONOMonthTrend?.mount({lat:+state.city.lat,lon:+state.city.lon,lang:state.lang,city:cityName(state.city),daily:state.view?.daily||[],historyEnabled:cacheAllowed()});
   }
+  mountLivingSky(waiting.length);
   if(state.page==='lab' && !waiting.length)window.MONOStats?.mount({view:state.view,atmosphere:state.atmosphere,train:state.train,lead:state.lead,lang:state.lang});
   if(state.page==='guide'){
     const q=$('#qs-panel');let start=null;
@@ -3988,13 +3990,47 @@ function shareText() {
   if (d[1]) lines.push(`${dayLabel(d[1].t, 1)}: ${deg(d[1].lo)} / ${deg(d[1].hi)} · ☂ ${pct(d[1].pop)}`);
   return lines.filter(Boolean).join('\n');
 }
+function shareCardFile() {
+  const V = state.view, S = window.MONOShareCard; if (!V || !S || state.snapshot) return null;
+  const c = state.city, cur = V.current, d = V.daily, nowRow = V.rows[V.iNow];
+  const code = fin(cur.code) ? cur.code : nowRow?.code;
+  return S.file(S.model({
+    lang: state.lang, now: Date.now(), zone: V.zone, url: location.host || 'monokairos.vercel.app',
+    city: cityName(c), place: [adminName(c), countryName(c)].filter(Boolean).join(' · '),
+    current: { temp: cur.temp, feels: cur.feels, wind: cur.wind, rh: cur.rh, station: cur.source === 'obs', icon: ico(code, cur.isDay) },
+    condition: cur.wx ? cur.wx[0].toUpperCase() + cur.wx.slice(1) : desc(code),
+    today: { hi: d[0]?.hi, lo: d[0]?.lo },
+    tomorrow: d[1] ? { label: dayLabel(d[1].t, 1), hi: d[1].hi, lo: d[1].lo, pop: d[1].pop } : null,
+    hours: V.rows.slice(V.iNow + 1, V.iNow + 13).map(r => ({ t: r.t, temp: r.temp, pop: r.pop, icon: ico(r.code, r.isDay) })),
+    rain: rainSentence()
+  }), 'mono-' + String(cityName(c)).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') + '.png');
+}
+// Living sky behind the home hero: real sun/moon position, clouds, rain, wind, fog and storms.
+let livingSkyOn = read('mono_living_sky', true) !== false;
+function livingSkyInput() {
+  const V = state.view, c = state.city; if (!V) return null;
+  const cur = V.current, nowRow = V.rows[V.iNow], live = state.main?.current || {};
+  const station = window.MONORainIntelligence?.present(V.stations, state.pws);
+  const rate = Math.max(fin(nowRow?.amount) ? nowRow.amount : 0, station?.kind === 'rain' || station?.kind === 'snow' ? 0.5 : 0);
+  return { now: Date.now(), lat: +c.lat, lon: +c.lon, code: fin(cur.code) ? cur.code : nowRow?.code, cloud: fin(live.cloud_cover) ? live.cloud_cover : nowRow?.cloud,
+    rate, wind: cur.wind, dir: cur.dir, vis: cur.vis, temp: cur.temp, isDay: cur.isDay };
+}
+function mountLivingSky(waiting) {
+  const S = window.MONOLivingSky, hero = state.page === 'now' && !waiting && livingSkyOn ? document.querySelector('#content .home-hero') : null, input = hero && livingSkyInput();
+  if (S && hero && input) S.mount(hero, input, { lang: state.lang }); else S?.unmount();
+}
 async function shareForecast() {
   const text = shareText(); if (!text) return;
   const url = location.origin + location.pathname, title = 'MONO Weather · ' + cityName(state.city);
+  const el = state.lang === 'el';
   try {
+    // Image card first: rendered synchronously so the tap's user activation is still valid.
+    const card = shareCardFile();
+    if (card && navigator.canShare?.({ files: [card] })) { await navigator.share({ title, text: text + '\n' + url, files: [card] }); return; }
     if (navigator.share) { await navigator.share({ title, text, url }); return; }
+    const saved = card && window.MONOShareCard.download(card);
     await navigator.clipboard.writeText(text + '\n' + url);
-    toast(state.lang === 'el' ? 'Η πρόγνωση αντιγράφηκε' : 'Forecast copied');
+    toast(saved ? (el ? 'Η κάρτα αποθηκεύτηκε και η πρόγνωση αντιγράφηκε' : 'Card saved and forecast copied') : (el ? 'Η πρόγνωση αντιγράφηκε' : 'Forecast copied'));
   } catch (err) {
     if (err?.name !== 'AbortError') toast(state.lang === 'el' ? 'Η κοινοποίηση δεν είναι διαθέσιμη' : 'Sharing is not available');
   }
@@ -4110,6 +4146,7 @@ function onClick(e) {
   else if (a === 'navGroup') { const key=b.dataset.v; if(NAV_GROUPS.some(g=>g.id===key)){navOpen[key]=!navOpen[key];write(NAV_OPEN_KEY,navOpen);navRender();} }
   else if (a === 'reload') { loadAll(true); if(state.page==='maps') MonoForecast.refresh(); if(state.page==='space')window.MONOSpaceControl?.load(true); }
   else if (a === 'share') shareForecast();
+  else if (a === 'livingSky') { livingSkyOn = !livingSkyOn; write('mono_living_sky', livingSkyOn); render(); }
   else if (a === 'homeHour') {
     const t = Number(b.dataset.t), V = state.view;
     if (!fin(t) || !V?.rows.slice(V.iNow, V.iNow + 25).some(r => r.t === t)) return;
