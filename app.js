@@ -3988,13 +3988,33 @@ function shareText() {
   if (d[1]) lines.push(`${dayLabel(d[1].t, 1)}: ${deg(d[1].lo)} / ${deg(d[1].hi)} · ☂ ${pct(d[1].pop)}`);
   return lines.filter(Boolean).join('\n');
 }
+function shareCardFile() {
+  const V = state.view, S = window.MONOShareCard; if (!V || !S || state.snapshot) return null;
+  const c = state.city, cur = V.current, d = V.daily, nowRow = V.rows[V.iNow];
+  const code = fin(cur.code) ? cur.code : nowRow?.code;
+  return S.file(S.model({
+    lang: state.lang, now: Date.now(), zone: V.zone, url: location.host || 'monokairos.vercel.app',
+    city: cityName(c), place: [adminName(c), countryName(c)].filter(Boolean).join(' · '),
+    current: { temp: cur.temp, feels: cur.feels, wind: cur.wind, rh: cur.rh, station: cur.source === 'obs', icon: ico(code, cur.isDay) },
+    condition: cur.wx ? cur.wx[0].toUpperCase() + cur.wx.slice(1) : desc(code),
+    today: { hi: d[0]?.hi, lo: d[0]?.lo },
+    tomorrow: d[1] ? { label: dayLabel(d[1].t, 1), hi: d[1].hi, lo: d[1].lo, pop: d[1].pop } : null,
+    hours: V.rows.slice(V.iNow + 1, V.iNow + 13).map(r => ({ t: r.t, temp: r.temp, pop: r.pop, icon: ico(r.code, r.isDay) })),
+    rain: rainSentence()
+  }), 'mono-' + String(cityName(c)).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') + '.png');
+}
 async function shareForecast() {
   const text = shareText(); if (!text) return;
   const url = location.origin + location.pathname, title = 'MONO Weather · ' + cityName(state.city);
+  const el = state.lang === 'el';
   try {
+    // Image card first: rendered synchronously so the tap's user activation is still valid.
+    const card = shareCardFile();
+    if (card && navigator.canShare?.({ files: [card] })) { await navigator.share({ title, text: text + '\n' + url, files: [card] }); return; }
     if (navigator.share) { await navigator.share({ title, text, url }); return; }
+    const saved = card && window.MONOShareCard.download(card);
     await navigator.clipboard.writeText(text + '\n' + url);
-    toast(state.lang === 'el' ? 'Η πρόγνωση αντιγράφηκε' : 'Forecast copied');
+    toast(saved ? (el ? 'Η κάρτα αποθηκεύτηκε και η πρόγνωση αντιγράφηκε' : 'Card saved and forecast copied') : (el ? 'Η πρόγνωση αντιγράφηκε' : 'Forecast copied'));
   } catch (err) {
     if (err?.name !== 'AbortError') toast(state.lang === 'el' ? 'Η κοινοποίηση δεν είναι διαθέσιμη' : 'Sharing is not available');
   }
