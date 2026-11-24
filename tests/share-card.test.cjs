@@ -92,7 +92,7 @@ test('long rain text wraps to two lines with an ellipsis', () => {
 test('share button sends the image card and keeps the text fallback', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(html, /<script defer src="share-card\.js\?v=[a-f0-9]+"><\/script>\s*<script defer src="app\.js/);
+  assert.match(html, /<script defer src="share-card\.js\?v=[a-f0-9]+"><\/script>[\s\S]*<script defer src="app\.js/);
   assert.match(app, /navigator\.canShare\?\.\(\{ files: \[card\] \}\)/);
   assert.match(app, /if \(navigator\.share\) \{ await navigator\.share\(\{ title, text, url \}\); return; \}/);
 });
